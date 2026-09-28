@@ -22,7 +22,7 @@ export class AiProviderService {
     return this.prisma.aiConnection.create({ data: dto });
   }
 
-  listConnections(providerId: string) {
+  listConnections(providerId: number) {
     return this.prisma.aiConnection.findMany({ where: { providerId } });
   }
 }

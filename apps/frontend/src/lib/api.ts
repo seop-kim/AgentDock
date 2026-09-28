@@ -14,30 +14,30 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export interface AgentRole {
-  id: string;
+  id: number;
   name: string;
   description?: string | null;
 }
 
 export interface PermissionProfile {
-  id: string;
+  id: number;
   name: string;
 }
 
 export interface AiProvider {
-  id: string;
+  id: number;
   key: string;
   name: string;
 }
 
 export interface Workspace {
-  id: string;
+  id: number;
   name: string;
   path: string;
 }
 
 export interface Agent {
-  id: string;
+  id: number;
   name: string;
   role: AgentRole;
   permissionProfile: PermissionProfile;
@@ -48,7 +48,7 @@ export interface Agent {
 }
 
 export interface Execution {
-  id: string;
+  id: number;
   status: string;
   prompt: string;
   exitCode: number | null;
@@ -89,7 +89,7 @@ export const api = {
   createAgent: (data: Record<string, unknown>) =>
     request<Agent>('/agents', { method: 'POST', body: JSON.stringify(data) }),
 
-  createExecution: (data: { agentId: string; prompt: string }) =>
+  createExecution: (data: { agentId: number; prompt: string }) =>
     request<Execution>('/executions', { method: 'POST', body: JSON.stringify(data) }),
-  getExecution: (id: string) => request<Execution>(`/executions/${id}`),
+  getExecution: (id: number | string) => request<Execution>(`/executions/${id}`),
 };

@@ -1,26 +1,32 @@
-import { IsObject, IsOptional, IsString, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsInt, IsObject, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class CreateAgentDto {
   @IsString()
   @MinLength(1)
   name!: string;
 
-  @IsString()
-  roleId!: string;
+  @Type(() => Number)
+  @IsInt()
+  roleId!: number;
 
-  @IsString()
-  permissionProfileId!: string;
+  @Type(() => Number)
+  @IsInt()
+  permissionProfileId!: number;
 
-  @IsString()
-  providerId!: string;
+  @Type(() => Number)
+  @IsInt()
+  providerId!: number;
 
   @IsOptional()
-  @IsString()
-  connectionId?: string;
+  @Type(() => Number)
+  @IsInt()
+  connectionId?: number;
 
   @IsOptional()
-  @IsString()
-  workspaceId?: string;
+  @Type(() => Number)
+  @IsInt()
+  workspaceId?: number;
 
   @IsOptional()
   @IsString()

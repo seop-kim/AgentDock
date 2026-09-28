@@ -1,8 +1,10 @@
-import { IsString, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsInt, IsString, MinLength } from 'class-validator';
 
 export class CreateExecutionDto {
-  @IsString()
-  agentId!: string;
+  @Type(() => Number)
+  @IsInt()
+  agentId!: number;
 
   @IsString()
   @MinLength(1)

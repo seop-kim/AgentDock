@@ -57,7 +57,14 @@ export default function AgentsPage() {
     e.preventDefault();
     setError(null);
     try {
-      await api.createAgent({ ...form, workspaceId: form.workspaceId || undefined, model: form.model || undefined });
+      await api.createAgent({
+        ...form,
+        roleId: Number(form.roleId),
+        permissionProfileId: Number(form.permissionProfileId),
+        providerId: Number(form.providerId),
+        workspaceId: form.workspaceId ? Number(form.workspaceId) : undefined,
+        model: form.model || undefined,
+      });
       setForm({ name: '', roleId: '', permissionProfileId: '', providerId: '', workspaceId: '', model: '' });
       loadAll();
     } catch (e) {
@@ -65,7 +72,7 @@ export default function AgentsPage() {
     }
   };
 
-  const runAgent = async (agentId: string) => {
+  const runAgent = async (agentId: number) => {
     const promptText = window.prompt('Agent에게 전달할 Prompt를 입력하세요.');
     if (!promptText) return;
     try {

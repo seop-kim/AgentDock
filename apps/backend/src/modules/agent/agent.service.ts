@@ -19,7 +19,7 @@ export class AgentService {
     return this.prisma.agent.findMany({ include: AGENT_INCLUDE, orderBy: { name: 'asc' } });
   }
 
-  findOne(id: string) {
+  findOne(id: number) {
     return this.prisma.agent.findUniqueOrThrow({ where: { id }, include: AGENT_INCLUDE });
   }
 

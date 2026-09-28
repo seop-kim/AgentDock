@@ -1,8 +1,10 @@
-import { IsOptional, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsInt, IsOptional, IsString } from 'class-validator';
 
 export class CreateAiConnectionDto {
-  @IsString()
-  providerId!: string;
+  @Type(() => Number)
+  @IsInt()
+  providerId!: number;
 
   @IsOptional()
   @IsString()

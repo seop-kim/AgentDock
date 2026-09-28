@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Post } from '@nestjs/common';
 import { AiProviderService } from './ai-provider.service';
 import { CreateAiProviderDto } from './dto/create-ai-provider.dto';
 import { CreateAiConnectionDto } from './dto/create-ai-connection.dto';
@@ -23,7 +23,7 @@ export class AiProviderController {
   }
 
   @Get(':id/connections')
-  listConnections(@Param('id') id: string) {
+  listConnections(@Param('id', ParseIntPipe) id: number) {
     return this.aiProviderService.listConnections(id);
   }
 }
