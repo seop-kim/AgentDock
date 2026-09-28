@@ -89,8 +89,8 @@ npm run prisma:migrate --workspace=apps/backend   # 로컬 개발, 스키마 변
 # 배포/CI에서는 npm run prisma:generate 대신 `prisma migrate deploy`를 쓴다 (마이그레이션 생성 없이 적용만)
 
 # 4. 서버 실행
-npm run dev:backend    # apps/backend, PORT 3001
-npm run dev:frontend   # apps/frontend, PORT 3000
+npm run dev:backend    # apps/backend, PORT 8080
+npm run dev:frontend   # apps/frontend, PORT 3030
 ```
 
 Prisma 스키마(`apps/backend/prisma/schema.prisma`)를 바꾼 뒤에는 `npm run prisma:migrate --workspace=apps/backend -- --name <변경 요약>`으로 마이그레이션 파일을 새로 생성하고 커밋한다.
