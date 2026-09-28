@@ -1,0 +1,170 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProviderKey {
+  CLAUDE_CODE
+  CODEX
+  COMMAND_CODE
+  GEMINI
+}
+
+enum ConnectionStatus {
+  CONNECTED
+  DISCONNECTED
+  ERROR
+}
+
+enum ExecutionStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum LogStream {
+  STDOUT
+  STDERR
+  SYSTEM
+}
+
+/// 실제 AI 실행 엔진 (Claude Code, Codex 등). Agent와는 분리된 개념.
+model AiProvider {
+  id           String       @id @default(cuid())
+  key          ProviderKey  @unique
+  name         String
+  capabilities Json
+  connections  AiConnection[]
+  agents       Agent[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@map("ai_provider")
+}
+
+/// Provider에 대한 계정 연결 상태. Secret 원문은 저장하지 않고 참조만 저장한다.
+model AiConnection {
+  id                  String           @id @default(cuid())
+  providerId          String
+  provider            AiProvider       @relation(fields: [providerId], references: [id])
+  accountName         String?
+  credentialReference String?
+  status              ConnectionStatus @default(DISCONNECTED)
+  agents              Agent[]
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@map("ai_connection")
+}
+
+/// Agent의 직무 (Backend Developer, Reviewer 등)
+model AgentRole {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  agents      Agent[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("agent_role")
+}
+
+/// Agent가 실제로 수행할 수 있는 작업 범위. Backend Enforcement에서 강제된다.
+model PermissionProfile {
+  id                     String   @id @default(cuid())
+  name                   String   @unique
+  fileRead               Boolean  @default(false)
+  fileWrite              Boolean  @default(false)
+  terminalExecute        Boolean  @default(false)
+  gitStatus              Boolean  @default(true)
+  gitDiff                Boolean  @default(false)
+  gitCommit              Boolean  @default(false)
+  gitPush                Boolean  @default(false)
+  dbRead                 Boolean  @default(false)
+  dbWrite                Boolean  @default(false)
+  dbSchemaChange         Boolean  @default(false)
+  deploy                 Boolean  @default(false)
+  externalNetworkAccess  Boolean  @default(false)
+  agents                 Agent[]
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@map("permission_profile")
+}
+
+/// 사전 등록된 로컬 프로젝트 경로만 허용한다. 임의 경로 접근 금지.
+model Workspace {
+  id          String      @id @default(cuid())
+  name        String      @unique
+  path        String      @unique
+  description String?
+  agents      Agent[]
+  executions  Execution[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@map("workspace")
+}
+
+/// 시스템 내부의 논리적 AI 직원. Provider/Connection은 교체 가능하며 Agent 정체성은 유지된다.
+model Agent {
+  id                  String              @id @default(cuid())
+  name                String
+  roleId              String
+  role                AgentRole           @relation(fields: [roleId], references: [id])
+  permissionProfileId String
+  permissionProfile   PermissionProfile   @relation(fields: [permissionProfileId], references: [id])
+  providerId          String
+  provider            AiProvider          @relation(fields: [providerId], references: [id])
+  connectionId        String?
+  connection          AiConnection?       @relation(fields: [connectionId], references: [id])
+  workspaceId         String?
+  workspace           Workspace?          @relation(fields: [workspaceId], references: [id])
+  model               String?
+  mode                String?
+  profile              Json?
+  executions          Execution[]
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  @@map("agent")
+}
+
+/// Agent의 단일 실행 단위 (Prompt 전달 -> CLI 실행 -> 종료)
+model Execution {
+  id           String          @id @default(cuid())
+  agentId      String
+  agent        Agent           @relation(fields: [agentId], references: [id])
+  workspaceId  String
+  workspace    Workspace       @relation(fields: [workspaceId], references: [id])
+  prompt       String
+  status       ExecutionStatus @default(PENDING)
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  exitCode     Int?
+  errorMessage String?
+  logs         ExecutionLog[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@map("execution")
+}
+
+/// Execution의 stdout/stderr 라인 기록
+model ExecutionLog {
+  id          String    @id @default(cuid())
+  executionId String
+  execution   Execution @relation(fields: [executionId], references: [id])
+  stream      LogStream
+  content     String
+  createdAt   DateTime  @default(now())
+
+  @@index([executionId])
+  @@map("execution_log")
+}
