@@ -32,7 +32,7 @@ export default function ProvidersPage() {
   return (
     <div>
       <h1>AI Providers / Connections</h1>
-      <form onSubmit={onSubmit} style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+      <form onSubmit={onSubmit} className="formRow">
         <select value={key} onChange={(e) => setKey(e.target.value)}>
           {PROVIDER_KEYS.map((k) => (
             <option key={k} value={k}>
@@ -43,8 +43,8 @@ export default function ProvidersPage() {
         <input placeholder="표시 이름 (예: Claude Code)" value={name} onChange={(e) => setName(e.target.value)} required />
         <button type="submit">등록</button>
       </form>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      <table cellPadding={8}>
+      {error && <p className="errorText">{error}</p>}
+      <table className="table" cellPadding={8}>
         <thead>
           <tr>
             <th>Key</th>

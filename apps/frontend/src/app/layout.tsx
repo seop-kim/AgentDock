@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import styles from './layout.module.css';
+import './globals.css';
 
 export const metadata = {
   title: 'AgentDock',
@@ -8,14 +10,14 @@ export const metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ko">
-      <body style={{ fontFamily: 'system-ui, sans-serif', margin: 0 }}>
-        <nav style={{ display: 'flex', gap: 16, padding: 16, borderBottom: '1px solid #ddd' }}>
+      <body>
+        <nav className={styles.nav}>
           <a href="/">Dashboard</a>
           <a href="/agents">Agents</a>
           <a href="/workspaces">Workspaces</a>
           <a href="/providers">AI Providers</a>
         </nav>
-        <main style={{ padding: 24 }}>{children}</main>
+        <main className={styles.main}>{children}</main>
       </body>
     </html>
   );

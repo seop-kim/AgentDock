@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { Agent, AgentRole, AiProvider, PermissionProfile, Workspace, api } from '@/lib/api';
+import styles from './page.module.css';
 
 export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -79,7 +80,7 @@ export default function AgentsPage() {
     <div>
       <h1>Agents</h1>
 
-      <form onSubmit={onSubmit} style={{ display: 'grid', gap: 8, maxWidth: 480, marginBottom: 24 }}>
+      <form onSubmit={onSubmit} className={styles.form}>
         <input
           placeholder="Agent 이름 (예: Backend Developer A)"
           value={form.name}
@@ -87,7 +88,7 @@ export default function AgentsPage() {
           required
         />
 
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="formRow">
           <select value={form.roleId} onChange={(e) => setForm({ ...form, roleId: e.target.value })} required>
             <option value="">Role 선택</option>
             {roles.map((r) => (
@@ -101,7 +102,7 @@ export default function AgentsPage() {
           </button>
         </div>
 
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="formRow">
           <select
             value={form.permissionProfileId}
             onChange={(e) => setForm({ ...form, permissionProfileId: e.target.value })}
@@ -146,9 +147,9 @@ export default function AgentsPage() {
         <button type="submit">Agent 생성</button>
       </form>
 
-      {error && <p style={{ color: 'red' }}>{error}</p>}
+      {error && <p className="errorText">{error}</p>}
 
-      <table cellPadding={8}>
+      <table className="table" cellPadding={8}>
         <thead>
           <tr>
             <th>Name</th>
