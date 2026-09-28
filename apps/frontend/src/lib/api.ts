@@ -54,6 +54,17 @@ export interface Execution {
   exitCode: number | null;
 }
 
+export interface WorkspaceBrowseEntry {
+  name: string;
+  path: string;
+}
+
+export interface WorkspaceBrowseResult {
+  path: string | null;
+  parentPath: string | null;
+  entries: WorkspaceBrowseEntry[];
+}
+
 export const api = {
   base: API_BASE,
   listRoles: () => request<AgentRole[]>('/roles'),
@@ -71,6 +82,8 @@ export const api = {
   listWorkspaces: () => request<Workspace[]>('/workspaces'),
   createWorkspace: (data: { name: string; path: string; description?: string }) =>
     request<Workspace>('/workspaces', { method: 'POST', body: JSON.stringify(data) }),
+  browseWorkspace: (path?: string) =>
+    request<WorkspaceBrowseResult>(`/workspaces/browse${path ? `?path=${encodeURIComponent(path)}` : ''}`),
 
   listAgents: () => request<Agent[]>('/agents'),
   createAgent: (data: Record<string, unknown>) =>

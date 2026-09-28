@@ -2,12 +2,15 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { Workspace, api } from '@/lib/api';
+import WorkspacePicker from './WorkspacePicker';
+import styles from './page.module.css';
 
 export default function WorkspacesPage() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [name, setName] = useState('');
   const [path, setPath] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const load = () => api.listWorkspaces().then(setWorkspaces).catch((e) => setError(String(e)));
 
@@ -31,26 +34,38 @@ export default function WorkspacesPage() {
   return (
     <div>
       <h1>Workspaces</h1>
-      <p>서버의 <code>WORKSPACE_ALLOWED_ROOTS</code>에 등록된 경로 하위만 등록 가능합니다.</p>
-      <form onSubmit={onSubmit} style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+      <p>Agent가 작업할 로컬 폴더를 선택하세요.</p>
+      <form onSubmit={onSubmit} className="formRow">
         <input placeholder="이름" value={name} onChange={(e) => setName(e.target.value)} required />
         <input
-          placeholder="절대 경로 (예: /home/user/workspace/limo-server)"
+          placeholder="폴더 선택 버튼으로 지정하세요"
           value={path}
-          onChange={(e) => setPath(e.target.value)}
-          style={{ width: 360 }}
+          readOnly
+          className={styles.pathInput}
           required
         />
+        <button type="button" onClick={() => setPickerOpen(true)}>
+          폴더 선택
+        </button>
         <button type="submit">등록</button>
       </form>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      <ul>
+      {error && <p className="errorText">{error}</p>}
+      <ul className={styles.list}>
         {workspaces.map((w) => (
           <li key={w.id}>
             <strong>{w.name}</strong> — {w.path}
           </li>
         ))}
       </ul>
+      {pickerOpen && (
+        <WorkspacePicker
+          onSelect={(selected) => {
+            setPath(selected);
+            setPickerOpen(false);
+          }}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
     </div>
   );
 }
