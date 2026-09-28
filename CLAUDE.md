@@ -71,3 +71,32 @@ Postgres 접속 정보는 `apps/backend/.env` (`DATABASE_URL`)에 설정. `.env.
 - 코드/식별자는 영어, 커밋 메시지와 이 문서 등 설명 텍스트는 한국어/영어 혼용 가능
 - 새 Runtime을 추가할 때는 `AgentRuntime` 인터페이스만 구현하고 `RuntimeRegistry`에 등록한다. 기존 모듈을 수정하지 않는다.
 - DTO는 `class-validator`로 검증, Controller는 얇게, 비즈니스 로직은 Service에 둔다.
+
+## 커밋 컨벤션
+
+모든 Agent/기여자는 커밋 전에 이 섹션을 확인한다. [Conventional Commits](https://www.conventionalcommits.org/) 형식을 따른다.
+
+```
+<type>(<scope>): <subject>
+
+<body>            (선택, 왜 변경했는지)
+
+<footer>          (선택, BREAKING CHANGE, 이슈 참조 등)
+```
+
+- `<type>`
+  - `feat` — 새로운 기능 추가
+  - `fix` — 버그 수정
+  - `docs` — 문서(README, CLAUDE.md 등)만 변경
+  - `style` — 포맷팅/세미콜론 등 동작에 영향 없는 변경
+  - `refactor` — 기능 변화 없는 코드 구조 개선
+  - `perf` — 성능 개선
+  - `test` — 테스트 추가/수정
+  - `build` — 빌드 시스템, 의존성 변경
+  - `ci` — CI 설정 변경
+  - `chore` — 기타 잡무 (설정 파일, 스캐폴딩 등 위 타입에 안 맞는 것)
+  - `revert` — 이전 커밋 되돌리기
+- `<scope>` (선택): 영향 범위. 예: `feat(backend): ...`, `fix(frontend): ...`, `feat(execution): ...`
+- `<subject>`: 소문자로 시작, 명령형/현재형, 마침표 없이 간결하게. 한국어로 써도 되지만 타입/콜론 형식은 반드시 지킨다. 예: `feat: agent 실행 permission enforcement 추가`
+- Breaking change는 본문에 `BREAKING CHANGE: <설명>`을 추가한다.
+- 여러 변경을 한 커밋에 몰아넣지 않는다. 하나의 커밋은 하나의 논리적 단위로 나눈다.
