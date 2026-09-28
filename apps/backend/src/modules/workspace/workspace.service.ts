@@ -3,7 +3,7 @@ import { readdirSync, statSync } from 'fs';
 import { dirname, join, resolve } from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateWorkspaceDto } from './dto/create-workspace.dto';
-import { FsEntry, listRoots } from './workspace-fs';
+import { FsEntry, isUncPath, listRoots } from './workspace-fs';
 
 export interface WorkspaceBrowseResult {
   path: string | null;
@@ -20,6 +20,9 @@ export class WorkspaceService {
   }
 
   create(dto: CreateWorkspaceDto) {
+    if (isUncPath(dto.path)) {
+      throw new BadRequestException('Network path (UNC) is not allowed');
+    }
     const resolvedPath = resolve(dto.path);
     let stat;
     try {
@@ -36,6 +39,9 @@ export class WorkspaceService {
   browse(path?: string): WorkspaceBrowseResult {
     if (!path) {
       return { path: null, parentPath: null, entries: listRoots() };
+    }
+    if (isUncPath(path)) {
+      throw new BadRequestException('Network path (UNC) is not allowed');
     }
 
     const resolvedPath = resolve(path);
