@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { WorkspaceService } from './workspace.service';
 import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 
@@ -9,6 +9,11 @@ export class WorkspaceController {
   @Get()
   findAll() {
     return this.workspaceService.findAll();
+  }
+
+  @Get('browse')
+  browse(@Query('path') path?: string) {
+    return this.workspaceService.browse(path);
   }
 
   @Post()

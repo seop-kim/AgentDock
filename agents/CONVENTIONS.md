@@ -46,7 +46,7 @@ npm workspaces 사용 (`package.json` 루트).
 
 - AI Provider/Connection 등록
 - Agent 생성 + Role/Permission 설정
-- Workspace 등록 (허용된 로컬 경로만 사용, 임의 경로 접근 금지)
+- Workspace 등록 (폴더 선택 UI로 로컬 경로 지정. 로컬 전용 도구이므로 경로 제한 없음)
 - Agent에게 Prompt 전달 → CLI 실행 (spawn) → 실시간 로그(SSE)
 - 모든 Execution/Log는 PostgreSQL에 저장
 
@@ -59,7 +59,7 @@ Group/Workflow/Task/Shared Context/Message/Artifact/Review/Decision은 이후 Ph
 - `modules/ai-provider/` — AiProviderModule/Service/Controller: Provider·Connection CRUD (Credential은 DB에 평문 저장 금지, `credentialReference`만 저장)
 - `modules/agent/` — Agent CRUD. Role/Permission/Provider/Workspace 참조
 - `modules/role/`, `modules/permission/` — Role, PermissionProfile CRUD
-- `modules/workspace/` — Workspace CRUD, 등록된 경로만 허용(allowlist 검증)
+- `modules/workspace/` — Workspace CRUD, 로컬 폴더 브라우징 API(`GET /workspaces/browse`, 존재하는 폴더인지만 검증)
 - `modules/process/` — ProcessService: spawn 래퍼, 실행 중 프로세스 관리/취소
 - `modules/execution/` — Execution 생성, ExecutionLog 저장, SSE 스트리밍 (`GET /executions/:id/stream`)
 
