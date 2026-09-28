@@ -1,4 +1,4 @@
-import { Body, Controller, Get, MessageEvent, Param, Post, Sse } from '@nestjs/common';
+import { Body, Controller, Get, MessageEvent, Param, ParseIntPipe, Post, Sse } from '@nestjs/common';
 import { Observable, map } from 'rxjs';
 import { ExecutionService } from './execution.service';
 import { CreateExecutionDto } from './dto/create-execution.dto';
@@ -13,12 +13,12 @@ export class ExecutionController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', ParseIntPipe) id: number) {
     return this.executionService.findOne(id);
   }
 
   @Get(':id/logs')
-  getLogs(@Param('id') id: string) {
+  getLogs(@Param('id', ParseIntPipe) id: number) {
     return this.executionService.getLogs(id);
   }
 
@@ -28,7 +28,7 @@ export class ExecutionController {
   }
 
   @Post(':id/cancel')
-  cancel(@Param('id') id: string) {
+  cancel(@Param('id', ParseIntPipe) id: number) {
     return this.executionService.cancel(id);
   }
 }

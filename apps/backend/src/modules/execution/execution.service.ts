@@ -27,18 +27,18 @@ export class ExecutionService {
     private readonly permissionService: PermissionService,
   ) {}
 
-  async findOne(id: string) {
+  async findOne(id: number) {
     return this.prisma.execution.findUniqueOrThrow({ where: { id } });
   }
 
-  async getLogs(executionId: string) {
+  async getLogs(executionId: number) {
     return this.prisma.executionLog.findMany({
       where: { executionId },
       orderBy: { createdAt: 'asc' },
     });
   }
 
-  async create(agentId: string, prompt: string) {
+  async create(agentId: number, prompt: string) {
     const agent = await this.prisma.agent.findUniqueOrThrow({
       where: { id: agentId },
       include: AGENT_INCLUDE,
@@ -70,41 +70,42 @@ export class ExecutionService {
     return new Observable<LogEvent>((subscriber) => subscriber.complete());
   }
 
-  async cancel(executionId: string) {
+  async cancel(id: number) {
     const execution = await this.prisma.execution.findUniqueOrThrow({
-      where: { id: executionId },
+      where: { id },
       include: { agent: { include: { provider: true } } },
     });
     const runtime = this.runtimeRegistry.resolve(execution.agent.provider.key);
-    await runtime.cancel(executionId);
+    await runtime.cancel(String(execution.id));
     return { cancelled: true };
   }
 
-  private async run(executionId: string, agent: { provider: { key: string }; workspace: { path: string } | null; model: string | null; mode: string | null }, prompt: string) {
+  private async run(id: number, agent: { provider: { key: string }; workspace: { path: string } | null; model: string | null; mode: string | null }, prompt: string) {
+    const streamKey = String(id);
     const subject = new Subject<LogEvent>();
-    this.streams.set(executionId, subject);
+    this.streams.set(streamKey, subject);
 
     await this.prisma.execution.update({
-      where: { id: executionId },
+      where: { id },
       data: { status: 'RUNNING', startedAt: new Date() },
     });
 
     try {
       const runtime = this.runtimeRegistry.resolve(agent.provider.key);
       const result = await runtime.execute({
-        executionId,
+        executionId: streamKey,
         prompt,
         workspacePath: agent.workspace!.path,
         model: agent.model,
         mode: agent.mode,
         onLog: (chunk, stream) => {
           subject.next({ stream, content: chunk });
-          this.persistLog(executionId, stream, chunk);
+          this.persistLog(id, stream, chunk);
         },
       });
 
       await this.prisma.execution.update({
-        where: { id: executionId },
+        where: { id },
         data: {
           status: result.exitCode === 0 ? 'SUCCEEDED' : 'FAILED',
           exitCode: result.exitCode,
@@ -113,16 +114,16 @@ export class ExecutionService {
       });
     } catch (err) {
       await this.prisma.execution.update({
-        where: { id: executionId },
+        where: { id },
         data: { status: 'FAILED', errorMessage: String(err), finishedAt: new Date() },
       });
     } finally {
       subject.complete();
-      this.streams.delete(executionId);
+      this.streams.delete(streamKey);
     }
   }
 
-  private persistLog(executionId: string, stream: 'stdout' | 'stderr', content: string) {
+  private persistLog(executionId: number, stream: 'stdout' | 'stderr', content: string) {
     this.prisma.executionLog
       .create({ data: { executionId, stream: stream.toUpperCase() as 'STDOUT' | 'STDERR', content } })
       .catch((err) => this.logger.error(err));
