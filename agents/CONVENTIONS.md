@@ -95,6 +95,17 @@ npm run dev:frontend   # apps/frontend, PORT 3030
 
 Prisma 스키마(`apps/backend/prisma/schema.prisma`)를 바꾼 뒤에는 `npm run prisma:migrate --workspace=apps/backend -- --name <변경 요약>`으로 마이그레이션 파일을 새로 생성하고 커밋한다.
 
+### AI 에이전트가 직접 실행/테스트할 때의 포트
+
+사용자가 로컬에서 쓰는 개발 포트는 백엔드 `8080`, 프론트 `3030`이다. AI 에이전트가 기능 검증을 위해 서버를 직접 띄울 때는 이 포트를 절대 쓰지 않는다 (사용자가 동시에 같은 포트로 작업 중일 수 있어 충돌한다). 대신 백엔드 `8081`, 프론트 `3031`을 쓴다.
+
+```
+npm run dev:backend:test    # apps/backend, PORT 8081
+npm run dev:frontend:test   # apps/frontend, PORT 3031
+```
+
+`.claude/launch.json`의 `frontend`/`backend` 항목이 이미 이 테스트 포트(3031/8081)로 설정되어 있으니, Claude Code 브라우저 프리뷰(`preview_start`)는 그대로 쓰면 된다. 검증이 끝나면 띄운 서버(포트)를 바로 종료한다 — 백그라운드에 남겨두지 않는다.
+
 ## 코딩 컨벤션
 
 - 코드/식별자는 영어, 커밋 메시지와 문서의 설명 텍스트는 한국어/영어 혼용 가능
