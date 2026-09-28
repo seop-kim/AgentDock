@@ -1,6 +1,18 @@
 # AgentDock — 공용 작업 기준 문서
 
-이 저장소에는 Claude Code, Codex, Command Code 등 여러 AI 코딩 에이전트가 함께 작업한다. 이 파일이 모든 에이전트가 공유하는 단일 기준 문서이며, 루트의 `CLAUDE.md`, `AGENTS.md`는 각 툴이 자동으로 찾는 진입점일 뿐 실제 내용은 여기 있다. **어떤 에이전트든 작업을 시작하기 전에 이 파일을 먼저 읽고, 구조/컨벤션을 바꾸면 이 파일도 함께 갱신한다.**
+이 저장소에는 Claude Code, Codex, Command Code, Gemini CLI 등 여러 AI 코딩 에이전트가 함께 작업한다. 이 파일이 모든 에이전트가 공유하는 단일 기준 문서이며, 루트의 진입점 파일들은 각 툴이 자동으로 찾는 포인터일 뿐 실제 내용은 여기 있다. **어떤 에이전트든 작업을 시작하기 전에 이 파일을 먼저 읽고, 구조/컨벤션을 바꾸면 이 파일도 함께 갱신한다.**
+
+## 진입점 파일 (루트)
+
+각 툴이 시작 시 자동으로 읽는 파일명이 다르므로, 루트에 동일한 내용(이 파일로의 포인터)을 여러 이름으로 둔다.
+
+| 파일 | 대상 툴 |
+| --- | --- |
+| `CLAUDE.md` | Claude Code |
+| `AGENTS.md` | Codex, 그리고 `AGENTS.md` 규격을 지원하는 대부분의 에이전트 |
+| `GEMINI.md` | Gemini CLI |
+
+Command Code처럼 위 세 파일 중 아무것도 자동으로 읽지 않는 툴을 쓸 경우, 그 툴의 system prompt/설정(예: 커스텀 instructions, `--system` 옵션 등)에 "작업 전에 `agents/CONVENTIONS.md`를 읽어라"를 직접 지정해야 한다. 새로운 진입점 파일명이 필요해지면 위 표와 루트에 같은 패턴으로 파일을 추가하고 이 표도 갱신한다.
 
 멀티 에이전트 조직 운영 플랫폼. 상세 제품/아키텍처 스펙은 이 저장소를 만든 최초 이슈 본문(Multi-Agent Organization Platform - Product & Architecture Draft) 참고. 이 파일은 그 스펙을 구현 단위로 요약한 것이다.
 
@@ -61,13 +73,27 @@ Agent의 `permissionProfile`은 DB의 boolean 플래그(FILE_READ/FILE_WRITE/TER
 
 ## 실행 방법
 
+Postgres 접속 정보는 `apps/backend/.env` (`DATABASE_URL`)에 설정. `.env.example` 참고. 로컬 기준 예: `postgresql://postgres@localhost:5432/AGENT_DOCK?schema=public`.
+
 ```
+# 1. 빈 데이터베이스 생성 (최초 1회, DB 자체는 Prisma가 만들어주지 않는다)
+createdb AGENT_DOCK
+# 또는: psql -U postgres -c 'CREATE DATABASE "AGENT_DOCK";'
+
+# 2. 의존성 설치
 npm install
+
+# 3. 스키마 적용 — apps/server/prisma/migrations의 SQL을 Prisma가 그대로 실행한다.
+#    직접 SQL을 작성/실행할 필요는 없다.
+npm run prisma:migrate --workspace=apps/backend   # 로컬 개발, 스키마 변경 시에도 사용
+# 배포/CI에서는 npm run prisma:generate 대신 `prisma migrate deploy`를 쓴다 (마이그레이션 생성 없이 적용만)
+
+# 4. 서버 실행
 npm run dev:backend    # apps/backend, PORT 3001
 npm run dev:frontend   # apps/frontend, PORT 3000
 ```
 
-Postgres 접속 정보는 `apps/backend/.env` (`DATABASE_URL`)에 설정. `.env.example` 참고.
+Prisma 스키마(`apps/backend/prisma/schema.prisma`)를 바꾼 뒤에는 `npm run prisma:migrate --workspace=apps/backend -- --name <변경 요약>`으로 마이그레이션 파일을 새로 생성하고 커밋한다.
 
 ## 코딩 컨벤션
 
