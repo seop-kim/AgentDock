@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
+import styles from './page.module.css';
 
 interface LogLine {
   stream: 'stdout' | 'stderr';
@@ -55,19 +56,9 @@ export default function ExecutionPage({ params }: { params: { id: string } }) {
       <p>
         Status: <strong>{status}</strong>
       </p>
-      <pre
-        ref={logRef}
-        style={{
-          background: '#111',
-          color: '#eee',
-          padding: 16,
-          height: 480,
-          overflowY: 'auto',
-          borderRadius: 4,
-        }}
-      >
+      <pre ref={logRef} className={styles.log}>
         {lines.map((l, i) => (
-          <div key={i} style={{ color: l.stream === 'stderr' ? '#ff8080' : '#eee' }}>
+          <div key={i} className={l.stream === 'stderr' ? styles.stderr : styles.stdout}>
             {l.content}
           </div>
         ))}
