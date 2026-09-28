@@ -4,8 +4,8 @@
 
 ## 기술 스택
 
-- Backend: NestJS + TypeScript + Prisma + PostgreSQL (`apps/server`)
-- Frontend: Next.js (App Router) + React + TypeScript (`apps/web`)
+- Backend: NestJS + TypeScript + Prisma + PostgreSQL (`apps/backend`)
+- Frontend: Next.js (App Router) + React + TypeScript (`apps/frontend`)
 - Local Runtime 실행: `child_process.spawn(cmd, args, { shell: false })`, 브라우저가 CLI를 직접 실행하지 않음
 - 실시간 로그: SSE (Server-Sent Events)
 
@@ -13,8 +13,8 @@
 
 ```
 apps/
-  server/   NestJS API. 아래 "Backend 모듈" 참고
-  web/      Next.js UI
+  backend/   NestJS API. 아래 "Backend 모듈" 참고
+  frontend/  Next.js UI
 ```
 
 npm workspaces 사용 (`package.json` 루트).
@@ -37,7 +37,7 @@ npm workspaces 사용 (`package.json` 루트).
 
 Group/Workflow/Task/Shared Context/Message/Artifact/Review/Decision은 이후 Phase(2~4)에서 확장. Phase 1 스캐폴딩 단계에서는 해당 엔티티를 만들지 않는다.
 
-## Backend 모듈 (`apps/server/src`)
+## Backend 모듈 (`apps/backend/src`)
 
 - `prisma/` — PrismaService, PrismaModule (전역)
 - `common/runtime/` — `AgentRuntime` 인터페이스, `ClaudeCodeRuntime` 구현체, `RuntimeRegistry` (provider key → runtime 매핑)
@@ -50,7 +50,7 @@ Group/Workflow/Task/Shared Context/Message/Artifact/Review/Decision은 이후 Ph
 
 ## Prisma 모델 (Phase 1)
 
-`ai_provider`, `ai_connection`, `agent_role`, `permission_profile`, `agent`, `workspace`, `execution`, `execution_log`. 이름/관계는 `apps/server/prisma/schema.prisma` 참고. 이후 Phase에서 `group`, `task`, `workflow`, `context`, `agent_message`, `artifact`, `review`, `decision` 등을 추가한다 (스펙 23장 Entity 목록).
+`ai_provider`, `ai_connection`, `agent_role`, `permission_profile`, `agent`, `workspace`, `execution`, `execution_log`. 이름/관계는 `apps/backend/prisma/schema.prisma` 참고. 이후 Phase에서 `group`, `task`, `workflow`, `context`, `agent_message`, `artifact`, `review`, `decision` 등을 추가한다 (스펙 23장 Entity 목록).
 
 ## Permission Enforcement
 
@@ -60,11 +60,11 @@ Agent의 `permissionProfile`은 DB의 boolean 플래그(FILE_READ/FILE_WRITE/TER
 
 ```
 npm install
-npm run dev:server   # apps/server, PORT 3001
-npm run dev:web       # apps/web, PORT 3000
+npm run dev:backend    # apps/backend, PORT 3001
+npm run dev:frontend   # apps/frontend, PORT 3000
 ```
 
-Postgres 접속 정보는 `apps/server/.env` (`DATABASE_URL`)에 설정. `.env.example` 참고.
+Postgres 접속 정보는 `apps/backend/.env` (`DATABASE_URL`)에 설정. `.env.example` 참고.
 
 ## 코딩 컨벤션
 

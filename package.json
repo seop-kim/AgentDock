@@ -2,13 +2,13 @@
   "name": "agentdock",
   "private": true,
   "workspaces": [
-    "apps/server",
-    "apps/web"
+    "apps/backend",
+    "apps/frontend"
   ],
   "scripts": {
-    "dev:server": "npm run start:dev --workspace=apps/server",
-    "dev:web": "npm run dev --workspace=apps/web",
-    "build:server": "npm run build --workspace=apps/server",
-    "build:web": "npm run build --workspace=apps/web"
+    "dev:backend": "npm run start:dev --workspace=apps/backend",
+    "dev:frontend": "npm run dev --workspace=apps/frontend",
+    "build:backend": "npm run build --workspace=apps/backend",
+    "build:frontend": "npm run build --workspace=apps/frontend"
   }
 }
