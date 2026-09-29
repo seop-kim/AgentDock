@@ -702,7 +702,7 @@ public class Workspace {
     @Column(nullable = false, unique = true)
     private String name;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false, unique = true, length = 1024)
     private String path;
 
     private String description;
