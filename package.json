@@ -2,15 +2,14 @@
   "name": "agentdock",
   "private": true,
   "workspaces": [
-    "apps/backend",
     "apps/frontend"
   ],
   "scripts": {
-    "dev:backend": "npm run start:dev --workspace=apps/backend",
+    "dev:backend": "cd apps/backend && gradlew.bat bootRun",
+    "dev:backend:test": "cd apps/backend && gradlew.bat bootRun --args=--server.port=8081",
     "dev:frontend": "npm run dev --workspace=apps/frontend",
-    "dev:backend:test": "npm run start:dev:test --workspace=apps/backend",
     "dev:frontend:test": "npm run dev:test --workspace=apps/frontend",
-    "build:backend": "npm run build --workspace=apps/backend",
+    "build:backend": "cd apps/backend && gradlew.bat build",
     "build:frontend": "npm run build --workspace=apps/frontend"
   }
 }
