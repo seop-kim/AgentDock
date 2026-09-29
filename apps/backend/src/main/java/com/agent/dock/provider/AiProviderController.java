@@ -30,6 +30,11 @@ public class AiProviderController {
         service.delete(id);
     }
 
+    @PutMapping("/{id}/enabled")
+    public AiProviderResponse setEnabled(@PathVariable Long id, @Valid @RequestBody RuntimeEnabledRequest request) {
+        return service.setEnabled(id, request.enabled());
+    }
+
     @PostMapping("/connections")
     @ResponseStatus(HttpStatus.CREATED)
     public AiConnectionResponse createConnection(@Valid @RequestBody CreateAiConnectionRequest request) {

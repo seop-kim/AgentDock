@@ -55,6 +55,14 @@ public class AiProviderService {
         providerRepository.save(provider);
     }
 
+    /** 런타임 on/off. 켜져 있어야 에이전트에 할당하거나 실행할 수 있다. */
+    @Transactional
+    public AiProviderResponse setEnabled(Long providerId, boolean enabled) {
+        AiProvider provider = findActive(providerId);
+        provider.setEnabled(enabled);
+        return AiProviderResponse.from(providerRepository.save(provider));
+    }
+
     /** 삭제된 Connection 을 다시 만든다("연결 추가"). Provider 당 1개만 허용한다. */
     public AiConnectionResponse createProviderConnection(Long providerId) {
         AiProvider provider = findActive(providerId);
