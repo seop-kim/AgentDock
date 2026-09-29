@@ -66,7 +66,7 @@ Workflow/WorkflowStep(순차·병렬 실행), Shared Context, Message, Artifact,
 ## Backend 모듈 (`apps/backend/src/main/java/com/agent/dock`)
 
 - `common/` — `GlobalExceptionHandler`(400/403/404/409 응답 형태), `BadRequestException`/`NotFoundException`/`ForbiddenException`/`ConflictException`, `WebConfig`(CORS), `QueryDslConfig`(`JPAQueryFactory` 빈)
-- `provider/` — AiProvider·AiConnection 엔티티/Repository/Service/Controller (Credential은 DB에 평문 저장 금지, `credentialReference`만 저장)
+- `provider/` — AiProvider·AiConnection CRUD와 연결 상태 확인. 실행 엔진별 probe(`AiConnectionProbe`/`ProbeRegistry`/`ClaudeCodeProbe`)로 CLI가 실제 응답하는지 확인한다(`POST /ai-connections/{id}/check`). Credential은 DB에 평문 저장 금지, `credentialReference`만 저장
 - `agent/` — Agent CRUD. Role/Permission/Provider/Connection 참조. 목록 조회는 QueryDSL fetch join(`AgentRepositoryImpl`)
 - `role/`, `permission/` — Role, PermissionProfile CRUD. `PermissionService.isAllowed(profile, action)`가 enforcement primitive
 - `workspace/` — Workspace CRUD, 로컬 폴더 브라우징 API(`GET /workspaces/browse`), UNC 경로 차단(`WorkspaceFs`), 기동 시 드라이브 루트 메타데이터 워밍
@@ -85,8 +85,17 @@ Workflow/WorkflowStep(순차·병렬 실행), Shared Context, Message, Artifact,
 - `agent_group` 은 SQL 예약어 `group` 을 피한 테이블명이다(엔티티 `AgentGroup`). 같은 프로젝트 안에서 이름이 유일하다.
 - `task` 는 `project_id` 가 필수이고 `group_id`/`agent_id` 중 정확히 하나만 가진다(DB CHECK + 서비스 검증).
 - `execution.task_id` 는 Task 실행으로 만들어진 실행을 표시한다. 관계 매핑 없이 컬럼만 두어 `execution` → `task` 패키지 의존을 피한다.
+- `ai_connection.last_checked_at`/`last_error` 는 연결 확인(V3)의 결과다. `status` 는 `CONNECTED`/`DISCONNECTED`/`ERROR` 이며 확인할 때마다 갱신된다.
 
 이후 Phase에서 `workflow`, `workflow_step`, `context`, `agent_message`, `artifact`, `review`, `decision` 등을 추가한다 (스펙 23장 Entity 목록).
+
+## AI 연결과 자격증명
+
+- 자격증명은 **CLI의 기존 로그인 세션을 그대로 사용**한다(스펙 6장 우선순위 1). 이 앱은 API Key/토큰을 저장하지 않고 DB에는 `accountName` 과 `credentialReference`(참조 문자열)만 둔다. 로그인/재로그인은 사용자가 각 CLI에서 직접 한다(`claude` 등).
+- 실행 바이너리는 환경변수로 override 한다: `CLAUDE_CODE_BIN`(기본 `claude`).
+- **연결 확인(probe)**: `POST /ai-connections/{id}/check` 가 해당 Provider의 CLI를 짧은 프롬프트로 한 번 실행해(최대 30초) 실제 응답 여부를 보고 `status`/`last_error`/`last_checked_at` 을 갱신한다. 로그인 만료 같은 실패를 실행 전에 UI에서 확인할 수 있게 하는 것이 목적이다.
+- probe 구현체는 Provider별로 하나이며 `ProbeRegistry` 에 자동 등록된다. 현재는 `ClaudeCodeProbe`(CLAUDE_CODE)만 있다. CODEX/COMMAND_CODE/GEMINI 는 Runtime 구현체도 probe도 없어서 실행 시 404, 연결 확인 시 ERROR 로 표시된다.
+- Provider별 지원 모델/모드(`capabilities`) 정의와 Mode 의미 부여는 아직 미구현이다(스펙 5장).
 
 ## Permission Enforcement
 
