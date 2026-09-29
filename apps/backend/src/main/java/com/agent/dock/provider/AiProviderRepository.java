@@ -10,6 +10,8 @@ public interface AiProviderRepository extends JpaRepository<AiProvider, Long> {
     @EntityGraph(attributePaths = "connections")
     List<AiProvider> findByDeletedAtIsNullOrderByNameAsc();
 
+    List<AiProvider> findByEnabledTrueAndDeletedAtIsNullOrderByNameAsc();
+
     Optional<AiProvider> findByIdAndDeletedAtIsNull(Long id);
 
     boolean existsByKeyAndDeletedAtIsNull(ProviderKey key);

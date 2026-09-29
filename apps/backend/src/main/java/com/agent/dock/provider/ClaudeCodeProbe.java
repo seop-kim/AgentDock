@@ -3,6 +3,7 @@ package com.agent.dock.provider;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.io.File;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -27,11 +28,11 @@ public class ClaudeCodeProbe implements AiConnectionProbe {
     }
 
     @Override
-    public ProbeResult check() {
+    public ProbeResult check(String cwd) {
         String command = System.getenv().getOrDefault("CLAUDE_CODE_BIN", "claude");
         ProcessBuilder builder = new ProcessBuilder(List.of(command, "-p", PROBE_PROMPT, "--output-format", "text"));
         builder.redirectErrorStream(true);
-        builder.directory(null);
+        builder.directory(cwd == null ? null : new File(cwd));
 
         Process process;
         try {

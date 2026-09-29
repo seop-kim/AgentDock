@@ -26,7 +26,7 @@ public class AiConnectionService {
             connection.setStatus(ConnectionStatus.ERROR);
             connection.setLastError("이 Provider 는 아직 연결 확인을 지원하지 않습니다: " + connection.getProvider().getKey());
         } else {
-            ProbeResult result = probe.check();
+            ProbeResult result = probe.check(null);
             connection.setStatus(result.ok() ? ConnectionStatus.CONNECTED : ConnectionStatus.ERROR);
             connection.setLastError(result.ok() ? null : result.detail());
         }
