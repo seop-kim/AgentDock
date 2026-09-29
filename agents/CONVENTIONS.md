@@ -127,32 +127,37 @@ DB 확인이 필요하면 `psql`이 PATH에 없으므로 전체 경로를 쓴다
 - FK를 읽기 전용 shadow 필드(`insertable = false, updatable = false`)로 함께 두는 엔티티는 저장 직후 그 값이 비어 있다. 생성 응답에서 FK id가 필요하면 관계에서 보완한다(`ExecutionResponse.from` 참고).
 - POST 엔드포인트는 기존 NestJS 동작과 맞추기 위해 **201**을 반환한다(`@ResponseStatus(HttpStatus.CREATED)`).
 
-## 커밋 컨벤션
+## 브랜치 흐름과 커밋 컨벤션
 
-모든 Agent/기여자는 커밋 전에 이 섹션을 확인한다. 이 저장소는 **[Conventional Commits](https://www.conventionalcommits.org/) 대신 `[Type] 제목` 형식**을 쓴다.
+브랜치 흐름은 `기능 브랜치 → dev → test → release` 다. `dev`는 통합 브랜치이고, `test`와 `release`는 `dev`에서 병합해 만든다. 따라서 **`dev`에 쌓이는 커밋 이력이 곧 릴리스 노트의 원천**이고, 커밋 메시지 규칙이 두 단계로 나뉜다.
+
+### 1) 기능 브랜치 — 글로벌 컨벤션([Conventional Commits](https://www.conventionalcommits.org/))
+
+기능 브랜치에서 작업할 때는 Conventional Commits 형식을 쓴다.
 
 ```
-[Feat] 에이전트 실행에 permission enforcement 추가
+feat: 에이전트 실행에 permission enforcement 추가
+fix(workspace): 폴더 선택에서 드라이브 루트 조회가 멈추던 문제 수정
+
+본문(선택): 왜 변경했는지
+```
+
+- 타입: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`
+- scope는 선택: `fix(workspace): ...`, `feat(backend): ...`
+- 제목은 소문자 타입 + 콜론 + 한 칸 + 간결한 설명 (한국어 허용)
+- 여러 변경을 한 커밋에 몰아넣지 않는다. 하나의 커밋은 하나의 논리적 단위로 나눈다.
+
+### 2) `dev`에 반영되는 커밋 — squash merge + `[Type] 제목`
+
+기능 브랜치를 `dev`에 넣을 때는 **squash merge**하고, 그 squash 커밋 메시지(= PR 제목)를 `[Type] 제목` 형식으로 쓴다.
+
+```
+[Feat] NestJS/Next.js → Spring Boot + Vite React 스택 전환
 [Fix] 폴더 선택에서 드라이브 루트 조회가 멈추던 문제 수정
-
-본문(선택): 왜 변경했는지 (빈 줄 뒤에 작성)
 ```
 
-- `[Type]` — 대괄호를 쓰고 타입은 대문자로 시작한다. 아래 타입을 쓴다.
-  - `[Feat]` — 새로운 기능 추가
-  - `[Fix]` — 버그 수정
-  - `[Docs]` — 문서만 변경 (이 파일, README 등)
-  - `[Style]` — 포맷팅/세미콜론 등 동작에 영향 없는 변경
-  - `[Refactor]` — 기능 변화 없는 코드 구조 개선
-  - `[Perf]` — 성능 개선
-  - `[Test]` — 테스트 추가/수정
-  - `[Build]` — 빌드 시스템, 의존성 변경
-  - `[Ci]` — CI 설정 변경
-  - `[Chore]` — 기타 잡무 (설정 파일, 스캐폴딩 등 위 타입에 안 맞는 것)
-  - `[Revert]` — 이전 커밋 되돌리기
-- 대괄호 뒤에 한 칸 띄우고 제목을 쓴다. 마침표 없이 간결하게, 한국어로 써도 된다. 예: `[Feat] Agent 실행에 permission enforcement 추가`
-- scope/콜론 형식(`feat(backend): ...`, `fix(frontend): ...`)은 쓰지 않는다.
+- 타입은 대괄호 + 대문자 시작: `[Feat]` `[Fix]` `[Docs]` `[Style]` `[Refactor]` `[Perf]` `[Test]` `[Build]` `[Ci]` `[Chore]` `[Revert]`
+- 대괄호 뒤에 한 칸 띄우고 제목을 쓴다. scope/콜론 형식(`feat(backend): ...`)은 쓰지 않는다. (한국어 허용)
+- 기능 브랜치의 개별 커밋은 squash되므로 `dev`에는 남지 않는다. 즉 `dev` 이력은 항상 `[Type]` 형식이다.
 - Breaking change는 본문에 `BREAKING CHANGE: <설명>`을 추가한다.
 - AI 에이전트가 만든 커밋에도 `Co-Authored-By:` 트레일러를 붙이지 않는다.
-- 여러 변경을 한 커밋에 몰아넣지 않는다. 하나의 커밋은 하나의 논리적 단위로 나눈다.
-- 참고: 2026-09-29 이전에 만들어진 기존 이력에는 Conventional Commits 형식이 섞여 있다.
