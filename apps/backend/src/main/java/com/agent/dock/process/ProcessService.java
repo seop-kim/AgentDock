@@ -12,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * 로컬 CLI(Claude Code, Codex 등) 프로세스 실행을 담당한다.
  * ProcessBuilder는 shell을 경유하지 않으므로 사용자 prompt가 셸 명령으로 해석되지 않는다.
+ * 실행 파일 이름은 PATH/PATHEXT 로 해석한다(`npm` → `npm.cmd` 처럼 확장자 없는 이름도 실행되게).
  */
 @Service
 @Slf4j
@@ -21,7 +22,7 @@ public class ProcessService {
     public Process spawn(String executionId, String command, List<String> args, String cwd) {
         try {
             List<String> fullCommand = new ArrayList<>();
-            fullCommand.add(command);
+            fullCommand.add(Executables.resolve(command));
             fullCommand.addAll(args);
             ProcessBuilder builder = new ProcessBuilder(fullCommand);
             builder.directory(new File(cwd));
