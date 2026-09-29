@@ -2,17 +2,18 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** `apps/backend`(NestJS+Prisma)를 Java 21 + Spring Boot 3(Gradle, JPA+QueryDSL, Flyway)로, `apps/frontend`(Next.js)를 Vite+React+React Router로 1:1 포팅한다. 기능 추가 없음, User/인증은 범위 밖.
+**Goal:** `apps/backend`(NestJS+Prisma)를 Java 25 + Spring Boot 4.1.1(Gradle Groovy DSL, JPA+QueryDSL, Flyway)로, `apps/frontend`(Next.js)를 Vite+React+React Router로 1:1 포팅한다. 기능 추가 없음, User/인증은 범위 밖.
 
 **Architecture:** 기존 6개 백엔드 모듈(ai-provider, agent, role, permission, workspace, execution)과 런타임 계층(AgentRuntime/ClaudeCodeRuntime/RuntimeRegistry/ProcessService)을 Spring 패키지로 그대로 대응시킨다. Entity↔JSON 직렬화 순환 참조를 피하기 위해 모든 Controller는 Entity를 직접 반환하지 않고 Response record(DTO)로 매핑한다. Execution의 SSE는 `Map<String, List<SseEmitter>>` fan-out으로, DB PK(Long)와 Runtime/스트림 키(String)를 분리해 관리한다. 프론트는 페이지 컴포넌트/CSS Modules를 거의 그대로 옮기고 Next.js 전용 요소만 제거한다.
 
-**Tech Stack:** Java 21, Spring Boot 3.3.4, Gradle(Kotlin DSL), Spring Data JPA + QueryDSL 5.1.0, Flyway, PostgreSQL, Lombok · Vite 5 + React 18 + React Router 6, CSS Modules
+**Tech Stack:** Java 25, Spring Boot 4.1.1, Gradle(Groovy DSL), Spring Data JPA + QueryDSL 5.1.0, Flyway, PostgreSQL, Lombok · Vite 5 + React 18 + React Router 6, CSS Modules
 
 **Spec:** [docs/superpowers/specs/2026-09-28-java-spring-react-migration-brief.md](../specs/2026-09-28-java-spring-react-migration-brief.md)
 
 ## Global Constraints
 
-- Java 21, Spring Boot 3.3.4, Gradle Kotlin DSL — 브리프 3절
+- Java 25, Spring Boot 4.1.1, Gradle **Groovy** DSL(`build.gradle`, `.kts` 아님), groupId `com.agent.dock`, 패키지 루트 `com.agent.dock` — Task 1 완료 후 실측 확정(브리프 3절/Task 1 원안의 Java 21·Boot 3.3.4·Kotlin DSL·`com.agentdock.backend`에서 변경됨, 로컬 환경 제약 및 사용자가 Spring Initializr로 직접 생성한 프로젝트 반영). 아래 모든 태스크의 코드 스니펫은 이미 이 패키지명으로 치환되어 있다
+- Spring Boot 4.x 스타터명 차이 주의: `spring-boot-starter-web` 대신 `spring-boot-starter-webmvc`, Flyway는 `spring-boot-starter-flyway` + `flyway-database-postgresql` 조합 사용(이미 Task 1 산출물의 build.gradle에 반영됨)
 - DB 컬럼명은 snake_case로 새로 설계한다(기존 Prisma의 camelCase 컬럼명 방식은 유지하지 않음). API JSON 필드명(camelCase)은 브리프 6절과 정확히 동일해야 한다 — 이 변경은 DB 내부 구현 세부사항이며 프론트 계약에는 영향 없음
 - 모든 REST 응답은 Entity를 직접 반환하지 않고 Response record로 매핑한다(양방향 관계 순환 참조로 인한 Jackson 무한 직렬화 방지)
 - Permission Enforcement는 `/executions` POST 처리 중 Runtime 호출 **전에** 서버에서 실제로 차단한다(`PermissionAction.TERMINAL_EXECUTE`) — 생략 금지
@@ -31,112 +32,89 @@
 
 ---
 
-## Task 1: 백엔드 스캐폴딩 — 기존 NestJS 삭제, Gradle Spring Boot 프로젝트 생성
+## Task 1: 백엔드 스캐폴딩 확인 + 공통 예외/CORS/설정 추가
+
+> **참고(실행 환경 변경 — ledger pre-flight 참고):** 이 태스크는 원래 "기존 NestJS 삭제 + Gradle 프로젝트를 코드로 생성"이었으나, 로컬 환경에 Gradle이 없고 관리자 권한도 없어 사용자가 [start.spring.io](https://start.spring.io)에서 Spring Initializr로 직접 프로젝트를 생성해 `apps/backend`에 배치했다(Gradle Wrapper 포함, 관리자 권한 불필요). 그 결과 스택이 계획 원안과 달라졌다: **Java 25**(21 아님), **Spring Boot 4.1.1**(3.3.4 아님), **Gradle Groovy DSL**(`build.gradle`, Kotlin DSL 아님), groupId/패키지 루트 `com.agent.dock`(`com.agentdock.backend` 아님), 메인 클래스 `AgentDockApplication`(`BackendApplication` 아님). 이 플랜의 모든 코드 스니펫은 이미 `com.agent.dock` 패키지로 치환되어 있다. 이 태스크는 "삭제 후 생성"이 아니라 "이미 있는 프로젝트에 남은 조각 추가"로 범위가 좁아졌다.
 
 **Files:**
-- Delete: `apps/backend/` 전체(기존 NestJS 프로�트)
-- Create: `apps/backend/build.gradle.kts`
-- Create: `apps/backend/settings.gradle.kts`
-- Create: `apps/backend/gradle.properties`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/BackendApplication.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/common/WebConfig.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/common/BadRequestException.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/common/NotFoundException.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/common/ForbiddenException.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/common/GlobalExceptionHandler.java`
-- Create: `apps/backend/src/main/resources/application.yml`
+- Verify (생성하지 않음, 이미 존재): `apps/backend/build.gradle`, `apps/backend/settings.gradle`, `apps/backend/gradlew`, `apps/backend/gradle/wrapper/*`, `apps/backend/src/main/java/com/agent/dock/AgentDockApplication.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/common/WebConfig.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/common/BadRequestException.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/common/NotFoundException.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/common/ForbiddenException.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/common/GlobalExceptionHandler.java`
+- Modify: `apps/backend/src/main/resources/application.yaml` (Initializr가 만든 빈 파일에 내용 채움 — 확장자가 `.yml`이 아니라 `.yaml`인 점 주의)
 - Create: `apps/backend/.env.example` (참고용 — Spring은 `.env`를 직접 읽지 않으므로 실제로는 OS 환경변수나 `--spring.config.*`로 주입한다는 설명 포함)
 
 **Interfaces:**
 - Produces: `BadRequestException`, `NotFoundException`, `ForbiddenException` (전부 `RuntimeException` 상속, 이후 모든 모듈이 이 셋으로 예외를 던진다)
 
-- [ ] **Step 1: 기존 apps/backend 삭제**
+- [ ] **Step 1: 기존 프로젝트 확인, 컴파일러 환경 확인**
 
 ```bash
-git rm -r apps/backend
+ls apps/backend
 ```
+Expected: `build.gradle`, `settings.gradle`, `gradlew`, `gradlew.bat`, `gradle/`, `src/main/java/com/agent/dock/AgentDockApplication.java`, `src/main/resources/application.yaml` 존재. 하나라도 없으면 이 태스크를 진행하기 전에 사용자에게 확인을 요청한다(다른 태스크가 이 구조를 전제로 하기 때문).
 
-- [ ] **Step 2: Gradle 프로젝트 뼈대 생성**
-
-`apps/backend/settings.gradle.kts`:
-```kotlin
-rootProject.name = "backend"
+JDK 확인(Gradle Wrapper는 `JAVA_HOME` 또는 `PATH`의 `java`가 필요하다):
+```bash
+java -version
 ```
+Expected: `openjdk version "25...`. 실패하면(이 환경은 JDK가 PATH에 없고 `C:\Users\<user>\.jdks\openjdk-25.0.2`에 설치되어 있었다) 해당 `bin` 디렉터리를 **POSIX 스타일 경로**(`/c/Users/...`, `C:/...` 아님 — Git Bash에서 드라이브 콜론이 PATH 구분자와 충돌해 깨진다)로 `PATH`에 추가한다. 이후 모든 `./gradlew` 호출 앞에 이 환경변수를 붙인다.
 
-`apps/backend/gradle.properties`:
-```properties
-org.gradle.jvmargs=-Xmx1g
-```
+- [ ] **Step 2: build.gradle 확인 (수정하지 않음 — QueryDSL은 Task 4에서 추가)**
 
-`apps/backend/build.gradle.kts`:
-```kotlin
+`apps/backend/build.gradle`은 이미 다음을 포함하고 있어야 한다(Initializr가 생성):
+```groovy
 plugins {
-    java
-    id("org.springframework.boot") version "3.3.4"
-    id("io.spring.dependency-management") version "1.1.6"
+	id 'java'
+	id 'org.springframework.boot' version '4.1.1'
+	id 'io.spring.dependency-management' version '1.1.7'
 }
 
-group = "com.agentdock"
-version = "0.1.0"
+group = 'com.agent.dock'
+version = '0.0.1-SNAPSHOT'
 
 java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
-    }
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(25)
+	}
 }
 
 repositories {
-    mavenCentral()
+	mavenCentral()
 }
-
-val querydslVersion = "5.1.0"
 
 dependencies {
-    implementation("org.springframework.boot:spring-boot-starter-web")
-    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-    implementation("org.springframework.boot:spring-boot-starter-validation")
-    implementation("org.flywaydb:flyway-core")
-    implementation("org.flywaydb:flyway-database-postgresql")
-    runtimeOnly("org.postgresql:postgresql")
-
-    implementation("com.querydsl:querydsl-jpa:$querydslVersion:jakarta")
-    annotationProcessor("com.querydsl:querydsl-apt:$querydslVersion:jakarta")
-    annotationProcessor("jakarta.annotation:jakarta.annotation-api")
-    annotationProcessor("jakarta.persistence:jakarta.persistence-api")
-
-    compileOnly("org.projectlombok:lombok")
-    annotationProcessor("org.projectlombok:lombok")
-
-    testImplementation("org.springframework.boot:spring-boot-starter-test")
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-flyway'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	implementation 'org.flywaydb:flyway-database-postgresql'
+	compileOnly 'org.projectlombok:lombok'
+	developmentOnly 'org.springframework.boot:spring-boot-devtools'
+	runtimeOnly 'org.postgresql:postgresql'
+	annotationProcessor 'org.projectlombok:lombok'
+	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-flyway-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	testCompileOnly 'org.projectlombok:lombok'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	testAnnotationProcessor 'org.projectlombok:lombok'
 }
 
-tasks.withType<Test> {
-    useJUnitPlatform()
-}
-```
-
-- [ ] **Step 3: BackendApplication 작성**
-
-`apps/backend/src/main/java/com/agentdock/backend/BackendApplication.java`:
-```java
-package com.agentdock.backend;
-
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-
-@SpringBootApplication
-public class BackendApplication {
-    public static void main(String[] args) {
-        SpringApplication.run(BackendApplication.class, args);
-    }
+tasks.named('test') {
+	useJUnitPlatform()
 }
 ```
+다르면(특히 `spring-boot-starter-webmvc`, `spring-boot-starter-flyway`, `spring-boot-starter-validation`, `data-jpa`, `lombok`, `postgresql` 항목) 위 내용으로 맞춘다. `AgentDockApplication.java`는 그대로 둔다(클래스명이 달라도 Spring Boot의 컴포넌트 스캔에는 영향 없다 — 다른 어떤 태스크도 이 클래스명을 참조하지 않는다).
 
-- [ ] **Step 4: 공통 예외 클래스 + 글로벌 핸들러 작성**
+- [ ] **Step 3: 공통 예외 클래스 + 글로벌 핸들러 작성**
 
-`apps/backend/src/main/java/com/agentdock/backend/common/BadRequestException.java`:
+`apps/backend/src/main/java/com/agent/dock/common/BadRequestException.java`:
 ```java
-package com.agentdock.backend.common;
+package com.agent.dock.common;
 
 public class BadRequestException extends RuntimeException {
     public BadRequestException(String message) {
@@ -145,9 +123,9 @@ public class BadRequestException extends RuntimeException {
 }
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/common/NotFoundException.java`:
+`apps/backend/src/main/java/com/agent/dock/common/NotFoundException.java`:
 ```java
-package com.agentdock.backend.common;
+package com.agent.dock.common;
 
 public class NotFoundException extends RuntimeException {
     public NotFoundException(String message) {
@@ -156,9 +134,9 @@ public class NotFoundException extends RuntimeException {
 }
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/common/ForbiddenException.java`:
+`apps/backend/src/main/java/com/agent/dock/common/ForbiddenException.java`:
 ```java
-package com.agentdock.backend.common;
+package com.agent.dock.common;
 
 public class ForbiddenException extends RuntimeException {
     public ForbiddenException(String message) {
@@ -167,9 +145,9 @@ public class ForbiddenException extends RuntimeException {
 }
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/common/GlobalExceptionHandler.java`:
+`apps/backend/src/main/java/com/agent/dock/common/GlobalExceptionHandler.java`:
 ```java
-package com.agentdock.backend.common;
+package com.agent.dock.common;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -223,9 +201,9 @@ public class GlobalExceptionHandler {
 }
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/common/WebConfig.java`:
+`apps/backend/src/main/java/com/agent/dock/common/WebConfig.java`:
 ```java
-package com.agentdock.backend.common;
+package com.agent.dock.common;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -244,9 +222,9 @@ public class WebConfig implements WebMvcConfigurer {
 }
 ```
 
-- [ ] **Step 5: application.yml 작성**
+- [ ] **Step 4: application.yaml 작성 (기존 빈 파일에 내용 채움)**
 
-`apps/backend/src/main/resources/application.yml`:
+`apps/backend/src/main/resources/application.yaml`:
 ```yaml
 server:
   port: ${PORT:8080}
@@ -265,10 +243,10 @@ spring:
     locations: classpath:db/migration
 ```
 
-`apps/backend/.env.example` (참고용 문서 — Spring Boot는 `.env` 파일을 직접 읽지 않는다. 로컬 실행 시 OS 환경변수로 주입하거나 `application-local.yml`을 만들어 쓴다):
+`apps/backend/.env.example` (참고용 문서 — Spring Boot는 `.env` 파일을 직접 읽지 않는다. 로컬 실행 시 OS 환경변수로 주입하거나 `application-local.yaml`을 만들어 쓴다):
 ```
 # Spring Boot는 .env를 자동으로 읽지 않습니다. 아래 값을 OS 환경변수로 export 하거나
-# apps/backend/src/main/resources/application-local.yml (gitignore 대상)을 만들어 override 하세요.
+# apps/backend/src/main/resources/application-local.yaml (gitignore 대상)을 만들어 override 하세요.
 DATABASE_URL=jdbc:postgresql://localhost:5432/AGENT_DOCK
 DATABASE_USERNAME=postgres
 DATABASE_PASSWORD=
@@ -276,16 +254,18 @@ PORT=8080
 CLAUDE_CODE_BIN=claude
 ```
 
-- [ ] **Step 6: 컴파일 확인**
+- [ ] **Step 5: 컴파일 확인**
 
-Run: `cd apps/backend && ./gradlew compileJava` (최초 실행이라 `gradle wrapper` 태스크가 없으면 로컬에 설치된 `gradle`로 `gradle wrapper --gradle-version 8.10`을 먼저 실행해 wrapper를 생성한다)
+Gradle Wrapper는 이미 존재하므로(Spring Initializr가 생성) `gradle wrapper` 태스크를 따로 실행할 필요가 없다. JDK가 PATH에 없는 환경이면 Step 1에서 확인한 `JAVA_HOME`/`PATH`를 명령 앞에 인라인으로 붙인다(POSIX 스타일 경로, 변수 확장 없이 리터럴로 — 이 저장소 경로에 `GitHub`라는 문자열이 들어있어 일부 셸 안전 필터가 변수 확장/서브셸 구성을 오탐하는 경우가 있었다. 실패하면 가장 단순한 한 줄짜리 리터럴 명령으로 줄인다):
+
+Run: `JAVA_HOME=<jdk-bin-parent-posix-path> PATH=<jdk-bin-posix-path>:/usr/bin:/bin ./gradlew compileJava` (예: `JAVA_HOME=/c/Users/<user>/.jdks/openjdk-25.0.2 PATH=/c/Users/<user>/.jdks/openjdk-25.0.2/bin:/usr/bin:/bin ./gradlew compileJava`, `apps/backend` 안에서 실행)
 Expected: `BUILD SUCCESSFUL` (아직 DB 연결/Flyway는 시도하지 않는 단계이므로 컴파일만 통과하면 된다)
 
-- [ ] **Step 7: 커밋**
+- [ ] **Step 6: 커밋**
 
 ```bash
 git add apps/backend
-git commit -m "feat(backend): Spring Boot 프로젝트 스캐폴딩(Gradle, 공통 예외/CORS)"
+git commit -m "feat(backend): 공통 예외/CORS/설정 추가 (Spring Boot 프로젝트는 Initializr로 생성됨)"
 ```
 
 ---
@@ -427,18 +407,18 @@ git commit -m "feat(backend): Flyway 초기 스키마 마이그레이션 추가"
 ## Task 3: JPA 엔티티 + Enum
 
 **Files:**
-- Create: `apps/backend/src/main/java/com/agentdock/backend/provider/ProviderKey.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/provider/ConnectionStatus.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/execution/ExecutionStatus.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/execution/LogStream.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/provider/AiProvider.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/provider/AiConnection.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/role/AgentRole.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/permission/PermissionProfile.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/workspace/Workspace.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/agent/Agent.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/execution/Execution.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/execution/ExecutionLog.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/provider/ProviderKey.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/provider/ConnectionStatus.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/execution/ExecutionStatus.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/execution/LogStream.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/provider/AiProvider.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/provider/AiConnection.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/role/AgentRole.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/permission/PermissionProfile.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/workspace/Workspace.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/agent/Agent.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/execution/Execution.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/execution/ExecutionLog.java`
 
 **Interfaces:**
 - Produces: 8개 `@Entity` 클래스. FK 관계는 `@ManyToOne(fetch = LAZY)` + 읽기 전용 shadow scalar 컬럼(`roleId`, `providerId` 등)을 함께 둔다 — 나중에 Response record가 지연 로딩 없이 FK 정수값을 바로 읽을 수 있게 하기 위함
@@ -446,36 +426,36 @@ git commit -m "feat(backend): Flyway 초기 스키마 마이그레이션 추가"
 
 - [ ] **Step 1: Enum 4개 작성**
 
-`apps/backend/src/main/java/com/agentdock/backend/provider/ProviderKey.java`:
+`apps/backend/src/main/java/com/agent/dock/provider/ProviderKey.java`:
 ```java
-package com.agentdock.backend.provider;
+package com.agent.dock.provider;
 
 public enum ProviderKey {
     CLAUDE_CODE, CODEX, COMMAND_CODE, GEMINI
 }
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/provider/ConnectionStatus.java`:
+`apps/backend/src/main/java/com/agent/dock/provider/ConnectionStatus.java`:
 ```java
-package com.agentdock.backend.provider;
+package com.agent.dock.provider;
 
 public enum ConnectionStatus {
     CONNECTED, DISCONNECTED, ERROR
 }
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/execution/ExecutionStatus.java`:
+`apps/backend/src/main/java/com/agent/dock/execution/ExecutionStatus.java`:
 ```java
-package com.agentdock.backend.execution;
+package com.agent.dock.execution;
 
 public enum ExecutionStatus {
     PENDING, RUNNING, SUCCEEDED, FAILED, CANCELLED
 }
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/execution/LogStream.java`:
+`apps/backend/src/main/java/com/agent/dock/execution/LogStream.java`:
 ```java
-package com.agentdock.backend.execution;
+package com.agent.dock.execution;
 
 public enum LogStream {
     STDOUT, STDERR, SYSTEM
@@ -484,11 +464,11 @@ public enum LogStream {
 
 - [ ] **Step 2: AiProvider, AiConnection 엔티티 작성**
 
-`apps/backend/src/main/java/com/agentdock/backend/provider/AiProvider.java`:
+`apps/backend/src/main/java/com/agent/dock/provider/AiProvider.java`:
 ```java
-package com.agentdock.backend.provider;
+package com.agent.dock.provider;
 
-import com.agentdock.backend.agent.Agent;
+import com.agent.dock.agent.Agent;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -538,11 +518,11 @@ public class AiProvider {
 }
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/provider/AiConnection.java`:
+`apps/backend/src/main/java/com/agent/dock/provider/AiConnection.java`:
 ```java
-package com.agentdock.backend.provider;
+package com.agent.dock.provider;
 
-import com.agentdock.backend.agent.Agent;
+import com.agent.dock.agent.Agent;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -590,11 +570,11 @@ public class AiConnection {
 
 - [ ] **Step 3: AgentRole, PermissionProfile, Workspace 엔티티 작성**
 
-`apps/backend/src/main/java/com/agentdock/backend/role/AgentRole.java`:
+`apps/backend/src/main/java/com/agent/dock/role/AgentRole.java`:
 ```java
-package com.agentdock.backend.role;
+package com.agent.dock.role;
 
-import com.agentdock.backend.agent.Agent;
+import com.agent.dock.agent.Agent;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -631,11 +611,11 @@ public class AgentRole {
 }
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/permission/PermissionProfile.java`:
+`apps/backend/src/main/java/com/agent/dock/permission/PermissionProfile.java`:
 ```java
-package com.agentdock.backend.permission;
+package com.agent.dock.permission;
 
-import com.agentdock.backend.agent.Agent;
+import com.agent.dock.agent.Agent;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -695,12 +675,12 @@ public class PermissionProfile {
 }
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/workspace/Workspace.java`:
+`apps/backend/src/main/java/com/agent/dock/workspace/Workspace.java`:
 ```java
-package com.agentdock.backend.workspace;
+package com.agent.dock.workspace;
 
-import com.agentdock.backend.agent.Agent;
-import com.agentdock.backend.execution.Execution;
+import com.agent.dock.agent.Agent;
+import com.agent.dock.execution.Execution;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -722,7 +702,7 @@ public class Workspace {
     @Column(nullable = false, unique = true)
     private String name;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false, unique = true, length = 1024)
     private String path;
 
     private String description;
@@ -745,16 +725,16 @@ public class Workspace {
 
 - [ ] **Step 4: Agent 엔티티 작성**
 
-`apps/backend/src/main/java/com/agentdock/backend/agent/Agent.java`:
+`apps/backend/src/main/java/com/agent/dock/agent/Agent.java`:
 ```java
-package com.agentdock.backend.agent;
+package com.agent.dock.agent;
 
-import com.agentdock.backend.execution.Execution;
-import com.agentdock.backend.permission.PermissionProfile;
-import com.agentdock.backend.provider.AiConnection;
-import com.agentdock.backend.provider.AiProvider;
-import com.agentdock.backend.role.AgentRole;
-import com.agentdock.backend.workspace.Workspace;
+import com.agent.dock.execution.Execution;
+import com.agent.dock.permission.PermissionProfile;
+import com.agent.dock.provider.AiConnection;
+import com.agent.dock.provider.AiProvider;
+import com.agent.dock.role.AgentRole;
+import com.agent.dock.workspace.Workspace;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -836,12 +816,12 @@ public class Agent {
 
 - [ ] **Step 5: Execution, ExecutionLog 엔티티 작성**
 
-`apps/backend/src/main/java/com/agentdock/backend/execution/Execution.java`:
+`apps/backend/src/main/java/com/agent/dock/execution/Execution.java`:
 ```java
-package com.agentdock.backend.execution;
+package com.agent.dock.execution;
 
-import com.agentdock.backend.agent.Agent;
-import com.agentdock.backend.workspace.Workspace;
+import com.agent.dock.agent.Agent;
+import com.agent.dock.workspace.Workspace;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -901,9 +881,9 @@ public class Execution {
 }
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/execution/ExecutionLog.java`:
+`apps/backend/src/main/java/com/agent/dock/execution/ExecutionLog.java`:
 ```java
-package com.agentdock.backend.execution;
+package com.agent.dock.execution;
 
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -949,7 +929,7 @@ Expected: `BUILD SUCCESSFUL`
 - [ ] **Step 7: 커밋**
 
 ```bash
-git add apps/backend/src/main/java/com/agentdock/backend
+git add apps/backend/src/main/java/com/agent/dock
 git commit -m "feat(backend): JPA 엔티티 8개 + Enum 4개 추가"
 ```
 
@@ -958,27 +938,38 @@ git commit -m "feat(backend): JPA 엔티티 8개 + Enum 4개 추가"
 ## Task 4: Repository 계층 + QueryDSL 설정
 
 **Files:**
-- Create: `apps/backend/src/main/java/com/agentdock/backend/common/QueryDslConfig.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/provider/AiProviderRepository.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/provider/AiConnectionRepository.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/role/AgentRoleRepository.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/permission/PermissionProfileRepository.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/workspace/WorkspaceRepository.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/agent/AgentRepository.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/agent/AgentRepositoryCustom.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/agent/AgentRepositoryImpl.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/execution/ExecutionRepository.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/execution/ExecutionLogRepository.java`
+- Modify: `apps/backend/build.gradle` (QueryDSL 의존성 추가 — Task 1에서는 추가하지 않았다)
+- Create: `apps/backend/src/main/java/com/agent/dock/common/QueryDslConfig.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/provider/AiProviderRepository.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/provider/AiConnectionRepository.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/role/AgentRoleRepository.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/permission/PermissionProfileRepository.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/workspace/WorkspaceRepository.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/agent/AgentRepository.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/agent/AgentRepositoryCustom.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/agent/AgentRepositoryImpl.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/execution/ExecutionRepository.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/execution/ExecutionLogRepository.java`
 
 **Interfaces:**
 - Consumes: Task 3의 엔티티 8개
 - Produces: `AgentRepository.findAllWithRelations(): List<Agent>`, `AgentRepository.findByIdWithRelations(Long): Optional<Agent>` — 이후 AgentService/ExecutionService가 사용
 
-- [ ] **Step 1: QueryDSL JPAQueryFactory Bean 등록**
+- [ ] **Step 1: build.gradle에 QueryDSL 의존성 추가**
 
-`apps/backend/src/main/java/com/agentdock/backend/common/QueryDslConfig.java`:
+`apps/backend/build.gradle`의 `dependencies { ... }` 블록 안에 다음을 추가한다(기존 줄은 그대로 두고 추가만 — Groovy DSL 문법, Task 1의 `build.gradle.kts` 문법이 아니다):
+```groovy
+	implementation 'com.querydsl:querydsl-jpa:5.1.0:jakarta'
+	annotationProcessor 'com.querydsl:querydsl-apt:5.1.0:jakarta'
+	annotationProcessor 'jakarta.annotation:jakarta.annotation-api'
+	annotationProcessor 'jakarta.persistence:jakarta.persistence-api'
+```
+
+- [ ] **Step 2: QueryDSL JPAQueryFactory Bean 등록**
+
+`apps/backend/src/main/java/com/agent/dock/common/QueryDslConfig.java`:
 ```java
-package com.agentdock.backend.common;
+package com.agent.dock.common;
 
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import jakarta.persistence.EntityManager;
@@ -994,11 +985,11 @@ public class QueryDslConfig {
 }
 ```
 
-- [ ] **Step 2: 단순 Repository 6개 작성**
+- [ ] **Step 3: 단순 Repository 6개 작성**
 
-`apps/backend/src/main/java/com/agentdock/backend/provider/AiProviderRepository.java`:
+`apps/backend/src/main/java/com/agent/dock/provider/AiProviderRepository.java`:
 ```java
-package com.agentdock.backend.provider;
+package com.agent.dock.provider;
 
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -1011,9 +1002,9 @@ public interface AiProviderRepository extends JpaRepository<AiProvider, Long> {
 }
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/provider/AiConnectionRepository.java`:
+`apps/backend/src/main/java/com/agent/dock/provider/AiConnectionRepository.java`:
 ```java
-package com.agentdock.backend.provider;
+package com.agent.dock.provider;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -1024,9 +1015,9 @@ public interface AiConnectionRepository extends JpaRepository<AiConnection, Long
 }
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/role/AgentRoleRepository.java`:
+`apps/backend/src/main/java/com/agent/dock/role/AgentRoleRepository.java`:
 ```java
-package com.agentdock.backend.role;
+package com.agent.dock.role;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -1037,9 +1028,9 @@ public interface AgentRoleRepository extends JpaRepository<AgentRole, Long> {
 }
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/permission/PermissionProfileRepository.java`:
+`apps/backend/src/main/java/com/agent/dock/permission/PermissionProfileRepository.java`:
 ```java
-package com.agentdock.backend.permission;
+package com.agent.dock.permission;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -1050,9 +1041,9 @@ public interface PermissionProfileRepository extends JpaRepository<PermissionPro
 }
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/workspace/WorkspaceRepository.java`:
+`apps/backend/src/main/java/com/agent/dock/workspace/WorkspaceRepository.java`:
 ```java
-package com.agentdock.backend.workspace;
+package com.agent.dock.workspace;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -1063,9 +1054,9 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
 }
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/execution/ExecutionRepository.java`:
+`apps/backend/src/main/java/com/agent/dock/execution/ExecutionRepository.java`:
 ```java
-package com.agentdock.backend.execution;
+package com.agent.dock.execution;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -1073,9 +1064,9 @@ public interface ExecutionRepository extends JpaRepository<Execution, Long> {
 }
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/execution/ExecutionLogRepository.java`:
+`apps/backend/src/main/java/com/agent/dock/execution/ExecutionLogRepository.java`:
 ```java
-package com.agentdock.backend.execution;
+package com.agent.dock.execution;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -1086,11 +1077,11 @@ public interface ExecutionLogRepository extends JpaRepository<ExecutionLog, Long
 }
 ```
 
-- [ ] **Step 3: Agent QueryDSL 커스텀 Repository 작성**
+- [ ] **Step 4: Agent QueryDSL 커스텀 Repository 작성**
 
-`apps/backend/src/main/java/com/agentdock/backend/agent/AgentRepositoryCustom.java`:
+`apps/backend/src/main/java/com/agent/dock/agent/AgentRepositoryCustom.java`:
 ```java
-package com.agentdock.backend.agent;
+package com.agent.dock.agent;
 
 import java.util.List;
 import java.util.Optional;
@@ -1101,9 +1092,9 @@ public interface AgentRepositoryCustom {
 }
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/agent/AgentRepositoryImpl.java`:
+`apps/backend/src/main/java/com/agent/dock/agent/AgentRepositoryImpl.java`:
 ```java
-package com.agentdock.backend.agent;
+package com.agent.dock.agent;
 
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import lombok.RequiredArgsConstructor;
@@ -1144,9 +1135,9 @@ public class AgentRepositoryImpl implements AgentRepositoryCustom {
 }
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/agent/AgentRepository.java`:
+`apps/backend/src/main/java/com/agent/dock/agent/AgentRepository.java`:
 ```java
-package com.agentdock.backend.agent;
+package com.agent.dock.agent;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -1154,20 +1145,20 @@ public interface AgentRepository extends JpaRepository<Agent, Long>, AgentReposi
 }
 ```
 
-`QAgent`는 QueryDSL annotation processor가 `Agent.java` 컴파일 시 `build/generated/sources/annotationProcessor/java/main/com/agentdock/backend/agent/QAgent.java`에 자동 생성한다 — 직접 작성하지 않는다. Spring Data JPA는 `AgentRepositoryImpl`이라는 이름 규칙(`AgentRepository` + `Impl`)만으로 `AgentRepositoryCustom` 구현체를 자동 인식해 연결한다.
+`QAgent`는 QueryDSL annotation processor가 `Agent.java` 컴파일 시 `build/generated/sources/annotationProcessor/java/main/com/agent/dock/agent/QAgent.java`에 자동 생성한다 — 직접 작성하지 않는다. Spring Data JPA는 `AgentRepositoryImpl`이라는 이름 규칙(`AgentRepository` + `Impl`)만으로 `AgentRepositoryCustom` 구현체를 자동 인식해 연결한다.
 
-- [ ] **Step 4: 컴파일 확인 (QAgent 자동 생성 확인)**
+- [ ] **Step 5: 컴파일 확인 (QAgent 자동 생성 확인)**
 
 Run: `cd apps/backend && ./gradlew compileJava`
-Expected: `BUILD SUCCESSFUL`. `apps/backend/build/generated/sources/annotationProcessor/java/main/com/agentdock/backend/agent/QAgent.java`가 생성되어 있어야 한다.
+Expected: `BUILD SUCCESSFUL`. `apps/backend/build/generated/sources/annotationProcessor/java/main/com/agent/dock/agent/QAgent.java`가 생성되어 있어야 한다.
 
-Run: `ls apps/backend/build/generated/sources/annotationProcessor/java/main/com/agentdock/backend/agent/`
+Run: `ls apps/backend/build/generated/sources/annotationProcessor/java/main/com/agent/dock/agent/`
 Expected: `QAgent.java` 파일 존재
 
-- [ ] **Step 5: 커밋**
+- [ ] **Step 6: 커밋**
 
 ```bash
-git add apps/backend/src/main/java/com/agentdock/backend
+git add apps/backend/build.gradle apps/backend/src/main/java/com/agent/dock
 git commit -m "feat(backend): Repository 계층 및 QueryDSL 설정 추가"
 ```
 
@@ -1176,14 +1167,14 @@ git commit -m "feat(backend): Repository 계층 및 QueryDSL 설정 추가"
 ## Task 5: AiProvider 모듈 (DTO, Service, Controller)
 
 **Files:**
-- Create: `apps/backend/src/main/java/com/agentdock/backend/provider/CreateAiProviderRequest.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/provider/CreateAiConnectionRequest.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/provider/AiConnectionSummary.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/provider/AiProviderSummary.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/provider/AiConnectionResponse.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/provider/AiProviderResponse.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/provider/AiProviderService.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/provider/AiProviderController.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/provider/CreateAiProviderRequest.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/provider/CreateAiConnectionRequest.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/provider/AiConnectionSummary.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/provider/AiProviderSummary.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/provider/AiConnectionResponse.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/provider/AiProviderResponse.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/provider/AiProviderService.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/provider/AiProviderController.java`
 
 **Interfaces:**
 - Consumes: `AiProviderRepository`, `AiConnectionRepository` (Task 4)
@@ -1191,9 +1182,9 @@ git commit -m "feat(backend): Repository 계층 및 QueryDSL 설정 추가"
 
 - [ ] **Step 1: 요청 DTO 작성**
 
-`apps/backend/src/main/java/com/agentdock/backend/provider/CreateAiProviderRequest.java`:
+`apps/backend/src/main/java/com/agent/dock/provider/CreateAiProviderRequest.java`:
 ```java
-package com.agentdock.backend.provider;
+package com.agent.dock.provider;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -1207,9 +1198,9 @@ public record CreateAiProviderRequest(
 ) {}
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/provider/CreateAiConnectionRequest.java`:
+`apps/backend/src/main/java/com/agent/dock/provider/CreateAiConnectionRequest.java`:
 ```java
-package com.agentdock.backend.provider;
+package com.agent.dock.provider;
 
 import jakarta.validation.constraints.NotNull;
 
@@ -1222,9 +1213,9 @@ public record CreateAiConnectionRequest(
 
 - [ ] **Step 2: 응답 DTO 작성 (순환 참조 방지 — Summary/Response 분리)**
 
-`apps/backend/src/main/java/com/agentdock/backend/provider/AiConnectionSummary.java`:
+`apps/backend/src/main/java/com/agent/dock/provider/AiConnectionSummary.java`:
 ```java
-package com.agentdock.backend.provider;
+package com.agent.dock.provider;
 
 import java.time.Instant;
 
@@ -1235,9 +1226,9 @@ public record AiConnectionSummary(Long id, String accountName, ConnectionStatus 
 }
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/provider/AiProviderSummary.java`:
+`apps/backend/src/main/java/com/agent/dock/provider/AiProviderSummary.java`:
 ```java
-package com.agentdock.backend.provider;
+package com.agent.dock.provider;
 
 import java.time.Instant;
 import java.util.Map;
@@ -1249,9 +1240,9 @@ public record AiProviderSummary(Long id, ProviderKey key, String name, Map<Strin
 }
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/provider/AiConnectionResponse.java`:
+`apps/backend/src/main/java/com/agent/dock/provider/AiConnectionResponse.java`:
 ```java
-package com.agentdock.backend.provider;
+package com.agent.dock.provider;
 
 import java.time.Instant;
 
@@ -1266,9 +1257,9 @@ public record AiConnectionResponse(
 }
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/provider/AiProviderResponse.java`:
+`apps/backend/src/main/java/com/agent/dock/provider/AiProviderResponse.java`:
 ```java
-package com.agentdock.backend.provider;
+package com.agent.dock.provider;
 
 import java.time.Instant;
 import java.util.List;
@@ -1289,11 +1280,11 @@ public record AiProviderResponse(
 
 - [ ] **Step 3: Service 작성**
 
-`apps/backend/src/main/java/com/agentdock/backend/provider/AiProviderService.java`:
+`apps/backend/src/main/java/com/agent/dock/provider/AiProviderService.java`:
 ```java
-package com.agentdock.backend.provider;
+package com.agent.dock.provider;
 
-import com.agentdock.backend.common.NotFoundException;
+import com.agent.dock.common.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -1336,9 +1327,9 @@ public class AiProviderService {
 
 - [ ] **Step 4: Controller 작성**
 
-`apps/backend/src/main/java/com/agentdock/backend/provider/AiProviderController.java`:
+`apps/backend/src/main/java/com/agent/dock/provider/AiProviderController.java`:
 ```java
-package com.agentdock.backend.provider;
+package com.agent.dock.provider;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -1382,7 +1373,7 @@ Expected: `BUILD SUCCESSFUL`
 - [ ] **Step 6: 커밋**
 
 ```bash
-git add apps/backend/src/main/java/com/agentdock/backend/provider
+git add apps/backend/src/main/java/com/agent/dock/provider
 git commit -m "feat(backend): AiProvider/AiConnection 모듈 포팅"
 ```
 
@@ -1391,10 +1382,10 @@ git commit -m "feat(backend): AiProvider/AiConnection 모듈 포팅"
 ## Task 6: AgentRole 모듈
 
 **Files:**
-- Create: `apps/backend/src/main/java/com/agentdock/backend/role/CreateAgentRoleRequest.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/role/AgentRoleResponse.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/role/RoleService.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/role/RoleController.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/role/CreateAgentRoleRequest.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/role/AgentRoleResponse.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/role/RoleService.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/role/RoleController.java`
 
 **Interfaces:**
 - Consumes: `AgentRoleRepository` (Task 4)
@@ -1402,18 +1393,18 @@ git commit -m "feat(backend): AiProvider/AiConnection 모듈 포팅"
 
 - [ ] **Step 1: DTO 작성**
 
-`apps/backend/src/main/java/com/agentdock/backend/role/CreateAgentRoleRequest.java`:
+`apps/backend/src/main/java/com/agent/dock/role/CreateAgentRoleRequest.java`:
 ```java
-package com.agentdock.backend.role;
+package com.agent.dock.role;
 
 import jakarta.validation.constraints.NotBlank;
 
 public record CreateAgentRoleRequest(@NotBlank String name, String description) {}
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/role/AgentRoleResponse.java`:
+`apps/backend/src/main/java/com/agent/dock/role/AgentRoleResponse.java`:
 ```java
-package com.agentdock.backend.role;
+package com.agent.dock.role;
 
 import java.time.Instant;
 
@@ -1426,9 +1417,9 @@ public record AgentRoleResponse(Long id, String name, String description, Instan
 
 - [ ] **Step 2: Service, Controller 작성**
 
-`apps/backend/src/main/java/com/agentdock/backend/role/RoleService.java`:
+`apps/backend/src/main/java/com/agent/dock/role/RoleService.java`:
 ```java
-package com.agentdock.backend.role;
+package com.agent.dock.role;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -1453,9 +1444,9 @@ public class RoleService {
 }
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/role/RoleController.java`:
+`apps/backend/src/main/java/com/agent/dock/role/RoleController.java`:
 ```java
-package com.agentdock.backend.role;
+package com.agent.dock.role;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -1489,7 +1480,7 @@ Expected: `BUILD SUCCESSFUL`
 - [ ] **Step 4: 커밋**
 
 ```bash
-git add apps/backend/src/main/java/com/agentdock/backend/role
+git add apps/backend/src/main/java/com/agent/dock/role
 git commit -m "feat(backend): AgentRole 모듈 포팅"
 ```
 
@@ -1498,11 +1489,11 @@ git commit -m "feat(backend): AgentRole 모듈 포팅"
 ## Task 7: PermissionProfile 모듈 (+ PermissionAction)
 
 **Files:**
-- Create: `apps/backend/src/main/java/com/agentdock/backend/permission/PermissionAction.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/permission/CreatePermissionProfileRequest.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/permission/PermissionProfileResponse.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/permission/PermissionService.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/permission/PermissionController.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/permission/PermissionAction.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/permission/CreatePermissionProfileRequest.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/permission/PermissionProfileResponse.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/permission/PermissionService.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/permission/PermissionController.java`
 
 **Interfaces:**
 - Consumes: `PermissionProfileRepository` (Task 4)
@@ -1510,9 +1501,9 @@ git commit -m "feat(backend): AgentRole 모듈 포팅"
 
 - [ ] **Step 1: PermissionAction enum, 요청/응답 DTO 작성**
 
-`apps/backend/src/main/java/com/agentdock/backend/permission/PermissionAction.java`:
+`apps/backend/src/main/java/com/agent/dock/permission/PermissionAction.java`:
 ```java
-package com.agentdock.backend.permission;
+package com.agent.dock.permission;
 
 public enum PermissionAction {
     FILE_READ, FILE_WRITE, TERMINAL_EXECUTE, GIT_STATUS, GIT_DIFF,
@@ -1521,9 +1512,9 @@ public enum PermissionAction {
 }
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/permission/CreatePermissionProfileRequest.java`:
+`apps/backend/src/main/java/com/agent/dock/permission/CreatePermissionProfileRequest.java`:
 ```java
-package com.agentdock.backend.permission;
+package com.agent.dock.permission;
 
 import jakarta.validation.constraints.NotBlank;
 
@@ -1544,9 +1535,9 @@ public record CreatePermissionProfileRequest(
 ) {}
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/permission/PermissionProfileResponse.java`:
+`apps/backend/src/main/java/com/agent/dock/permission/PermissionProfileResponse.java`:
 ```java
-package com.agentdock.backend.permission;
+package com.agent.dock.permission;
 
 import java.time.Instant;
 
@@ -1567,9 +1558,9 @@ public record PermissionProfileResponse(
 
 - [ ] **Step 2: Service 작성 (isAllowed 포함)**
 
-`apps/backend/src/main/java/com/agentdock/backend/permission/PermissionService.java`:
+`apps/backend/src/main/java/com/agent/dock/permission/PermissionService.java`:
 ```java
-package com.agentdock.backend.permission;
+package com.agent.dock.permission;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -1625,9 +1616,9 @@ public class PermissionService {
 
 - [ ] **Step 3: Controller 작성**
 
-`apps/backend/src/main/java/com/agentdock/backend/permission/PermissionController.java`:
+`apps/backend/src/main/java/com/agent/dock/permission/PermissionController.java`:
 ```java
-package com.agentdock.backend.permission;
+package com.agent.dock.permission;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -1661,7 +1652,7 @@ Expected: `BUILD SUCCESSFUL`
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add apps/backend/src/main/java/com/agentdock/backend/permission
+git add apps/backend/src/main/java/com/agent/dock/permission
 git commit -m "feat(backend): PermissionProfile 모듈 및 Enforcement 로직 포팅"
 ```
 
@@ -1670,13 +1661,13 @@ git commit -m "feat(backend): PermissionProfile 모듈 및 Enforcement 로직 �
 ## Task 8: Workspace 모듈 (+ 폴더 브라우징, UNC 차단)
 
 **Files:**
-- Create: `apps/backend/src/main/java/com/agentdock/backend/workspace/FsEntry.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/workspace/WorkspaceBrowseResult.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/workspace/WorkspaceFs.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/workspace/CreateWorkspaceRequest.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/workspace/WorkspaceResponse.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/workspace/WorkspaceService.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/workspace/WorkspaceController.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/workspace/FsEntry.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/workspace/WorkspaceBrowseResult.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/workspace/WorkspaceFs.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/workspace/CreateWorkspaceRequest.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/workspace/WorkspaceResponse.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/workspace/WorkspaceService.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/workspace/WorkspaceController.java`
 
 **Interfaces:**
 - Consumes: `WorkspaceRepository` (Task 4)
@@ -1684,25 +1675,25 @@ git commit -m "feat(backend): PermissionProfile 모듈 및 Enforcement 로직 �
 
 - [ ] **Step 1: FsEntry, WorkspaceBrowseResult, WorkspaceFs(UNC 체크) 작성**
 
-`apps/backend/src/main/java/com/agentdock/backend/workspace/FsEntry.java`:
+`apps/backend/src/main/java/com/agent/dock/workspace/FsEntry.java`:
 ```java
-package com.agentdock.backend.workspace;
+package com.agent.dock.workspace;
 
 public record FsEntry(String name, String path) {}
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/workspace/WorkspaceBrowseResult.java`:
+`apps/backend/src/main/java/com/agent/dock/workspace/WorkspaceBrowseResult.java`:
 ```java
-package com.agentdock.backend.workspace;
+package com.agent.dock.workspace;
 
 import java.util.List;
 
 public record WorkspaceBrowseResult(String path, String parentPath, List<FsEntry> entries) {}
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/workspace/WorkspaceFs.java`:
+`apps/backend/src/main/java/com/agent/dock/workspace/WorkspaceFs.java`:
 ```java
-package com.agentdock.backend.workspace;
+package com.agent.dock.workspace;
 
 import org.springframework.stereotype.Component;
 
@@ -1734,18 +1725,18 @@ public class WorkspaceFs {
 
 - [ ] **Step 2: 요청/응답 DTO 작성**
 
-`apps/backend/src/main/java/com/agentdock/backend/workspace/CreateWorkspaceRequest.java`:
+`apps/backend/src/main/java/com/agent/dock/workspace/CreateWorkspaceRequest.java`:
 ```java
-package com.agentdock.backend.workspace;
+package com.agent.dock.workspace;
 
 import jakarta.validation.constraints.NotBlank;
 
 public record CreateWorkspaceRequest(@NotBlank String name, @NotBlank String path, String description) {}
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/workspace/WorkspaceResponse.java`:
+`apps/backend/src/main/java/com/agent/dock/workspace/WorkspaceResponse.java`:
 ```java
-package com.agentdock.backend.workspace;
+package com.agent.dock.workspace;
 
 import java.time.Instant;
 
@@ -1758,12 +1749,12 @@ public record WorkspaceResponse(Long id, String name, String path, String descri
 
 - [ ] **Step 3: Service 작성 (browse + create, UNC/존재/디렉터리 검증)**
 
-`apps/backend/src/main/java/com/agentdock/backend/workspace/WorkspaceService.java`:
+`apps/backend/src/main/java/com/agent/dock/workspace/WorkspaceService.java`:
 ```java
-package com.agentdock.backend.workspace;
+package com.agent.dock.workspace;
 
-import com.agentdock.backend.common.BadRequestException;
-import com.agentdock.backend.common.NotFoundException;
+import com.agent.dock.common.BadRequestException;
+import com.agent.dock.common.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -1829,9 +1820,9 @@ public class WorkspaceService {
 
 - [ ] **Step 4: Controller 작성**
 
-`apps/backend/src/main/java/com/agentdock/backend/workspace/WorkspaceController.java`:
+`apps/backend/src/main/java/com/agent/dock/workspace/WorkspaceController.java`:
 ```java
-package com.agentdock.backend.workspace;
+package com.agent.dock.workspace;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -1874,7 +1865,7 @@ Expected: `BUILD SUCCESSFUL`
 - [ ] **Step 7: 커밋**
 
 ```bash
-git add apps/backend/src/main/java/com/agentdock/backend/workspace
+git add apps/backend/src/main/java/com/agent/dock/workspace
 git commit -m "feat(backend): Workspace 모듈(폴더 브라우징, UNC 차단) 포팅"
 ```
 
@@ -1883,21 +1874,21 @@ git commit -m "feat(backend): Workspace 모듈(폴더 브라우징, UNC 차단) 
 ## Task 9: Runtime 계층 (AgentRuntime, ClaudeCodeRuntime, RuntimeRegistry, ProcessService)
 
 **Files:**
-- Create: `apps/backend/src/main/java/com/agentdock/backend/runtime/AgentExecutionRequest.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/runtime/AgentExecutionResult.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/runtime/AgentRuntime.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/process/ProcessService.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/runtime/ClaudeCodeRuntime.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/runtime/RuntimeRegistry.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/runtime/AgentExecutionRequest.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/runtime/AgentExecutionResult.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/runtime/AgentRuntime.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/process/ProcessService.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/runtime/ClaudeCodeRuntime.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/runtime/RuntimeRegistry.java`
 
 **Interfaces:**
 - Produces: `AgentRuntime` 인터페이스(`getProviderKey()`, `execute(AgentExecutionRequest): AgentExecutionResult`, `cancel(String)`), `RuntimeRegistry.resolve(String providerKey): AgentRuntime` — Task 11(Execution 모듈)이 이 둘을 사용
 
 - [ ] **Step 1: AgentRuntime 인터페이스 + 요청/결과 record 작성**
 
-`apps/backend/src/main/java/com/agentdock/backend/runtime/AgentExecutionRequest.java`:
+`apps/backend/src/main/java/com/agent/dock/runtime/AgentExecutionRequest.java`:
 ```java
-package com.agentdock.backend.runtime;
+package com.agent.dock.runtime;
 
 import java.util.function.BiConsumer;
 
@@ -1911,16 +1902,16 @@ public record AgentExecutionRequest(
 ) {}
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/runtime/AgentExecutionResult.java`:
+`apps/backend/src/main/java/com/agent/dock/runtime/AgentExecutionResult.java`:
 ```java
-package com.agentdock.backend.runtime;
+package com.agent.dock.runtime;
 
 public record AgentExecutionResult(int exitCode) {}
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/runtime/AgentRuntime.java`:
+`apps/backend/src/main/java/com/agent/dock/runtime/AgentRuntime.java`:
 ```java
-package com.agentdock.backend.runtime;
+package com.agent.dock.runtime;
 
 /**
  * Agent와 실제 AI 실행 엔진(Claude Code, Codex 등)을 분리하는 경계.
@@ -1935,9 +1926,9 @@ public interface AgentRuntime {
 
 - [ ] **Step 2: ProcessService (ProcessBuilder 래퍼) 작성**
 
-`apps/backend/src/main/java/com/agentdock/backend/process/ProcessService.java`:
+`apps/backend/src/main/java/com/agent/dock/process/ProcessService.java`:
 ```java
-package com.agentdock.backend.process;
+package com.agent.dock.process;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -1992,11 +1983,11 @@ public class ProcessService {
 
 - [ ] **Step 3: ClaudeCodeRuntime 작성**
 
-`apps/backend/src/main/java/com/agentdock/backend/runtime/ClaudeCodeRuntime.java`:
+`apps/backend/src/main/java/com/agent/dock/runtime/ClaudeCodeRuntime.java`:
 ```java
-package com.agentdock.backend.runtime;
+package com.agent.dock.runtime;
 
-import com.agentdock.backend.process.ProcessService;
+import com.agent.dock.process.ProcessService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -2060,11 +2051,11 @@ public class ClaudeCodeRuntime implements AgentRuntime {
 
 - [ ] **Step 4: RuntimeRegistry 작성**
 
-`apps/backend/src/main/java/com/agentdock/backend/runtime/RuntimeRegistry.java`:
+`apps/backend/src/main/java/com/agent/dock/runtime/RuntimeRegistry.java`:
 ```java
-package com.agentdock.backend.runtime;
+package com.agent.dock.runtime;
 
-import com.agentdock.backend.common.NotFoundException;
+import com.agent.dock.common.NotFoundException;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -2103,7 +2094,7 @@ Expected: `BUILD SUCCESSFUL`
 - [ ] **Step 6: 커밋**
 
 ```bash
-git add apps/backend/src/main/java/com/agentdock/backend/runtime apps/backend/src/main/java/com/agentdock/backend/process
+git add apps/backend/src/main/java/com/agent/dock/runtime apps/backend/src/main/java/com/agent/dock/process
 git commit -m "feat(backend): AgentRuntime/ClaudeCodeRuntime/RuntimeRegistry/ProcessService 포팅"
 ```
 
@@ -2112,10 +2103,10 @@ git commit -m "feat(backend): AgentRuntime/ClaudeCodeRuntime/RuntimeRegistry/Pro
 ## Task 10: Agent 모듈
 
 **Files:**
-- Create: `apps/backend/src/main/java/com/agentdock/backend/agent/CreateAgentRequest.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/agent/AgentResponse.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/agent/AgentService.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/agent/AgentController.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/agent/CreateAgentRequest.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/agent/AgentResponse.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/agent/AgentService.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/agent/AgentController.java`
 
 **Interfaces:**
 - Consumes: `AgentRepository.findAllWithRelations/findByIdWithRelations` (Task 4), `AgentRoleRepository`/`PermissionProfileRepository`/`AiProviderRepository`/`AiConnectionRepository`/`WorkspaceRepository` (Task 4), `AgentRoleResponse.from` (Task 6), `PermissionProfileResponse.from` (Task 7), `AiProviderSummary.from`/`AiConnectionSummary.from` (Task 5), `WorkspaceResponse.from` (Task 8)
@@ -2123,9 +2114,9 @@ git commit -m "feat(backend): AgentRuntime/ClaudeCodeRuntime/RuntimeRegistry/Pro
 
 - [ ] **Step 1: 요청 DTO 작성**
 
-`apps/backend/src/main/java/com/agentdock/backend/agent/CreateAgentRequest.java`:
+`apps/backend/src/main/java/com/agent/dock/agent/CreateAgentRequest.java`:
 ```java
-package com.agentdock.backend.agent;
+package com.agent.dock.agent;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -2147,15 +2138,15 @@ public record CreateAgentRequest(
 
 - [ ] **Step 2: 응답 DTO 작성 (다른 모듈의 Summary/Response record 재사용, 순환 참조 없음)**
 
-`apps/backend/src/main/java/com/agentdock/backend/agent/AgentResponse.java`:
+`apps/backend/src/main/java/com/agent/dock/agent/AgentResponse.java`:
 ```java
-package com.agentdock.backend.agent;
+package com.agent.dock.agent;
 
-import com.agentdock.backend.permission.PermissionProfileResponse;
-import com.agentdock.backend.provider.AiConnectionSummary;
-import com.agentdock.backend.provider.AiProviderSummary;
-import com.agentdock.backend.role.AgentRoleResponse;
-import com.agentdock.backend.workspace.WorkspaceResponse;
+import com.agent.dock.permission.PermissionProfileResponse;
+import com.agent.dock.provider.AiConnectionSummary;
+import com.agent.dock.provider.AiProviderSummary;
+import com.agent.dock.role.AgentRoleResponse;
+import com.agent.dock.workspace.WorkspaceResponse;
 
 import java.time.Instant;
 import java.util.Map;
@@ -2187,16 +2178,16 @@ public record AgentResponse(
 
 - [ ] **Step 3: Service 작성**
 
-`apps/backend/src/main/java/com/agentdock/backend/agent/AgentService.java`:
+`apps/backend/src/main/java/com/agent/dock/agent/AgentService.java`:
 ```java
-package com.agentdock.backend.agent;
+package com.agent.dock.agent;
 
-import com.agentdock.backend.common.NotFoundException;
-import com.agentdock.backend.permission.PermissionProfileRepository;
-import com.agentdock.backend.provider.AiConnectionRepository;
-import com.agentdock.backend.provider.AiProviderRepository;
-import com.agentdock.backend.role.AgentRoleRepository;
-import com.agentdock.backend.workspace.WorkspaceRepository;
+import com.agent.dock.common.NotFoundException;
+import com.agent.dock.permission.PermissionProfileRepository;
+import com.agent.dock.provider.AiConnectionRepository;
+import com.agent.dock.provider.AiProviderRepository;
+import com.agent.dock.role.AgentRoleRepository;
+import com.agent.dock.workspace.WorkspaceRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -2250,9 +2241,9 @@ public class AgentService {
 
 - [ ] **Step 4: Controller 작성**
 
-`apps/backend/src/main/java/com/agentdock/backend/agent/AgentController.java`:
+`apps/backend/src/main/java/com/agent/dock/agent/AgentController.java`:
 ```java
-package com.agentdock.backend.agent;
+package com.agent.dock.agent;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -2291,7 +2282,7 @@ Expected: `BUILD SUCCESSFUL`
 - [ ] **Step 6: 커밋**
 
 ```bash
-git add apps/backend/src/main/java/com/agentdock/backend/agent
+git add apps/backend/src/main/java/com/agent/dock/agent
 git commit -m "feat(backend): Agent 모듈 포팅"
 ```
 
@@ -2300,11 +2291,11 @@ git commit -m "feat(backend): Agent 모듈 포팅"
 ## Task 11: Execution 모듈 (+ SSE, Permission Enforcement)
 
 **Files:**
-- Create: `apps/backend/src/main/java/com/agentdock/backend/execution/CreateExecutionRequest.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/execution/ExecutionResponse.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/execution/ExecutionLogResponse.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/execution/ExecutionService.java`
-- Create: `apps/backend/src/main/java/com/agentdock/backend/execution/ExecutionController.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/execution/CreateExecutionRequest.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/execution/ExecutionResponse.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/execution/ExecutionLogResponse.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/execution/ExecutionService.java`
+- Create: `apps/backend/src/main/java/com/agent/dock/execution/ExecutionController.java`
 
 **Interfaces:**
 - Consumes: `AgentRepository.findByIdWithRelations` (Task 4), `PermissionService.isAllowed` (Task 7), `RuntimeRegistry.resolve` (Task 9)
@@ -2312,9 +2303,9 @@ git commit -m "feat(backend): Agent 모듈 포팅"
 
 - [ ] **Step 1: 요청/응답 DTO 작성**
 
-`apps/backend/src/main/java/com/agentdock/backend/execution/CreateExecutionRequest.java`:
+`apps/backend/src/main/java/com/agent/dock/execution/CreateExecutionRequest.java`:
 ```java
-package com.agentdock.backend.execution;
+package com.agent.dock.execution;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -2322,9 +2313,9 @@ import jakarta.validation.constraints.NotNull;
 public record CreateExecutionRequest(@NotNull Long agentId, @NotBlank String prompt) {}
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/execution/ExecutionResponse.java`:
+`apps/backend/src/main/java/com/agent/dock/execution/ExecutionResponse.java`:
 ```java
-package com.agentdock.backend.execution;
+package com.agent.dock.execution;
 
 import java.time.Instant;
 
@@ -2341,9 +2332,9 @@ public record ExecutionResponse(
 }
 ```
 
-`apps/backend/src/main/java/com/agentdock/backend/execution/ExecutionLogResponse.java`:
+`apps/backend/src/main/java/com/agent/dock/execution/ExecutionLogResponse.java`:
 ```java
-package com.agentdock.backend.execution;
+package com.agent.dock.execution;
 
 import java.time.Instant;
 
@@ -2356,20 +2347,20 @@ public record ExecutionLogResponse(Long id, Long executionId, LogStream stream, 
 
 - [ ] **Step 2: Service 작성 (Permission Enforcement + 비동기 실행 + SSE fan-out)**
 
-`apps/backend/src/main/java/com/agentdock/backend/execution/ExecutionService.java`:
+`apps/backend/src/main/java/com/agent/dock/execution/ExecutionService.java`:
 ```java
-package com.agentdock.backend.execution;
+package com.agent.dock.execution;
 
-import com.agentdock.backend.agent.Agent;
-import com.agentdock.backend.agent.AgentRepository;
-import com.agentdock.backend.common.BadRequestException;
-import com.agentdock.backend.common.ForbiddenException;
-import com.agentdock.backend.common.NotFoundException;
-import com.agentdock.backend.permission.PermissionAction;
-import com.agentdock.backend.permission.PermissionService;
-import com.agentdock.backend.runtime.AgentExecutionRequest;
-import com.agentdock.backend.runtime.AgentRuntime;
-import com.agentdock.backend.runtime.RuntimeRegistry;
+import com.agent.dock.agent.Agent;
+import com.agent.dock.agent.AgentRepository;
+import com.agent.dock.common.BadRequestException;
+import com.agent.dock.common.ForbiddenException;
+import com.agent.dock.common.NotFoundException;
+import com.agent.dock.permission.PermissionAction;
+import com.agent.dock.permission.PermissionService;
+import com.agent.dock.runtime.AgentExecutionRequest;
+import com.agent.dock.runtime.AgentRuntime;
+import com.agent.dock.runtime.RuntimeRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -2517,9 +2508,9 @@ public class ExecutionService {
 
 - [ ] **Step 3: Controller 작성**
 
-`apps/backend/src/main/java/com/agentdock/backend/execution/ExecutionController.java`:
+`apps/backend/src/main/java/com/agent/dock/execution/ExecutionController.java`:
 ```java
-package com.agentdock.backend.execution;
+package com.agent.dock.execution;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -2571,7 +2562,7 @@ Expected: `BUILD SUCCESSFUL`
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add apps/backend/src/main/java/com/agentdock/backend/execution
+git add apps/backend/src/main/java/com/agent/dock/execution
 git commit -m "feat(backend): Execution 모듈(SSE, Permission Enforcement) 포팅"
 ```
 
@@ -3654,13 +3645,13 @@ git commit -m "feat(frontend): ExecutionDetail 페이지 및 라우팅 최종 �
 ```markdown
 ## 기술 스택
 
-- Backend: Java 21 + Spring Boot 3 + Gradle(Kotlin DSL) + Spring Data JPA + QueryDSL + Flyway + PostgreSQL (`apps/backend`)
+- Backend: Java 25 + Spring Boot 4.1.1 + Gradle(Groovy DSL) + Spring Data JPA + QueryDSL + Flyway + PostgreSQL (`apps/backend`)
 - Frontend: Vite + React 18 + React Router + TypeScript (`apps/frontend`)
 - Local Runtime 실행: `ProcessBuilder`, 브라우저가 CLI를 직접 실행하지 않음
 - 실시간 로그: SSE (Server-Sent Events, `SseEmitter`)
 ```
 
-Backend 모듈 절의 각 항목을 Java 패키지 경로로 갱신(`apps/backend/src/main/java/com/agentdock/backend/...`), Prisma 관련 문구를 Flyway/JPA로 교체. DB 마이그레이션 절차를 다음으로 교체:
+Backend 모듈 절의 각 항목을 Java 패키지 경로로 갱신(`apps/backend/src/main/java/com/agent/dock/...`), Prisma 관련 문구를 Flyway/JPA로 교체. DB 마이그레이션 절차를 다음으로 교체:
 ```markdown
 ## 실행 방법
 
