@@ -46,7 +46,7 @@ apps/
   backend/                  # 삭제 후 Spring Boot 프로젝트로 교체
     build.gradle.kts
     settings.gradle.kts
-    src/main/java/com/agentdock/backend/
+    src/main/java/com/agent/dock/
       BackendApplication.java
       provider/            # AiProvider, AiConnection
       agent/                # Agent
@@ -74,7 +74,7 @@ apps/
       *.module.css, globals.css (기존 그대로 이식)
 ```
 
-Java 패키지 루트는 `com.agentdock.backend`로 한다(그룹ID `com.agentdock`, 아티팩트ID `backend`).
+Java 패키지 루트는 `com.agent.dock`로 한다(그룹ID `com.agent.dock`, 아티팩트ID `backend`).
 
 ## 5. 도메인 모델 — Prisma → JPA 엔티티 매핑
 
