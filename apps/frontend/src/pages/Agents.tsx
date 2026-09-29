@@ -10,6 +10,8 @@ const UNAVAILABLE_LABELS: Record<string, string> = {
   CONNECTION_NOT_CONNECTED: '연결 안 됨',
 };
 
+const EMPTY_FORM = { name: '', roleId: '', permissionProfileId: '', providerId: '', model: '', mode: '' };
+
 export default function Agents() {
   const navigate = useNavigate();
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -19,13 +21,7 @@ export default function Agents() {
   const [error, setError] = useState<string | null>(null);
   const [runTarget, setRunTarget] = useState<Agent | null>(null);
 
-  const [form, setForm] = useState({
-    name: '',
-    roleId: '',
-    permissionProfileId: '',
-    providerId: '',
-    model: '',
-  });
+  const [form, setForm] = useState(EMPTY_FORM);
 
   const loadAll = () => {
     api.listAgents().then(setAgents).catch((e) => setError(String(e)));
@@ -37,6 +33,12 @@ export default function Agents() {
   useEffect(() => {
     loadAll();
   }, []);
+
+  const selectedProvider = providers.find((p) => String(p.id) === form.providerId) ?? null;
+  const modelOptions = selectedProvider?.capabilities?.models ?? [];
+  const modeOptions = selectedProvider?.capabilities?.modes ?? [];
+  const modelNotListed = form.model !== '' && modelOptions.length > 0 && !modelOptions.includes(form.model);
+  const modeNotListed = form.mode !== '' && modeOptions.length > 0 && !modeOptions.includes(form.mode);
 
   const quickCreateRole = async () => {
     const name = window.prompt('Role 이름 (예: Backend Developer)');
@@ -68,8 +70,9 @@ export default function Agents() {
         permissionProfileId: Number(form.permissionProfileId),
         providerId: Number(form.providerId),
         model: form.model || undefined,
+        mode: form.mode || undefined,
       });
-      setForm({ name: '', roleId: '', permissionProfileId: '', providerId: '', model: '' });
+      setForm(EMPTY_FORM);
       loadAll();
     } catch (e) {
       setError(String(e));
@@ -129,11 +132,47 @@ export default function Agents() {
           ))}
         </select>
 
+        {selectedProvider && (
+          <p className={styles.hint}>
+            {selectedProvider.name} 지원 목록 — 모델: {modelOptions.length > 0 ? modelOptions.join(', ') : '미등록'} / 모드:{' '}
+            {modeOptions.length > 0 ? modeOptions.join(', ') : '미등록'} (Agent 연결 설정에서 편집)
+          </p>
+        )}
+
         <input
-          placeholder="Model (예: claude-sonnet-5, 선택)"
+          list="agent-model-options"
+          placeholder="Model (선택 — 목록에서 고르거나 직접 입력)"
           value={form.model}
           onChange={(e) => setForm({ ...form, model: e.target.value })}
         />
+        <datalist id="agent-model-options">
+          {modelOptions.map((m) => (
+            <option key={m} value={m} />
+          ))}
+        </datalist>
+
+        <input
+          list="agent-mode-options"
+          placeholder="Mode (선택 — 예: plan, acceptEdits)"
+          value={form.mode}
+          onChange={(e) => setForm({ ...form, mode: e.target.value })}
+        />
+        <datalist id="agent-mode-options">
+          {modeOptions.map((m) => (
+            <option key={m} value={m} />
+          ))}
+        </datalist>
+
+        {modelNotListed && (
+          <p className={styles.hint}>
+            모델 "{form.model}" 은 {selectedProvider?.name} 지원 목록에 없습니다. CLI가 지원하면 그대로 동작합니다.
+          </p>
+        )}
+        {modeNotListed && (
+          <p className={styles.hint}>
+            모드 "{form.mode}" 은 {selectedProvider?.name} 지원 목록에 없습니다. CLI가 지원하면 그대로 동작합니다.
+          </p>
+        )}
 
         <button type="submit">Agent 생성</button>
       </form>
@@ -146,6 +185,7 @@ export default function Agents() {
             <th>Name</th>
             <th>Role</th>
             <th>Provider</th>
+            <th>Model / Mode</th>
             <th></th>
           </tr>
         </thead>
@@ -162,6 +202,9 @@ export default function Agents() {
               <td>
                 {a.provider.name}{' '}
                 <AgentProviderAssign agent={a} providers={providers} onAssigned={loadAll} onError={setError} />
+              </td>
+              <td className={styles.hint}>
+                {a.model ?? 'CLI 기본값'} / {a.mode ?? 'CLI 기본값'}
               </td>
               <td>
                 <button
@@ -181,6 +224,8 @@ export default function Agents() {
         <RunAgentModal
           agentId={runTarget.id}
           agentName={runTarget.name}
+          model={runTarget.model}
+          mode={runTarget.mode}
           onClose={() => setRunTarget(null)}
           onStarted={(executionId) => navigate(`/executions/${executionId}`)}
         />
