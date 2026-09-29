@@ -6,7 +6,6 @@ import com.agent.dock.permission.PermissionProfileRepository;
 import com.agent.dock.project.ProjectWorkspace;
 import com.agent.dock.project.ProjectWorkspaceRepository;
 import com.agent.dock.project.ProjectRepository;
-import com.agent.dock.provider.AiConnectionRepository;
 import com.agent.dock.provider.AiProvider;
 import com.agent.dock.provider.AiProviderRepository;
 import com.agent.dock.provider.ConnectionStatus;
@@ -30,7 +29,6 @@ public class AgentService {
     private final AgentRoleRepository roleRepository;
     private final PermissionProfileRepository permissionProfileRepository;
     private final AiProviderRepository providerRepository;
-    private final AiConnectionRepository connectionRepository;
     private final ProjectRepository projectRepository;
     private final ProjectWorkspaceRepository projectWorkspaceRepository;
     private final WorkspaceRuntimeStatusRepository runtimeStatusRepository;
@@ -64,10 +62,6 @@ public class AgentService {
         agent.setPermissionProfile(permissionProfileRepository.findById(request.permissionProfileId())
                 .orElseThrow(() -> new NotFoundException("PermissionProfile %d not found".formatted(request.permissionProfileId()))));
         agent.setProvider(provider);
-        if (request.connectionId() != null) {
-            agent.setConnection(connectionRepository.findById(request.connectionId())
-                    .orElseThrow(() -> new NotFoundException("AiConnection %d not found".formatted(request.connectionId()))));
-        }
         agent.setPersona(request.persona());
         agent.setModel(request.model());
         agent.setMode(request.mode());
@@ -76,12 +70,11 @@ public class AgentService {
         return findOne(saved.getId());
     }
 
-    /** 사용 불가가 된 Agent 에 다른 런타임을 다시 할당한다. 켜져 있는 런타임만 가능하다. */
+    /** 사용 불가가 된 에이전트에 다른 런타임을 다시 할당한다. 켜져 있는 런타임만 가능하다. */
     public AgentResponse assignProvider(Long agentId, Long providerId) {
         Agent agent = agentRepository.findById(agentId)
                 .orElseThrow(() -> new NotFoundException("Agent %d not found".formatted(agentId)));
         agent.setProvider(findEnabledProvider(providerId));
-        agent.setConnection(null);
         agentRepository.save(agent);
         return findOne(agentId);
     }

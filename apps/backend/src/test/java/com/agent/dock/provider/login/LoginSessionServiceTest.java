@@ -2,9 +2,8 @@ package com.agent.dock.provider.login;
 
 import com.agent.dock.common.BadRequestException;
 import com.agent.dock.common.NotFoundException;
-import com.agent.dock.provider.AiConnection;
-import com.agent.dock.provider.AiConnectionRepository;
 import com.agent.dock.provider.AiProvider;
+import com.agent.dock.provider.AiProviderRepository;
 import com.agent.dock.provider.ProviderKey;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -62,37 +61,35 @@ class LoginSessionServiceTest {
         void advance(Duration duration) { now = now.plus(duration); }
     }
 
-    @Mock AiConnectionRepository connectionRepository;
+    @Mock AiProviderRepository providerRepository;
     @Mock LoginProcessFactory processFactory;
 
     FakeLoginProcess process;
     TestClock clock;
     LoginSessionService service;
 
-    private AiConnection connectionOf(ProviderKey key) {
+    private AiProvider providerOf(ProviderKey key) {
         AiProvider provider = new AiProvider();
         provider.setKey(key);
-        AiConnection connection = new AiConnection();
-        connection.setProvider(provider);
-        return connection;
+        return provider;
     }
 
     @BeforeEach
     void setUp() {
         process = new FakeLoginProcess();
         clock = new TestClock();
-        service = new LoginSessionService(connectionRepository,
+        service = new LoginSessionService(providerRepository,
                 new LoginCommandRegistry(List.of(new ClaudeCodeLoginCommand())), processFactory, clock);
     }
 
-    private void givenClaudeConnection() {
-        when(connectionRepository.findWithProvider(7L)).thenReturn(Optional.of(connectionOf(ProviderKey.CLAUDE_CODE)));
+    private void givenClaudeProvider() {
+        when(providerRepository.findByIdAndDeletedAtIsNull(7L)).thenReturn(Optional.of(providerOf(ProviderKey.CLAUDE_CODE)));
         when(processFactory.create()).thenReturn(process);
     }
 
     @Test
     void startRunsFixedClaudeLoginCommand() {
-        givenClaudeConnection();
+        givenClaudeProvider();
 
         String sessionId = service.start(7L);
 
@@ -102,7 +99,7 @@ class LoginSessionServiceTest {
 
     @Test
     void lateSubscriberReplaysEarlierOutputThenReceivesLiveOutput() {
-        givenClaudeConnection();
+        givenClaudeProvider();
         String sessionId = service.start(7L);
         process.emit("Open https://example.com/login");
 
@@ -116,7 +113,7 @@ class LoginSessionServiceTest {
 
     @Test
     void exitEventIsDeliveredWithExitCode() {
-        givenClaudeConnection();
+        givenClaudeProvider();
         String sessionId = service.start(7L);
         List<LoginEvent> got = new ArrayList<>();
         service.subscribe(sessionId, got::add);
@@ -130,7 +127,7 @@ class LoginSessionServiceTest {
 
     @Test
     void secondStartWhileActiveReturnsSameSession() {
-        givenClaudeConnection();
+        givenClaudeProvider();
 
         String first = service.start(7L);
         String second = service.start(7L);
@@ -141,7 +138,7 @@ class LoginSessionServiceTest {
 
     @Test
     void inputIsWrittenWithNewline() {
-        givenClaudeConnection();
+        givenClaudeProvider();
         String sessionId = service.start(7L);
 
         service.input(sessionId, "abc123");
@@ -151,7 +148,7 @@ class LoginSessionServiceTest {
 
     @Test
     void inputAfterExitIsRejected() {
-        givenClaudeConnection();
+        givenClaudeProvider();
         String sessionId = service.start(7L);
         process.exit(0);
 
@@ -159,8 +156,8 @@ class LoginSessionServiceTest {
     }
 
     @Test
-    void providerWithoutLoginCommandIsRejected() {
-        when(connectionRepository.findWithProvider(8L)).thenReturn(Optional.of(connectionOf(ProviderKey.CODEX)));
+    void runtimeWithoutLoginCommandIsRejected() {
+        when(providerRepository.findByIdAndDeletedAtIsNull(8L)).thenReturn(Optional.of(providerOf(ProviderKey.CODEX)));
 
         assertThatThrownBy(() -> service.start(8L))
                 .isInstanceOf(BadRequestException.class)
@@ -170,7 +167,7 @@ class LoginSessionServiceTest {
     @Test
     void missingCliBinaryEndsSessionWithMessageAndExitMinusOne() {
         process.failStart = true;
-        givenClaudeConnection();
+        givenClaudeProvider();
         String sessionId = service.start(7L);
 
         List<LoginEvent> got = new ArrayList<>();
@@ -184,7 +181,7 @@ class LoginSessionServiceTest {
 
     @Test
     void idleSessionIsKilledAfterTimeout() {
-        givenClaudeConnection();
+        givenClaudeProvider();
         service.start(7L);
 
         clock.advance(Duration.ofMinutes(6));
@@ -195,7 +192,7 @@ class LoginSessionServiceTest {
 
     @Test
     void activityResetsIdleTimer() {
-        givenClaudeConnection();
+        givenClaudeProvider();
         service.start(7L);
 
         clock.advance(Duration.ofMinutes(4));
@@ -211,5 +208,12 @@ class LoginSessionServiceTest {
         assertThatThrownBy(() -> service.subscribe("nope", e -> { })).isInstanceOf(NotFoundException.class);
         assertThatThrownBy(() -> service.input("nope", "x")).isInstanceOf(NotFoundException.class);
         assertThatThrownBy(() -> service.stop("nope")).isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void deletedRuntimeIsNotFound() {
+        when(providerRepository.findByIdAndDeletedAtIsNull(9L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.start(9L)).isInstanceOf(NotFoundException.class);
     }
 }

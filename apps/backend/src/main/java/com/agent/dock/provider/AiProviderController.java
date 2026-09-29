@@ -13,6 +13,7 @@ import java.util.List;
 public class AiProviderController {
     private final AiProviderService service;
 
+    /** 등록된 런타임 목록. 연결 상태는 워크스페이스별(`/workspaces/{id}/runtimes`)이다. */
     @GetMapping
     public List<AiProviderResponse> findAll() {
         return service.findAll();
@@ -30,26 +31,10 @@ public class AiProviderController {
         service.delete(id);
     }
 
+    /** 런타임 on/off 토글. */
     @PutMapping("/{id}/enabled")
     public AiProviderResponse setEnabled(@PathVariable Long id, @Valid @RequestBody RuntimeEnabledRequest request) {
         return service.setEnabled(id, request.enabled());
-    }
-
-    @PostMapping("/connections")
-    @ResponseStatus(HttpStatus.CREATED)
-    public AiConnectionResponse createConnection(@Valid @RequestBody CreateAiConnectionRequest request) {
-        return service.createConnection(request);
-    }
-
-    @PostMapping("/{id}/connection")
-    @ResponseStatus(HttpStatus.CREATED)
-    public AiConnectionResponse createProviderConnection(@PathVariable Long id) {
-        return service.createProviderConnection(id);
-    }
-
-    @GetMapping("/{id}/connections")
-    public List<AiConnectionResponse> listConnections(@PathVariable Long id) {
-        return service.listConnections(id);
     }
 
     @PutMapping("/{id}/capabilities")

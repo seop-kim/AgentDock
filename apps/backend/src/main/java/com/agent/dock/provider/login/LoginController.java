@@ -9,16 +9,17 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 
+/** 런타임 단위 웹 로그인 패널. 로그인은 폴더와 무관하게 런타임 전역이다. */
 @RestController
-@RequestMapping("/ai-connections")
+@RequestMapping("/ai-providers")
 @RequiredArgsConstructor
 public class LoginController {
     private final LoginSessionService service;
 
-    @PostMapping("/{connectionId}/login")
+    @PostMapping("/{providerId}/login")
     @ResponseStatus(HttpStatus.CREATED)
-    public LoginSessionResponse start(@PathVariable Long connectionId) {
-        return new LoginSessionResponse(service.start(connectionId));
+    public LoginSessionResponse start(@PathVariable Long providerId) {
+        return new LoginSessionResponse(service.start(providerId));
     }
 
     @GetMapping(value = "/login-sessions/{sessionId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)

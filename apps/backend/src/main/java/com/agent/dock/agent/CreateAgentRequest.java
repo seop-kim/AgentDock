@@ -11,7 +11,6 @@ public record CreateAgentRequest(
         @NotNull Long roleId,
         @NotNull Long permissionProfileId,
         @NotNull Long providerId,
-        Long connectionId,
         String persona,
         String model,
         String mode,

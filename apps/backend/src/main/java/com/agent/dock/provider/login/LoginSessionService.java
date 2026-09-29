@@ -2,8 +2,8 @@ package com.agent.dock.provider.login;
 
 import com.agent.dock.common.BadRequestException;
 import com.agent.dock.common.NotFoundException;
-import com.agent.dock.provider.AiConnection;
-import com.agent.dock.provider.AiConnectionRepository;
+import com.agent.dock.provider.AiProvider;
+import com.agent.dock.provider.AiProviderRepository;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +24,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
- * 웹 로그인 패널의 백엔드. Provider CLI 의 로그인 명령을 실행하고 출력을 세션에 쌓아 SSE 로 전달한다.
+ * 웹 로그인 패널의 백엔드. 런타임 CLI 의 로그인 명령을 실행하고 출력을 세션에 쌓아 SSE 로 전달한다.
+ * 로그인은 런타임 전역(폴더와 무관)이고, 폴더별 상태는 워크스페이스의 런타임 확인이 담당한다.
  * 자격증명은 CLI 가 자기 세션에 저장하며 이 앱은 다루지 않는다. 오래 걸리는 작업이므로 @Transactional 을 쓰지 않는다.
  */
 @Service
@@ -32,7 +33,7 @@ import java.util.function.Consumer;
 public class LoginSessionService {
     static final Duration IDLE_TIMEOUT = Duration.ofMinutes(5);
 
-    private final AiConnectionRepository connectionRepository;
+    private final AiProviderRepository providerRepository;
     private final LoginCommandRegistry commandRegistry;
     private final LoginProcessFactory processFactory;
     private final Clock clock;
@@ -40,14 +41,14 @@ public class LoginSessionService {
     private ScheduledExecutorService sweeper;
 
     @Autowired
-    public LoginSessionService(AiConnectionRepository connectionRepository, LoginCommandRegistry commandRegistry,
+    public LoginSessionService(AiProviderRepository providerRepository, LoginCommandRegistry commandRegistry,
                                LoginProcessFactory processFactory) {
-        this(connectionRepository, commandRegistry, processFactory, Clock.systemUTC());
+        this(providerRepository, commandRegistry, processFactory, Clock.systemUTC());
     }
 
-    LoginSessionService(AiConnectionRepository connectionRepository, LoginCommandRegistry commandRegistry,
+    LoginSessionService(AiProviderRepository providerRepository, LoginCommandRegistry commandRegistry,
                         LoginProcessFactory processFactory, Clock clock) {
-        this.connectionRepository = connectionRepository;
+        this.providerRepository = providerRepository;
         this.commandRegistry = commandRegistry;
         this.processFactory = processFactory;
         this.clock = clock;
@@ -71,24 +72,23 @@ public class LoginSessionService {
         sessions.values().forEach(session -> session.process().close());
     }
 
-    /** 로그인 세션을 시작하고 sessionId 를 돌려준다. Connection 당 활성 세션은 하나이며 이미 있으면 그것을 돌려준다. */
-    public String start(Long connectionId) {
-        // provider 를 fetch join 으로 함께 읽는다(open-in-view=false 라 지연 로딩 불가)
-        AiConnection connection = connectionRepository.findWithProvider(connectionId)
-                .orElseThrow(() -> new NotFoundException("AiConnection %d not found".formatted(connectionId)));
-        var providerKey = connection.getProvider().getKey();
+    /** 로그인 세션을 시작하고 sessionId 를 돌려준다. 런타임 당 활성 세션은 하나이며 이미 있으면 그것을 돌려준다. */
+    public String start(Long providerId) {
+        AiProvider provider = providerRepository.findByIdAndDeletedAtIsNull(providerId)
+                .orElseThrow(() -> new NotFoundException("AiProvider %d not found".formatted(providerId)));
+        var providerKey = provider.getKey();
         List<String> command = commandRegistry.find(providerKey)
-                .orElseThrow(() -> new BadRequestException("이 Provider 는 로그인 창을 아직 지원하지 않습니다: " + providerKey))
+                .orElseThrow(() -> new BadRequestException("이 런타임은 로그인 창을 아직 지원하지 않습니다: " + providerKey))
                 .command();
 
         for (LoginSession existing : sessions.values()) {
-            if (existing.connectionId().equals(connectionId) && !existing.finished()) {
+            if (existing.providerId().equals(providerId) && !existing.finished()) {
                 return existing.id();
             }
         }
 
         LoginProcess process = processFactory.create();
-        LoginSession session = new LoginSession(UUID.randomUUID().toString(), connectionId, process, clock);
+        LoginSession session = new LoginSession(UUID.randomUUID().toString(), providerId, process, clock);
         sessions.put(session.id(), session);
         process.onOutput(chunk -> session.publish(LoginEvent.output(chunk)));
         process.onExit(code -> session.publish(LoginEvent.exit(code)));

@@ -2,7 +2,6 @@ package com.agent.dock.agent;
 
 import com.agent.dock.permission.PermissionProfileResponse;
 import com.agent.dock.project.ProjectSummary;
-import com.agent.dock.provider.AiConnectionResponse;
 import com.agent.dock.provider.AiProviderSummary;
 import com.agent.dock.role.AgentRoleResponse;
 
@@ -15,7 +14,6 @@ public record AgentResponse(
         Long roleId, AgentRoleResponse role,
         Long permissionProfileId, PermissionProfileResponse permissionProfile,
         Long providerId, AiProviderSummary provider,
-        Long connectionId, AiConnectionResponse connection,
         String persona, String model, String mode, Map<String, Object> profile,
         boolean available, String unavailableReason,
         Instant createdAt, Instant updatedAt
@@ -27,7 +25,6 @@ public record AgentResponse(
                 a.getRoleId(), AgentRoleResponse.from(a.getRole()),
                 a.getPermissionProfileId(), PermissionProfileResponse.from(a.getPermissionProfile()),
                 a.getProviderId(), AiProviderSummary.from(a.getProvider()),
-                a.getConnectionId(), a.getConnection() == null ? null : AiConnectionResponse.from(a.getConnection()),
                 a.getPersona(), a.getModel(), a.getMode(), a.getProfile(),
                 availability.available(), availability.reason() == null ? null : availability.reason().name(),
                 a.getCreatedAt(), a.getUpdatedAt()

@@ -8,7 +8,6 @@ import com.agent.dock.project.Project;
 import com.agent.dock.project.ProjectWorkspace;
 import com.agent.dock.project.ProjectWorkspaceRepository;
 import com.agent.dock.project.ProjectRepository;
-import com.agent.dock.provider.AiConnectionRepository;
 import com.agent.dock.provider.AiProvider;
 import com.agent.dock.provider.AiProviderRepository;
 import com.agent.dock.provider.ConnectionStatus;
@@ -41,7 +40,6 @@ class AgentServiceTest {
     @Mock AgentRoleRepository roleRepository;
     @Mock PermissionProfileRepository permissionProfileRepository;
     @Mock AiProviderRepository providerRepository;
-    @Mock AiConnectionRepository connectionRepository;
     @Mock ProjectRepository projectRepository;
     @Mock ProjectWorkspaceRepository projectWorkspaceRepository;
     @Mock WorkspaceRuntimeStatusRepository runtimeStatusRepository;
@@ -153,7 +151,7 @@ class AgentServiceTest {
         when(providerRepository.findByIdAndDeletedAtIsNull(7L)).thenReturn(Optional.of(provider(7L, false, false)));
 
         assertThatThrownBy(() -> service.create(new CreateAgentRequest(
-                "A", 2L, 1L, 1L, 7L, null, "persona", null, null, null)))
+                "A", 2L, 1L, 1L, 7L, "persona", null, null, null)))
                 .isInstanceOf(ConflictException.class)
                 .hasMessageContaining("turned off");
         verify(agentRepository, never()).save(any());

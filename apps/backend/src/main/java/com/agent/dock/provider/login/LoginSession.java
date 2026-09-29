@@ -12,7 +12,7 @@ import java.util.function.Consumer;
  */
 class LoginSession {
     private final String id;
-    private final Long connectionId;
+    private final Long providerId;
     private final LoginProcess process;
     private final Clock clock;
     private final List<LoginEvent> events = new ArrayList<>();
@@ -20,9 +20,9 @@ class LoginSession {
     private boolean finished;
     private Instant lastActivity;
 
-    LoginSession(String id, Long connectionId, LoginProcess process, Clock clock) {
+    LoginSession(String id, Long providerId, LoginProcess process, Clock clock) {
         this.id = id;
-        this.connectionId = connectionId;
+        this.providerId = providerId;
         this.process = process;
         this.clock = clock;
         this.lastActivity = clock.instant();
@@ -32,8 +32,8 @@ class LoginSession {
         return id;
     }
 
-    Long connectionId() {
-        return connectionId;
+    Long providerId() {
+        return providerId;
     }
 
     LoginProcess process() {

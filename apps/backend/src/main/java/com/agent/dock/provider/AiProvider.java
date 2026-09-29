@@ -39,9 +39,6 @@ public class AiProvider {
     private boolean enabled;
 
     @OneToMany(mappedBy = "provider")
-    private List<AiConnection> connections;
-
-    @OneToMany(mappedBy = "provider")
     private List<Agent> agents;
 
     @CreationTimestamp

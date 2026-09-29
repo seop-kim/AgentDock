@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit;
  */
 @Component
 @Slf4j
-public class ClaudeCodeProbe implements AiConnectionProbe {
+public class ClaudeCodeProbe implements AiRuntimeProbe {
 
     private static final int TIMEOUT_SECONDS = 30;
     private static final int DETAIL_LIMIT = 500;

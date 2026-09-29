@@ -1,6 +1,5 @@
 package com.agent.dock.provider;
 
-import com.agent.dock.agent.AgentRepository;
 import com.agent.dock.common.ConflictException;
 import com.agent.dock.common.NotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -16,15 +15,12 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AiProviderService {
     private final AiProviderRepository providerRepository;
-    private final AiConnectionRepository connectionRepository;
-    private final AgentRepository agentRepository;
 
-    /** 논리 삭제되지 않은 Provider 만 반환한다. */
+    /** 논리 삭제되지 않은 런타임만 반환한다. */
     public List<AiProviderResponse> findAll() {
         return providerRepository.findByDeletedAtIsNullOrderByNameAsc().stream().map(AiProviderResponse::from).toList();
     }
 
-    /** Provider 를 만들고 Connection(Provider 당 1개)을 함께 만든다. */
     @Transactional
     public AiProviderResponse create(CreateAiProviderRequest request) {
         if (providerRepository.existsByKeyAndDeletedAtIsNull(request.key())) {
@@ -34,23 +30,13 @@ public class AiProviderService {
         provider.setKey(request.key());
         provider.setName(request.name());
         provider.setCapabilities(request.capabilities() != null ? request.capabilities() : new HashMap<>());
-        AiProvider saved = providerRepository.save(provider);
-
-        AiConnection connection = new AiConnection();
-        connection.setProvider(saved);
-        saved.setConnections(List.of(connectionRepository.save(connection)));
-        return AiProviderResponse.from(saved);
+        return AiProviderResponse.from(providerRepository.save(provider));
     }
 
-    /**
-     * 논리 삭제. Agent 는 그대로 두고(사용 불가가 된다), Connection 은 지운다.
-     * Connection 을 지우기 전에 Agent 의 connection_id 를 먼저 끊어 FK 위반을 피한다.
-     */
+    /** 논리 삭제. 이 런타임을 쓰던 에이전트는 남고 "사용 불가"가 된다. */
     @Transactional
     public void delete(Long id) {
         AiProvider provider = findActive(id);
-        agentRepository.detachConnectionsOfProvider(id);
-        connectionRepository.deleteByProviderId(id);
         provider.setDeletedAt(Instant.now());
         providerRepository.save(provider);
     }
@@ -61,33 +47,6 @@ public class AiProviderService {
         AiProvider provider = findActive(providerId);
         provider.setEnabled(enabled);
         return AiProviderResponse.from(providerRepository.save(provider));
-    }
-
-    /** 삭제된 Connection 을 다시 만든다("연결 추가"). Provider 당 1개만 허용한다. */
-    public AiConnectionResponse createProviderConnection(Long providerId) {
-        AiProvider provider = findActive(providerId);
-        if (connectionRepository.existsByProviderId(providerId)) {
-            throw new ConflictException("AiProvider %d already has a connection".formatted(providerId));
-        }
-        AiConnection connection = new AiConnection();
-        connection.setProvider(provider);
-        return AiConnectionResponse.from(connectionRepository.save(connection));
-    }
-
-    public AiConnectionResponse createConnection(CreateAiConnectionRequest request) {
-        AiProvider provider = findActive(request.providerId());
-        if (connectionRepository.existsByProviderId(request.providerId())) {
-            throw new ConflictException("AiProvider %d already has a connection".formatted(request.providerId()));
-        }
-        AiConnection connection = new AiConnection();
-        connection.setProvider(provider);
-        connection.setAccountName(request.accountName());
-        connection.setCredentialReference(request.credentialReference());
-        return AiConnectionResponse.from(connectionRepository.save(connection));
-    }
-
-    public List<AiConnectionResponse> listConnections(Long providerId) {
-        return connectionRepository.findByProviderId(providerId).stream().map(AiConnectionResponse::from).toList();
     }
 
     /**

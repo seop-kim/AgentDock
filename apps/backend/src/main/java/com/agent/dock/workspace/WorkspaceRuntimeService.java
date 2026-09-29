@@ -1,9 +1,9 @@
 package com.agent.dock.workspace;
 
 import com.agent.dock.common.NotFoundException;
-import com.agent.dock.provider.AiConnectionProbe;
 import com.agent.dock.provider.AiProvider;
 import com.agent.dock.provider.AiProviderRepository;
+import com.agent.dock.provider.AiRuntimeProbe;
 import com.agent.dock.provider.ConnectionStatus;
 import com.agent.dock.provider.ProbeRegistry;
 import com.agent.dock.provider.ProbeResult;
@@ -51,7 +51,7 @@ public class WorkspaceRuntimeService {
             status.setProvider(provider);
         }
 
-        AiConnectionProbe probe = probeRegistry.find(provider.getKey()).orElse(null);
+        AiRuntimeProbe probe = probeRegistry.find(provider.getKey()).orElse(null);
         if (probe == null) {
             status.setStatus(ConnectionStatus.ERROR);
             status.setLastError("이 런타임은 아직 확인을 지원하지 않습니다: " + provider.getKey());
