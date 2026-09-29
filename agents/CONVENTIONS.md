@@ -84,7 +84,14 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
 - 실행 바이너리는 환경변수 override: `CLAUDE_CODE_BIN`(기본 `claude`). probe 와 로그인 명령이 같은 변수를 쓴다.
 - **폴더별 상태 확인(probe)**: `POST /workspaces/{id}/runtimes/{providerId}/check` 가 **그 폴더를 작업 디렉터리로** CLI 를 짧은 프롬프트로 한 번 실행해(최대 30초) `status`/`last_error`/`last_checked_at` 을 저장한다. 로그인은 전역이지만 "이 폴더에서 실제로 실행되는가"는 폴더마다 다를 수 있어 이렇게 확인한다.
 - probe 구현체는 런타임별 하나이고 `ProbeRegistry` 에 자동 등록된다. 현재는 `ClaudeCodeProbe`(CLAUDE_CODE)만 있다. 다른 런타임은 목록에 표시되고 확인 시 ERROR("이 런타임은 아직 확인을 지원하지 않습니다") 가 된다.
-- **웹 로그인 패널**: `POST /ai-providers/{id}/login` 이 서버 고정 로그인 명령(현재 `claude auth login`)을 실행하고 `GET /ai-providers/login-sessions/{sessionId}/stream`(SSE)으로 출력을, `POST .../input` 으로 stdin 입력을 전달한다. 런타임당 활성 세션 1개, 유휴 5분이면 종료. 로그인 명령은 사용자 입력으로 만들지 않는다.
+- **웹 로그인 패널**: `POST /ai-providers/{id}/login` 이 서버 고정 로그인 명령(현재 `claude auth login`)을 실행하고 `GET /ai-providers/command-sessions/{sessionId}/stream`(SSE)으로 출력을, `POST .../input` 으로 stdin 입력을 전달한다. 런타임당 활성 세션 1개(로그인/설치 별개), 유휴 5분이면 종료. 로그인 명령은 사용자 입력으로 만들지 않는다.
+
+### CLI 설치와 실행 파일 해석
+
+- **실행 파일 해석**(`process/Executables`): Java 는 `npm` 처럼 확장자 없이 쓰는 이름을 `npm.cmd` 로 찾지 못한다(`CreateProcess error=2`). PATH/PATHEXT 를 훑어 실제 파일을 찾아 실행한다. `ProcessService`(에이전트 실행)와 probe 에 적용하며 **셸을 경유하지 않는다**(프롬프트가 셸로 해석되지 않게).
+- **설치 계획(데이터)**: `capabilities` 에 `installRequire`(먼저 있어야 하는 실행 파일, 예: `npm`), `installPrerequisite`(없을 때 먼저 실행할 단계, 예: `nvm install lts`), `install`(본 설치 단계) 을 둔다. V9 가 4종 런타임에 시드하며 화면에서 편집한다(추측 금지, npm 패키지는 실존 확인 후 기재).
+- **설치 세션**: `POST /ai-providers/{id}/install` → 단계를 순서대로 실행하고 출력을 같은 SSE 로 스트리밍한다. 필수 도구가 없으면 선행 단계를 먼저 실행한다. 설치 단계만 `CommandShell`(`cmd.exe /c`, Unix `sh -c`)로 감싼다 — `.cmd`/`.ps1`/`&&` 를 쓰기 위함이며, **에이전트 실행 경로는 셸을 쓰지 않는다**.
+- **CLI 없음 감지**: probe 가 실행 파일을 못 찾으면 `cliMissing` 으로 표시하고(저장: `workspace_runtime_status.cli_missing`) 화면은 설치 버튼을 띄운다.
 
 ### 모델과 모드 (`capabilities`)
 
