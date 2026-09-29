@@ -40,21 +40,42 @@ public class ClaudeCodeProbe implements AiConnectionProbe {
             return ProbeResult.failure("CLI 실행 실패: " + command + " 를 찾을 수 없습니다 (CLAUDE_CODE_BIN 으로 경로 지정 가능)");
         }
 
-        try (InputStream input = process.getInputStream()) {
-            String output = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        // 출력은 별도 스레드에서 읽는다. 프로세스가 끝나지 않고 stdout 도 닫지 않으면
+        // 출력을 먼저 다 읽는 방식은 영원히 블록되어 타임아웃이 동작하지 않는다.
+        StringBuffer collected = new StringBuffer();
+        Thread reader = new Thread(() -> pump(process.getInputStream(), collected), "probe-output");
+        reader.setDaemon(true);
+        reader.start();
+
+        try {
             if (!process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                 process.destroyForcibly();
                 return ProbeResult.failure("확인 시간 초과 (" + TIMEOUT_SECONDS + "초)");
             }
+            // 종료 감지를 우선하고 남은 출력은 잠깐만 기다린다.
+            reader.join(1000);
             int exitCode = process.exitValue();
-            String trimmed = output.trim();
+            String output = collected.toString().trim();
             if (exitCode == 0) {
-                return ProbeResult.success(trimmed.isEmpty() ? "OK" : shorten(trimmed));
+                return ProbeResult.success(output.isEmpty() ? "OK" : shorten(output));
             }
-            return ProbeResult.failure(shorten(trimmed.isEmpty() ? "CLI 종료 코드 " + exitCode : trimmed));
-        } catch (Exception ex) {
+            return ProbeResult.failure(shorten(output.isEmpty() ? "CLI 종료 코드 " + exitCode : output));
+        } catch (InterruptedException ex) {
             process.destroyForcibly();
-            return ProbeResult.failure("확인 중 오류: " + ex.getClass().getSimpleName() + ": " + ex.getMessage());
+            Thread.currentThread().interrupt();
+            return ProbeResult.failure("확인 중 인터럽트되었습니다");
+        }
+    }
+
+    private void pump(InputStream input, StringBuffer sink) {
+        try (InputStream stream = input) {
+            byte[] buffer = new byte[1024];
+            int read;
+            while ((read = stream.read(buffer)) != -1) {
+                sink.append(new String(buffer, 0, read, StandardCharsets.UTF_8));
+            }
+        } catch (Exception ignored) {
+            // 프로세스를 종료하면 스트림이 닫힌다
         }
     }
 
