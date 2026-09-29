@@ -29,13 +29,7 @@ public class ClaudeCodeRuntime implements AgentRuntime {
     @Override
     public AgentExecutionResult execute(AgentExecutionRequest request) throws Exception {
         String command = System.getenv().getOrDefault("CLAUDE_CODE_BIN", "claude");
-        List<String> args = new ArrayList<>(List.of("-p", request.prompt(), "--output-format", "text"));
-        if (request.model() != null) {
-            args.add("--model");
-            args.add(request.model());
-        }
-
-        Process process = processService.spawn(request.executionId(), command, args, request.workspacePath());
+        Process process = processService.spawn(request.executionId(), command, buildArgs(request), request.workspacePath());
 
         CompletableFuture<Void> stdout = CompletableFuture.runAsync(() -> pump(process.getInputStream(), "stdout", request));
         CompletableFuture<Void> stderr = CompletableFuture.runAsync(() -> pump(process.getErrorStream(), "stderr", request));
@@ -43,6 +37,23 @@ public class ClaudeCodeRuntime implements AgentRuntime {
         int exitCode = process.waitFor();
         CompletableFuture.allOf(stdout, stderr).join();
         return new AgentExecutionResult(exitCode);
+    }
+
+    /**
+     * CLI 인자 조립. Agent 의 mode 는 Claude Code 의 권한/실행 모드로 전달한다.
+     * 값이 없으면 플래그를 붙이지 않고 CLI 기본값을 쓴다.
+     */
+    List<String> buildArgs(AgentExecutionRequest request) {
+        List<String> args = new ArrayList<>(List.of("-p", request.prompt(), "--output-format", "text"));
+        if (request.model() != null && !request.model().isBlank()) {
+            args.add("--model");
+            args.add(request.model());
+        }
+        if (request.mode() != null && !request.mode().isBlank()) {
+            args.add("--permission-mode");
+            args.add(request.mode());
+        }
+        return args;
     }
 
     private void pump(InputStream input, String stream, AgentExecutionRequest request) {
