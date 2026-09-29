@@ -1,6 +1,5 @@
 package com.agent.dock.workspace;
 
-import com.agent.dock.agent.Agent;
 import com.agent.dock.execution.Execution;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -27,9 +26,6 @@ public class Workspace {
     private String path;
 
     private String description;
-
-    @OneToMany(mappedBy = "workspace")
-    private List<Agent> agents;
 
     @OneToMany(mappedBy = "workspace")
     private List<Execution> executions;
