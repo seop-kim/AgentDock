@@ -7,12 +7,13 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * 로그인 프로세스 한 번의 수명. 이벤트를 모두 쌓아 두고, 구독자에게 지금까지의 이벤트를 재생한 뒤 실시간으로 전달한다
- * (구독이 프로세스 시작보다 늦어도 인증 URL 출력을 놓치지 않기 위함).
+ * 런타임 CLI 명령(로그인/설치) 한 번의 수명. 이벤트를 모두 쌓아 두고, 구독자에게 지금까지의 이벤트를 재생한 뒤
+ * 실시간으로 전달한다(구독이 프로세스 시작보다 늦어도 인증 URL/설치 로그 출력을 놓치지 않기 위함).
  */
 class LoginSession {
     private final String id;
     private final Long providerId;
+    private final SessionKind kind;
     private final LoginProcess process;
     private final Clock clock;
     private final List<LoginEvent> events = new ArrayList<>();
@@ -20,9 +21,10 @@ class LoginSession {
     private boolean finished;
     private Instant lastActivity;
 
-    LoginSession(String id, Long providerId, LoginProcess process, Clock clock) {
+    LoginSession(String id, Long providerId, SessionKind kind, LoginProcess process, Clock clock) {
         this.id = id;
         this.providerId = providerId;
+        this.kind = kind;
         this.process = process;
         this.clock = clock;
         this.lastActivity = clock.instant();
@@ -34,6 +36,10 @@ class LoginSession {
 
     Long providerId() {
         return providerId;
+    }
+
+    SessionKind kind() {
+        return kind;
     }
 
     LoginProcess process() {

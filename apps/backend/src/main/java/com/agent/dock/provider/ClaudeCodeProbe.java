@@ -1,5 +1,6 @@
 package com.agent.dock.provider;
 
+import com.agent.dock.process.Executables;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -29,7 +30,8 @@ public class ClaudeCodeProbe implements AiRuntimeProbe {
 
     @Override
     public ProbeResult check(String cwd) {
-        String command = System.getenv().getOrDefault("CLAUDE_CODE_BIN", "claude");
+        // npm 으로 설치된 claude 는 claude.cmd 이므로 PATH/PATHEXT 로 실제 파일을 찾아 준다.
+        String command = Executables.resolve(System.getenv().getOrDefault("CLAUDE_CODE_BIN", "claude"));
         ProcessBuilder builder = new ProcessBuilder(List.of(command, "-p", PROBE_PROMPT, "--output-format", "text"));
         builder.redirectErrorStream(true);
         builder.directory(cwd == null ? null : new File(cwd));
@@ -38,7 +40,8 @@ public class ClaudeCodeProbe implements AiRuntimeProbe {
         try {
             process = builder.start();
         } catch (Exception ex) {
-            return ProbeResult.failure("CLI 실행 실패: " + command + " 를 찾을 수 없습니다 (CLAUDE_CODE_BIN 으로 경로 지정 가능)");
+            // 실행 파일 자체가 없으면 화면에서 설치를 안내할 수 있게 cliMissing 으로 표시한다.
+            return ProbeResult.cliMissing("CLI 실행 실패: " + command + " 를 찾을 수 없습니다 (에이전트 설정에서 설치하거나 CLAUDE_CODE_BIN 으로 경로 지정)");
         }
 
         // 출력은 별도 스레드에서 읽는다. 프로세스가 끝나지 않고 stdout 도 닫지 않으면

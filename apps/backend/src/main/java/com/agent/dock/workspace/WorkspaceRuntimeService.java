@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
 
 /**
  * 폴더별 런타임 상태. 로그인은 런타임 전역이지만 "이 폴더에서 실제로 실행되는가"는 폴더마다 다를 수 있어
- * 그 폴더를 작업 디렉터리로 CLI 를 한 번 실행해 확인한다.
+ * 그 폴더를 작업 디렉터리로 CLI 를 한 번 실행해 확인한다. CLI 가 없으면 그 사실을 남겨 화면에서 설치를 안내한다.
  */
 @Service
 @RequiredArgsConstructor
@@ -54,10 +54,12 @@ public class WorkspaceRuntimeService {
         AiRuntimeProbe probe = probeRegistry.find(provider.getKey()).orElse(null);
         if (probe == null) {
             status.setStatus(ConnectionStatus.ERROR);
+            status.setCliMissing(false);
             status.setLastError("이 런타임은 아직 확인을 지원하지 않습니다: " + provider.getKey());
         } else {
             ProbeResult result = probe.check(workspace.getPath());
             status.setStatus(result.ok() ? ConnectionStatus.CONNECTED : ConnectionStatus.ERROR);
+            status.setCliMissing(result.cliMissing());
             status.setLastError(result.ok() ? null : result.detail());
         }
         status.setLastCheckedAt(Instant.now());

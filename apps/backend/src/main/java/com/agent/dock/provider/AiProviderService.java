@@ -60,6 +60,9 @@ public class AiProviderService {
                 ? new HashMap<>() : new HashMap<>(provider.getCapabilities());
         capabilities.put("models", normalize(request.models()));
         capabilities.put("modes", normalize(request.modes()));
+        putOrRemove(capabilities, "install", request.install());
+        putOrRemove(capabilities, "installRequire", request.installRequire());
+        putOrRemove(capabilities, "installPrerequisite", normalize(request.installPrerequisite()));
         if (request.notes() == null || request.notes().isBlank()) {
             capabilities.remove("notes");
         } else {
@@ -67,6 +70,23 @@ public class AiProviderService {
         }
         provider.setCapabilities(capabilities);
         return AiProviderResponse.from(providerRepository.save(provider));
+    }
+
+    private void putOrRemove(Map<String, Object> capabilities, String key, String value) {
+        if (value == null || value.isBlank()) {
+            capabilities.remove(key);
+        } else {
+            capabilities.put(key, value.trim());
+        }
+    }
+
+    private void putOrRemove(Map<String, Object> capabilities, String key, List<String> values) {
+        List<String> normalized = normalize(values);
+        if (normalized.isEmpty()) {
+            capabilities.remove(key);
+        } else {
+            capabilities.put(key, normalized);
+        }
     }
 
     private List<String> normalize(List<String> values) {

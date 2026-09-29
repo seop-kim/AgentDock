@@ -88,7 +88,7 @@ class AiProviderServiceTest {
         when(providerRepository.save(any(AiProvider.class))).thenAnswer(inv -> inv.getArgument(0));
 
         var response = service.updateCapabilities(1L, new ProviderCapabilities(
-                List.of(" opus ", "opus", "", "  ", "sonnet"), List.of("plan", " plan "), "  note  "));
+                List.of(" opus ", "opus", "", "  ", "sonnet"), List.of("plan", " plan "), "  note  ", null, null, null));
 
         assertThat(response.capabilities()).containsEntry("custom", "keep-me");
         assertThat(response.capabilities().get("models")).isEqualTo(List.of("opus", "sonnet"));
@@ -97,17 +97,38 @@ class AiProviderServiceTest {
     }
 
     @Test
-    void updateCapabilitiesRemovesNotesWhenBlank() {
+    void updateCapabilitiesStoresInstallPlan() {
+        AiProvider provider = new AiProvider();
+        when(providerRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(provider));
+        when(providerRepository.save(any(AiProvider.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var response = service.updateCapabilities(1L, new ProviderCapabilities(
+                List.of(), List.of(), null,
+                List.of(" npm install -g @openai/codex ", ""), " npm ",
+                List.of("nvm install lts", "nvm use lts")));
+
+        assertThat(response.capabilities().get("install")).isEqualTo(List.of("npm install -g @openai/codex"));
+        assertThat(response.capabilities().get("installRequire")).isEqualTo("npm");
+        assertThat(response.capabilities().get("installPrerequisite")).isEqualTo(List.of("nvm install lts", "nvm use lts"));
+    }
+
+    @Test
+    void updateCapabilitiesRemovesNotesAndInstallWhenBlank() {
         AiProvider provider = new AiProvider();
         Map<String, Object> existing = new HashMap<>();
         existing.put("notes", "old note");
+        existing.put("install", List.of("npm install -g old"));
+        existing.put("installRequire", "npm");
         provider.setCapabilities(existing);
         when(providerRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(provider));
         when(providerRepository.save(any(AiProvider.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        var response = service.updateCapabilities(1L, new ProviderCapabilities(null, null, "   "));
+        var response = service.updateCapabilities(1L, new ProviderCapabilities(null, null, "   ", null, "  ", List.of()));
 
         assertThat(response.capabilities()).doesNotContainKey("notes");
+        assertThat(response.capabilities()).doesNotContainKey("install");
+        assertThat(response.capabilities()).doesNotContainKey("installRequire");
+        assertThat(response.capabilities()).doesNotContainKey("installPrerequisite");
         assertThat(response.capabilities().get("models")).isEqualTo(List.of());
     }
 
@@ -115,7 +136,8 @@ class AiProviderServiceTest {
     void updateCapabilitiesOfDeletedProviderIsNotFound() {
         when(providerRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.updateCapabilities(1L, new ProviderCapabilities(List.of(), List.of(), null)))
+        assertThatThrownBy(() -> service.updateCapabilities(1L,
+                new ProviderCapabilities(List.of(), List.of(), null, null, null, null)))
                 .isInstanceOf(NotFoundException.class);
         verify(providerRepository, never()).save(any());
     }

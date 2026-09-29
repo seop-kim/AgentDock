@@ -19,6 +19,7 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
@@ -35,14 +36,14 @@ class LoginSessionServiceTest {
     static class FakeLoginProcess implements LoginProcess {
         Consumer<String> outputListener = s -> { };
         IntConsumer exitListener = c -> { };
-        List<String> started;
+        List<List<String>> started;
         final List<String> written = new ArrayList<>();
         boolean closed;
         boolean failStart;
 
-        @Override public void start(List<String> command) throws IOException {
+        @Override public void start(List<List<String>> commands) throws IOException {
             if (failStart) throw new IOException("no such file");
-            started = command;
+            started = commands;
         }
         @Override public void onOutput(Consumer<String> listener) { outputListener = listener; }
         @Override public void onExit(IntConsumer listener) { exitListener = listener; }
@@ -94,7 +95,10 @@ class LoginSessionServiceTest {
         String sessionId = service.start(7L);
 
         assertThat(sessionId).isNotBlank();
-        assertThat(process.started.subList(1, 3)).containsExactly("auth", "login");
+        // 로그인 명령은 셸로 감싸 .cmd/.ps1 실행 파일도 쓸 수 있게 한다
+        assertThat(process.started).hasSize(1);
+        assertThat(process.started.get(0)).hasSize(3);
+        assertThat(process.started.get(0).get(2)).contains("auth login");
     }
 
     @Test
@@ -174,7 +178,7 @@ class LoginSessionServiceTest {
         service.subscribe(sessionId, got::add);
 
         assertThat(got).hasSize(2);
-        assertThat(got.get(0).content()).contains("CLI");
+        assertThat(got.get(0).content()).contains("CLI 실행 실패");
         assertThat(got.get(1).exitEvent()).isTrue();
         assertThat(got.get(1).exitCode()).isEqualTo(-1);
     }
@@ -215,5 +219,59 @@ class LoginSessionServiceTest {
         when(providerRepository.findByIdAndDeletedAtIsNull(9L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.start(9L)).isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void installRunsStoredInstallSteps() {
+        AiProvider provider = providerOf(ProviderKey.COMMAND_CODE);
+        provider.setCapabilities(Map.of("install", List.of("npm install -g command-code")));
+        when(providerRepository.findByIdAndDeletedAtIsNull(9L)).thenReturn(Optional.of(provider));
+        when(processFactory.create()).thenReturn(process);
+
+        service.start(9L, SessionKind.INSTALL);
+
+        assertThat(process.started).hasSize(1);
+        assertThat(process.started.get(0)).contains("npm install -g command-code");
+    }
+
+    @Test
+    void installAddsPrerequisiteStepsWhenRequiredToolIsMissing() {
+        AiProvider provider = providerOf(ProviderKey.CODEX);
+        provider.setCapabilities(Map.of(
+                "install", List.of("npm install -g @openai/codex"),
+                "installRequire", "definitely-missing-tool-xyz",
+                "installPrerequisite", List.of("nvm install lts", "nvm use lts")));
+        when(providerRepository.findByIdAndDeletedAtIsNull(9L)).thenReturn(Optional.of(provider));
+        when(processFactory.create()).thenReturn(process);
+
+        service.start(9L, SessionKind.INSTALL);
+
+        // 안내 1 + 선행 2 + 안내 1 + 본 설치 1
+        assertThat(process.started).hasSize(5);
+        assertThat(process.started.get(1)).contains("nvm install lts");
+        assertThat(process.started.get(4)).contains("npm install -g @openai/codex");
+    }
+
+    @Test
+    void installWithoutCommandIsRejected() {
+        when(providerRepository.findByIdAndDeletedAtIsNull(9L)).thenReturn(Optional.of(providerOf(ProviderKey.COMMAND_CODE)));
+
+        assertThatThrownBy(() -> service.start(9L, SessionKind.INSTALL))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("설치 명령");
+    }
+
+    @Test
+    void installAndLoginSessionsAreSeparate() {
+        AiProvider provider = providerOf(ProviderKey.CLAUDE_CODE);
+        provider.setCapabilities(Map.of("install", List.of("npm install -g @anthropic-ai/claude-code")));
+        when(providerRepository.findByIdAndDeletedAtIsNull(7L)).thenReturn(Optional.of(provider));
+        when(processFactory.create()).thenReturn(process);
+
+        String login = service.start(7L, SessionKind.LOGIN);
+        String install = service.start(7L, SessionKind.INSTALL);
+
+        assertThat(install).isNotEqualTo(login);
+        verify(processFactory, times(2)).create();
     }
 }

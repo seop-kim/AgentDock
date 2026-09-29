@@ -35,6 +35,10 @@ public class WorkspaceRuntimeStatus {
     @Column(nullable = false)
     private ConnectionStatus status = ConnectionStatus.DISCONNECTED;
 
+    /** 실행 파일 자체가 없어서 실패했는지. 화면에서 설치를 안내하는 데 쓴다. */
+    @Column(name = "cli_missing", nullable = false)
+    private boolean cliMissing;
+
     private Instant lastCheckedAt;
 
     @Column(columnDefinition = "text")
