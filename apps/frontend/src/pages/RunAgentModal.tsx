@@ -5,11 +5,13 @@ import styles from './RunAgentModal.module.css';
 interface RunAgentModalProps {
   agentId: number;
   agentName: string;
+  model?: string | null;
+  mode?: string | null;
   onClose: () => void;
   onStarted: (executionId: number) => void;
 }
 
-export default function RunAgentModal({ agentId, agentName, onClose, onStarted }: RunAgentModalProps) {
+export default function RunAgentModal({ agentId, agentName, model, mode, onClose, onStarted }: RunAgentModalProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState('');
   const [prompt, setPrompt] = useState('');
@@ -38,6 +40,9 @@ export default function RunAgentModal({ agentId, agentName, onClose, onStarted }
       <form className={styles.modal} onClick={(e) => e.stopPropagation()} onSubmit={onSubmit}>
         <h2>Run {agentName}</h2>
         <p className={styles.hint}>작업 디렉터리는 선택한 프로젝트의 워크스페이스로 결정됩니다.</p>
+        <p className={styles.hint}>
+          모델: {model ?? 'CLI 기본값'} / 모드: {mode ?? 'CLI 기본값'} (Agent 설정을 사용합니다)
+        </p>
         <select value={projectId} onChange={(e) => setProjectId(e.target.value)} required>
           <option value="">프로젝트 선택</option>
           {projects.map((p) => (

@@ -11,6 +11,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -102,5 +105,47 @@ class AiProviderServiceTest {
         var response = service.createProviderConnection(1L);
 
         assertThat(response.status()).isEqualTo(ConnectionStatus.DISCONNECTED);
+    }
+
+    @Test
+    void updateCapabilitiesNormalizesListsAndKeepsOtherKeys() {
+        AiProvider provider = new AiProvider();
+        Map<String, Object> existing = new HashMap<>();
+        existing.put("custom", "keep-me");
+        provider.setCapabilities(existing);
+        when(providerRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(provider));
+        when(providerRepository.save(any(AiProvider.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var response = service.updateCapabilities(1L, new ProviderCapabilities(
+                List.of(" opus ", "opus", "", "  ", "sonnet"), List.of("plan", " plan "), "  note  "));
+
+        assertThat(response.capabilities()).containsEntry("custom", "keep-me");
+        assertThat(response.capabilities().get("models")).isEqualTo(List.of("opus", "sonnet"));
+        assertThat(response.capabilities().get("modes")).isEqualTo(List.of("plan"));
+        assertThat(response.capabilities().get("notes")).isEqualTo("note");
+    }
+
+    @Test
+    void updateCapabilitiesRemovesNotesWhenBlank() {
+        AiProvider provider = new AiProvider();
+        Map<String, Object> existing = new HashMap<>();
+        existing.put("notes", "old note");
+        provider.setCapabilities(existing);
+        when(providerRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(provider));
+        when(providerRepository.save(any(AiProvider.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var response = service.updateCapabilities(1L, new ProviderCapabilities(null, null, "   "));
+
+        assertThat(response.capabilities()).doesNotContainKey("notes");
+        assertThat(response.capabilities().get("models")).isEqualTo(List.of());
+    }
+
+    @Test
+    void updateCapabilitiesOfDeletedProviderIsNotFound() {
+        when(providerRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.updateCapabilities(1L, new ProviderCapabilities(List.of(), List.of(), null)))
+                .isInstanceOf(NotFoundException.class);
+        verify(providerRepository, never()).save(any());
     }
 }

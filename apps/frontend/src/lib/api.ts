@@ -27,10 +27,17 @@ export interface PermissionProfile {
   name: string;
 }
 
+export interface ProviderCapabilities {
+  models?: string[] | null;
+  modes?: string[] | null;
+  notes?: string | null;
+}
+
 export interface AiProvider {
   id: number;
   key: string;
   name: string;
+  capabilities?: ProviderCapabilities | null;
   connections?: AiConnection[];
 }
 
@@ -134,6 +141,8 @@ export const api = {
   createProviderConnection: (providerId: number) =>
     request<AiConnection>(`/ai-providers/${providerId}/connection`, { method: 'POST' }),
   deleteConnection: (id: number) => request<void>(`/ai-connections/${id}`, { method: 'DELETE' }),
+  updateProviderCapabilities: (id: number, data: ProviderCapabilities) =>
+    request<AiProvider>(`/ai-providers/${id}/capabilities`, { method: 'PUT', body: JSON.stringify(data) }),
   startLogin: (connectionId: number) =>
     request<{ sessionId: string }>(`/ai-connections/${connectionId}/login`, { method: 'POST' }),
   sendLoginInput: (sessionId: string, text: string) =>
