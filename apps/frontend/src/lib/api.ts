@@ -36,13 +36,20 @@ export interface Workspace {
   path: string;
 }
 
+export interface Project {
+  id: number;
+  name: string;
+  description?: string | null;
+  workspaceId: number;
+  workspace: Workspace | null;
+}
+
 export interface Agent {
   id: number;
   name: string;
   role: AgentRole;
   permissionProfile: PermissionProfile;
   provider: AiProvider;
-  workspace: Workspace | null;
   model: string | null;
   mode: string | null;
 }
@@ -85,11 +92,15 @@ export const api = {
   browseWorkspace: (path?: string) =>
     request<WorkspaceBrowseResult>(`/workspaces/browse${path ? `?path=${encodeURIComponent(path)}` : ''}`),
 
+  listProjects: () => request<Project[]>('/projects'),
+  createProject: (data: { name: string; workspaceId: number; description?: string }) =>
+    request<Project>('/projects', { method: 'POST', body: JSON.stringify(data) }),
+
   listAgents: () => request<Agent[]>('/agents'),
   createAgent: (data: Record<string, unknown>) =>
     request<Agent>('/agents', { method: 'POST', body: JSON.stringify(data) }),
 
-  createExecution: (data: { agentId: number; prompt: string }) =>
+  createExecution: (data: { agentId: number; projectId: number; prompt: string }) =>
     request<Execution>('/executions', { method: 'POST', body: JSON.stringify(data) }),
   getExecution: (id: number | string) => request<Execution>(`/executions/${id}`),
 };

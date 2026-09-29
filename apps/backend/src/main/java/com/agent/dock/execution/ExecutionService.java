@@ -2,11 +2,12 @@ package com.agent.dock.execution;
 
 import com.agent.dock.agent.Agent;
 import com.agent.dock.agent.AgentRepository;
-import com.agent.dock.common.BadRequestException;
 import com.agent.dock.common.ForbiddenException;
 import com.agent.dock.common.NotFoundException;
 import com.agent.dock.permission.PermissionAction;
 import com.agent.dock.permission.PermissionService;
+import com.agent.dock.project.Project;
+import com.agent.dock.project.ProjectRepository;
 import com.agent.dock.runtime.AgentExecutionRequest;
 import com.agent.dock.runtime.AgentRuntime;
 import com.agent.dock.runtime.RuntimeRegistry;
@@ -31,6 +32,7 @@ public class ExecutionService {
     private final ExecutionRepository executionRepository;
     private final ExecutionLogRepository logRepository;
     private final AgentRepository agentRepository;
+    private final ProjectRepository projectRepository;
     private final RuntimeRegistry runtimeRegistry;
     private final PermissionService permissionService;
 
@@ -48,13 +50,13 @@ public class ExecutionService {
                 .map(ExecutionLogResponse::from).toList();
     }
 
-    public ExecutionResponse create(Long agentId, String prompt) {
+    public ExecutionResponse create(Long agentId, Long projectId, String prompt) {
         Agent agent = agentRepository.findByIdWithRelations(agentId)
                 .orElseThrow(() -> new NotFoundException("Agent %d not found".formatted(agentId)));
+        // 작업 디렉터리는 프로젝트가 결정한다 (워크스페이스는 프로젝트에 귀속)
+        Project project = projectRepository.findWithWorkspace(projectId)
+                .orElseThrow(() -> new NotFoundException("Project %d not found".formatted(projectId)));
 
-        if (agent.getWorkspace() == null) {
-            throw new BadRequestException("Agent has no workspace assigned");
-        }
         // Permission Enforcement: Prompt 설명이 아니라 실행 전 Backend에서 실제로 차단한다.
         if (!permissionService.isAllowed(agent.getPermissionProfile(), PermissionAction.TERMINAL_EXECUTE)) {
             throw new ForbiddenException("Agent permission profile does not allow TERMINAL_EXECUTE");
@@ -62,12 +64,12 @@ public class ExecutionService {
 
         Execution execution = new Execution();
         execution.setAgent(agent);
-        execution.setWorkspace(agent.getWorkspace());
+        execution.setWorkspace(project.getWorkspace());
         execution.setPrompt(prompt);
         execution.setStatus(ExecutionStatus.PENDING);
         Execution saved = executionRepository.save(execution);
 
-        executor.submit(() -> run(saved.getId(), agent, prompt));
+        executor.submit(() -> run(saved.getId(), agent, project.getWorkspace().getPath(), prompt));
 
         return ExecutionResponse.from(saved);
     }
@@ -95,7 +97,7 @@ public class ExecutionService {
         return Map.of("cancelled", true);
     }
 
-    private void run(Long id, Agent agent, String prompt) {
+    private void run(Long id, Agent agent, String workspacePath, String prompt) {
         String streamKey = String.valueOf(id);
         streams.put(streamKey, new CopyOnWriteArrayList<>());
 
@@ -104,7 +106,7 @@ public class ExecutionService {
         try {
             AgentRuntime runtime = runtimeRegistry.resolve(agent.getProvider().getKey().name());
             var result = runtime.execute(new AgentExecutionRequest(
-                    streamKey, prompt, agent.getWorkspace().getPath(), agent.getModel(), agent.getMode(),
+                    streamKey, prompt, workspacePath, agent.getModel(), agent.getMode(),
                     (chunk, stream) -> {
                         broadcast(streamKey, stream, chunk);
                         persistLog(id, stream, chunk);

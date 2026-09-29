@@ -18,7 +18,6 @@ public class AgentRepositoryImpl implements AgentRepositoryCustom {
                 .leftJoin(agent.permissionProfile).fetchJoin()
                 .leftJoin(agent.provider).fetchJoin()
                 .leftJoin(agent.connection).fetchJoin()
-                .leftJoin(agent.workspace).fetchJoin()
                 .orderBy(agent.name.asc())
                 .fetch();
     }
@@ -31,7 +30,6 @@ public class AgentRepositoryImpl implements AgentRepositoryCustom {
                 .leftJoin(agent.permissionProfile).fetchJoin()
                 .leftJoin(agent.provider).fetchJoin()
                 .leftJoin(agent.connection).fetchJoin()
-                .leftJoin(agent.workspace).fetchJoin()
                 .where(agent.id.eq(id))
                 .fetchOne();
         return Optional.ofNullable(result);

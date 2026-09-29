@@ -11,7 +11,6 @@ public record CreateAgentRequest(
         @NotNull Long permissionProfileId,
         @NotNull Long providerId,
         Long connectionId,
-        Long workspaceId,
         String model,
         String mode,
         Map<String, Object> profile
