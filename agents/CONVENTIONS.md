@@ -129,29 +129,30 @@ DB 확인이 필요하면 `psql`이 PATH에 없으므로 전체 경로를 쓴다
 
 ## 커밋 컨벤션
 
-모든 Agent/기여자는 커밋 전에 이 섹션을 확인한다. [Conventional Commits](https://www.conventionalcommits.org/) 형식을 따른다.
+모든 Agent/기여자는 커밋 전에 이 섹션을 확인한다. 이 저장소는 **[Conventional Commits](https://www.conventionalcommits.org/) 대신 `[Type] 제목` 형식**을 쓴다.
 
 ```
-<type>(<scope>): <subject>
+[Feat] 에이전트 실행에 permission enforcement 추가
+[Fix] 폴더 선택에서 드라이브 루트 조회가 멈추던 문제 수정
 
-<body>            (선택, 왜 변경했는지)
-
-<footer>          (선택, BREAKING CHANGE, 이슈 참조 등)
+본문(선택): 왜 변경했는지 (빈 줄 뒤에 작성)
 ```
 
-- `<type>`
-  - `feat` — 새로운 기능 추가
-  - `fix` — 버그 수정
-  - `docs` — 문서만 변경 (이 파일, README 등)
-  - `style` — 포맷팅/세미콜론 등 동작에 영향 없는 변경
-  - `refactor` — 기능 변화 없는 코드 구조 개선
-  - `perf` — 성능 개선
-  - `test` — 테스트 추가/수정
-  - `build` — 빌드 시스템, 의존성 변경
-  - `ci` — CI 설정 변경
-  - `chore` — 기타 잡무 (설정 파일, 스캐폴딩 등 위 타입에 안 맞는 것)
-  - `revert` — 이전 커밋 되돌리기
-- `<scope>` (선택): 영향 범위. 예: `feat(backend): ...`, `fix(frontend): ...`, `feat(execution): ...`
-- `<subject>`: 소문자로 시작, 명령형/현재형, 마침표 없이 간결하게. 한국어로 써도 되지만 타입/콜론 형식은 반드시 지킨다. 예: `feat: agent 실행 permission enforcement 추가`
+- `[Type]` — 대괄호를 쓰고 타입은 대문자로 시작한다. 아래 타입을 쓴다.
+  - `[Feat]` — 새로운 기능 추가
+  - `[Fix]` — 버그 수정
+  - `[Docs]` — 문서만 변경 (이 파일, README 등)
+  - `[Style]` — 포맷팅/세미콜론 등 동작에 영향 없는 변경
+  - `[Refactor]` — 기능 변화 없는 코드 구조 개선
+  - `[Perf]` — 성능 개선
+  - `[Test]` — 테스트 추가/수정
+  - `[Build]` — 빌드 시스템, 의존성 변경
+  - `[Ci]` — CI 설정 변경
+  - `[Chore]` — 기타 잡무 (설정 파일, 스캐폴딩 등 위 타입에 안 맞는 것)
+  - `[Revert]` — 이전 커밋 되돌리기
+- 대괄호 뒤에 한 칸 띄우고 제목을 쓴다. 마침표 없이 간결하게, 한국어로 써도 된다. 예: `[Feat] Agent 실행에 permission enforcement 추가`
+- scope/콜론 형식(`feat(backend): ...`, `fix(frontend): ...`)은 쓰지 않는다.
 - Breaking change는 본문에 `BREAKING CHANGE: <설명>`을 추가한다.
+- AI 에이전트가 만든 커밋에도 `Co-Authored-By:` 트레일러를 붙이지 않는다.
 - 여러 변경을 한 커밋에 몰아넣지 않는다. 하나의 커밋은 하나의 논리적 단위로 나눈다.
+- 참고: 2026-09-29 이전에 만들어진 기존 이력에는 Conventional Commits 형식이 섞여 있다.
