@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -79,6 +80,37 @@ public class AiProviderService {
 
     public List<AiConnectionResponse> listConnections(Long providerId) {
         return connectionRepository.findByProviderId(providerId).stream().map(AiConnectionResponse::from).toList();
+    }
+
+    /**
+     * 지원 모델/모드 목록을 갱신한다. 목록이 자주 바뀌므로 코드가 아니라 데이터로 두고 화면에서 편집한다.
+     * capabilities 의 다른 키는 보존한다.
+     */
+    @Transactional
+    public AiProviderResponse updateCapabilities(Long providerId, ProviderCapabilities request) {
+        AiProvider provider = findActive(providerId);
+        Map<String, Object> capabilities = provider.getCapabilities() == null
+                ? new HashMap<>() : new HashMap<>(provider.getCapabilities());
+        capabilities.put("models", normalize(request.models()));
+        capabilities.put("modes", normalize(request.modes()));
+        if (request.notes() == null || request.notes().isBlank()) {
+            capabilities.remove("notes");
+        } else {
+            capabilities.put("notes", request.notes().trim());
+        }
+        provider.setCapabilities(capabilities);
+        return AiProviderResponse.from(providerRepository.save(provider));
+    }
+
+    private List<String> normalize(List<String> values) {
+        if (values == null) {
+            return List.of();
+        }
+        return values.stream()
+                .filter(value -> value != null && !value.isBlank())
+                .map(String::trim)
+                .distinct()
+                .toList();
     }
 
     private AiProvider findActive(Long id) {

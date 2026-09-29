@@ -46,4 +46,9 @@ public class AiProviderController {
     public List<AiConnectionResponse> listConnections(@PathVariable Long id) {
         return service.listConnections(id);
     }
+
+    @PutMapping("/{id}/capabilities")
+    public AiProviderResponse updateCapabilities(@PathVariable Long id, @Valid @RequestBody ProviderCapabilities request) {
+        return service.updateCapabilities(id, request);
+    }
 }
