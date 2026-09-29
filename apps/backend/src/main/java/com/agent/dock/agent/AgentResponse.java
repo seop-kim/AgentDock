@@ -15,9 +15,10 @@ public record AgentResponse(
         Long providerId, AiProviderSummary provider,
         Long connectionId, AiConnectionResponse connection,
         String model, String mode, Map<String, Object> profile,
+        boolean available, String unavailableReason,
         Instant createdAt, Instant updatedAt
 ) {
-    public static AgentResponse from(Agent a) {
+    public static AgentResponse from(Agent a, AgentAvailability.Result availability) {
         return new AgentResponse(
                 a.getId(), a.getName(),
                 a.getRoleId(), AgentRoleResponse.from(a.getRole()),
@@ -25,6 +26,7 @@ public record AgentResponse(
                 a.getProviderId(), AiProviderSummary.from(a.getProvider()),
                 a.getConnectionId(), a.getConnection() == null ? null : AiConnectionResponse.from(a.getConnection()),
                 a.getModel(), a.getMode(), a.getProfile(),
+                availability.available(), availability.reason() == null ? null : availability.reason().name(),
                 a.getCreatedAt(), a.getUpdatedAt()
         );
     }
