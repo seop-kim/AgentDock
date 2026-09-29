@@ -1,8 +1,10 @@
 package com.agent.dock.provider;
 
+import com.agent.dock.agent.AgentRepository;
 import com.agent.dock.common.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 
@@ -11,6 +13,7 @@ import java.time.Instant;
 public class AiConnectionService {
     private final AiConnectionRepository connectionRepository;
     private final ProbeRegistry probeRegistry;
+    private final AgentRepository agentRepository;
 
     /** 연결 상태를 실제로 확인하고 결과를 저장한다. 자격증명은 CLI 세션에 위임하므로 여기서 다루지 않는다. */
     public AiConnectionResponse check(Long connectionId) {
@@ -29,5 +32,15 @@ public class AiConnectionService {
         }
         connection.setLastCheckedAt(Instant.now());
         return AiConnectionResponse.from(connectionRepository.save(connection));
+    }
+
+    /** Connection 을 지운다. 참조하던 Agent 는 연결이 끊긴 상태가 되어 실행 가드에 막힌다. */
+    @Transactional
+    public void delete(Long connectionId) {
+        if (!connectionRepository.existsById(connectionId)) {
+            throw new NotFoundException("AiConnection %d not found".formatted(connectionId));
+        }
+        agentRepository.detachConnection(connectionId);
+        connectionRepository.deleteById(connectionId);
     }
 }

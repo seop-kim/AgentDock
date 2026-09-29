@@ -15,4 +15,10 @@ public class AiConnectionController {
     public AiConnectionResponse check(@PathVariable Long id) {
         return service.check(id);
     }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable Long id) {
+        service.delete(id);
+    }
 }

@@ -8,9 +8,6 @@ import java.util.Optional;
 
 public interface AiProviderRepository extends JpaRepository<AiProvider, Long> {
     @EntityGraph(attributePaths = "connections")
-    List<AiProvider> findAllByOrderByNameAsc();
-
-    @EntityGraph(attributePaths = "connections")
     List<AiProvider> findByDeletedAtIsNullOrderByNameAsc();
 
     Optional<AiProvider> findByIdAndDeletedAtIsNull(Long id);
