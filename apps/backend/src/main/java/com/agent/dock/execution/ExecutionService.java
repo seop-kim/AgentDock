@@ -1,13 +1,16 @@
 package com.agent.dock.execution;
 
 import com.agent.dock.agent.Agent;
+import com.agent.dock.agent.AgentAvailability;
 import com.agent.dock.agent.AgentRepository;
+import com.agent.dock.common.ConflictException;
 import com.agent.dock.common.ForbiddenException;
 import com.agent.dock.common.NotFoundException;
 import com.agent.dock.permission.PermissionAction;
 import com.agent.dock.permission.PermissionService;
 import com.agent.dock.project.Project;
 import com.agent.dock.project.ProjectRepository;
+import com.agent.dock.provider.AiConnectionRepository;
 import com.agent.dock.runtime.AgentExecutionRequest;
 import com.agent.dock.runtime.AgentRuntime;
 import com.agent.dock.runtime.RuntimeRegistry;
@@ -36,6 +39,7 @@ public class ExecutionService {
     private final ProjectRepository projectRepository;
     private final RuntimeRegistry runtimeRegistry;
     private final PermissionService permissionService;
+    private final AiConnectionRepository connectionRepository;
     private final ApplicationEventPublisher eventPublisher;
 
     private final Map<String, List<SseEmitter>> streams = new ConcurrentHashMap<>();
@@ -66,6 +70,13 @@ public class ExecutionService {
         // Permission Enforcement: Prompt 설명이 아니라 실행 전 Backend에서 실제로 차단한다.
         if (!permissionService.isAllowed(agent.getPermissionProfile(), PermissionAction.TERMINAL_EXECUTE)) {
             throw new ForbiddenException("Agent permission profile does not allow TERMINAL_EXECUTE");
+        }
+
+        // Provider 가 삭제됐거나 연결이 CONNECTED 가 아니면 Runtime 을 호출하지 않고 즉시 거부한다(새 실행만 차단).
+        var availability = AgentAvailability.evaluate(agent.getProvider(),
+                connectionRepository.findByProviderId(agent.getProvider().getId()));
+        if (!availability.available()) {
+            throw new ConflictException(availability.message());
         }
 
         Execution execution = new Execution();
