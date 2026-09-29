@@ -14,7 +14,8 @@ public class AiConnectionService {
 
     /** 연결 상태를 실제로 확인하고 결과를 저장한다. 자격증명은 CLI 세션에 위임하므로 여기서 다루지 않는다. */
     public AiConnectionResponse check(Long connectionId) {
-        AiConnection connection = connectionRepository.findById(connectionId)
+        // provider 를 fetch join 으로 함께 읽는다(open-in-view=false 라 지연 로딩 불가)
+        AiConnection connection = connectionRepository.findWithProvider(connectionId)
                 .orElseThrow(() -> new NotFoundException("AiConnection %d not found".formatted(connectionId)));
 
         AiConnectionProbe probe = probeRegistry.find(connection.getProvider().getKey()).orElse(null);
