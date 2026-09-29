@@ -28,6 +28,17 @@ export interface AiProvider {
   id: number;
   key: string;
   name: string;
+  connections?: AiConnection[];
+}
+
+export interface AiConnection {
+  id: number;
+  providerId: number;
+  accountName: string | null;
+  credentialReference: string | null;
+  status: string;
+  lastCheckedAt: string | null;
+  lastError: string | null;
 }
 
 export interface Workspace {
@@ -110,6 +121,9 @@ export const api = {
   listProviders: () => request<AiProvider[]>('/ai-providers'),
   createProvider: (data: { key: string; name: string }) =>
     request<AiProvider>('/ai-providers', { method: 'POST', body: JSON.stringify(data) }),
+  createConnection: (data: { providerId: number; accountName?: string; credentialReference?: string }) =>
+    request<AiConnection>('/ai-providers/connections', { method: 'POST', body: JSON.stringify(data) }),
+  checkConnection: (id: number) => request<AiConnection>(`/ai-connections/${id}/check`, { method: 'POST' }),
 
   listWorkspaces: () => request<Workspace[]>('/workspaces'),
   createWorkspace: (data: { name: string; path: string; description?: string }) =>

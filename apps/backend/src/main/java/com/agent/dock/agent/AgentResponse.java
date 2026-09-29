@@ -1,7 +1,7 @@
 package com.agent.dock.agent;
 
 import com.agent.dock.permission.PermissionProfileResponse;
-import com.agent.dock.provider.AiConnectionSummary;
+import com.agent.dock.provider.AiConnectionResponse;
 import com.agent.dock.provider.AiProviderSummary;
 import com.agent.dock.role.AgentRoleResponse;
 
@@ -13,7 +13,7 @@ public record AgentResponse(
         Long roleId, AgentRoleResponse role,
         Long permissionProfileId, PermissionProfileResponse permissionProfile,
         Long providerId, AiProviderSummary provider,
-        Long connectionId, AiConnectionSummary connection,
+        Long connectionId, AiConnectionResponse connection,
         String model, String mode, Map<String, Object> profile,
         Instant createdAt, Instant updatedAt
 ) {
@@ -23,7 +23,7 @@ public record AgentResponse(
                 a.getRoleId(), AgentRoleResponse.from(a.getRole()),
                 a.getPermissionProfileId(), PermissionProfileResponse.from(a.getPermissionProfile()),
                 a.getProviderId(), AiProviderSummary.from(a.getProvider()),
-                a.getConnectionId(), a.getConnection() == null ? null : AiConnectionSummary.from(a.getConnection()),
+                a.getConnectionId(), a.getConnection() == null ? null : AiConnectionResponse.from(a.getConnection()),
                 a.getModel(), a.getMode(), a.getProfile(),
                 a.getCreatedAt(), a.getUpdatedAt()
         );

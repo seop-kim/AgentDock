@@ -6,11 +6,11 @@ import java.util.Map;
 
 public record AiProviderResponse(
         Long id, ProviderKey key, String name, Map<String, Object> capabilities,
-        List<AiConnectionSummary> connections, Instant createdAt, Instant updatedAt
+        List<AiConnectionResponse> connections, Instant createdAt, Instant updatedAt
 ) {
     public static AiProviderResponse from(AiProvider p) {
-        List<AiConnectionSummary> connections = p.getConnections() == null ? List.of() :
-                p.getConnections().stream().map(AiConnectionSummary::from).toList();
+        List<AiConnectionResponse> connections = p.getConnections() == null ? List.of() :
+                p.getConnections().stream().map(AiConnectionResponse::from).toList();
         return new AiProviderResponse(p.getId(), p.getKey(), p.getName(), p.getCapabilities(),
                 connections, p.getCreatedAt(), p.getUpdatedAt());
     }
