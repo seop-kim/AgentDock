@@ -2,6 +2,7 @@ package com.agent.dock.agent;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -23,6 +24,7 @@ public class AgentController {
     }
 
     @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
     public AgentResponse create(@Valid @RequestBody CreateAgentRequest request) {
         return service.create(request);
     }

@@ -2,6 +2,7 @@ package com.agent.dock.execution;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -16,6 +17,7 @@ public class ExecutionController {
     private final ExecutionService service;
 
     @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
     public ExecutionResponse create(@Valid @RequestBody CreateExecutionRequest request) {
         return service.create(request.agentId(), request.prompt());
     }
@@ -36,6 +38,7 @@ public class ExecutionController {
     }
 
     @PostMapping("/{id}/cancel")
+    @ResponseStatus(HttpStatus.CREATED)
     public Map<String, Boolean> cancel(@PathVariable Long id) {
         return service.cancel(id);
     }

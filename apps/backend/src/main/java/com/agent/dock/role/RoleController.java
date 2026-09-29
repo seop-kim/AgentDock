@@ -2,6 +2,7 @@ package com.agent.dock.role;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,6 +19,7 @@ public class RoleController {
     }
 
     @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
     public AgentRoleResponse create(@Valid @RequestBody CreateAgentRoleRequest request) {
         return service.create(request);
     }
