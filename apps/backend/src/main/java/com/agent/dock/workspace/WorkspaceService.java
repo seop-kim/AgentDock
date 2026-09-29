@@ -3,15 +3,22 @@ package com.agent.dock.workspace;
 import com.agent.dock.common.BadRequestException;
 import com.agent.dock.common.NotFoundException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
-import java.util.Arrays;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class WorkspaceService {
     private final WorkspaceRepository repository;
     private final WorkspaceFs workspaceFs;
@@ -52,14 +59,42 @@ public class WorkspaceService {
         if (!dir.isDirectory()) {
             throw new BadRequestException("Path \"" + dir.getPath() + "\" is not a directory");
         }
-        File[] children = dir.listFiles(File::isDirectory);
-        List<FsEntry> entries = children == null ? List.of() :
-                Arrays.stream(children)
-                        .map(f -> new FsEntry(f.getName(), f.getAbsolutePath()))
-                        .sorted(Comparator.comparing(FsEntry::name))
-                        .toList();
+        return new WorkspaceBrowseResult(dir.getAbsolutePath(), parentPathOf(dir), listDirectories(dir));
+    }
+
+    private static List<FsEntry> listDirectories(File dir) {
+        try (Stream<Path> stream = Files.list(dir.toPath())) {
+            return stream
+                    .filter(Files::isDirectory)
+                    .map(p -> new FsEntry(p.getFileName().toString(), p.toString()))
+                    .sorted(Comparator.comparing(FsEntry::name))
+                    .toList();
+        } catch (IOException ex) {
+            return List.of();
+        }
+    }
+
+    private static String parentPathOf(File dir) {
         File parent = dir.getParentFile();
-        String parentPath = parent == null ? null : parent.getAbsolutePath();
-        return new WorkspaceBrowseResult(dir.getAbsolutePath(), parentPath, entries);
+        return parent == null ? null : parent.getAbsolutePath();
+    }
+
+    /**
+     * 드라이브 루트의 하위 항목 속성 조회는 Windows에서 첫 1회 30초까지 걸릴 수 있다
+     * (예: C:\$AAA... 형태의 업데이트 잔여 폴더가 있는 경우). 프로세스 단위로 한 번만 지불하면
+     * 이후에는 빠르므로, 기동 직후 백그라운드에서 미리 지불해 폴더 선택 UI가 멈추지 않게 한다.
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    void warmUpDirectoryMetadata() {
+        Thread.ofVirtual().name("workspace-fs-warmup").start(() -> {
+            for (File root : File.listRoots()) {
+                long started = System.currentTimeMillis();
+                listDirectories(root.getAbsoluteFile());
+                long took = System.currentTimeMillis() - started;
+                if (took > 1000) {
+                    log.info("warmed up {} in {} ms", root, took);
+                }
+            }
+        });
     }
 }
