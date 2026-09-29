@@ -19,7 +19,7 @@ function Layout() {
         <Link to="/tasks">Tasks</Link>
         <Link to="/agents">Agents</Link>
         <Link to="/workspaces">Workspaces</Link>
-        <Link to="/providers">AI Providers</Link>
+        <Link to="/providers">Agent 연결 설정</Link>
       </nav>
       <main className={styles.main}>
         <Outlet />
