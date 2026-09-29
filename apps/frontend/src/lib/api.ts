@@ -38,14 +38,15 @@ export interface AiProvider {
   key: string;
   name: string;
   capabilities?: ProviderCapabilities | null;
-  connections?: AiConnection[];
+  enabled: boolean;
 }
 
-export interface AiConnection {
-  id: number;
+/** 워크스페이스(폴더)에서의 런타임 상태. */
+export interface WorkspaceRuntime {
   providerId: number;
-  accountName: string | null;
-  credentialReference: string | null;
+  providerKey: string;
+  name: string;
+  enabled: boolean;
   status: string;
   lastCheckedAt: string | null;
   lastError: string | null;
@@ -57,12 +58,23 @@ export interface Workspace {
   path: string;
 }
 
+export interface ProjectWorkspaceInfo {
+  workspaceId: number;
+  name: string;
+  path: string;
+  isDefault: boolean;
+}
+
 export interface Project {
   id: number;
   name: string;
   description?: string | null;
-  workspaceId: number;
-  workspace: Workspace | null;
+  workspaces: ProjectWorkspaceInfo[];
+}
+
+export interface ProjectSummary {
+  id: number;
+  name: string;
 }
 
 export interface AgentSummary {
@@ -81,7 +93,7 @@ export interface AgentGroup {
 
 export interface Task {
   id: number;
-  project: Project | null;
+  project: ProjectSummary | null;
   group: AgentSummary | null;
   agent: AgentSummary | null;
   title: string;
@@ -93,14 +105,17 @@ export interface Task {
 export interface Agent {
   id: number;
   name: string;
+  projectId: number;
+  project: ProjectSummary | null;
   role: AgentRole;
   permissionProfile: PermissionProfile;
   provider: AiProvider;
+  providerId: number;
+  persona: string | null;
   model: string | null;
   mode: string | null;
-  providerId: number;
   available: boolean;
-  unavailableReason: 'PROVIDER_DELETED' | 'CONNECTION_NOT_CONNECTED' | null;
+  unavailableReason: 'PROVIDER_DELETED' | 'RUNTIME_DISABLED' | 'CONNECTION_NOT_CONNECTED' | null;
 }
 
 export interface Execution {
@@ -134,34 +149,40 @@ export const api = {
   listProviders: () => request<AiProvider[]>('/ai-providers'),
   createProvider: (data: { key: string; name: string }) =>
     request<AiProvider>('/ai-providers', { method: 'POST', body: JSON.stringify(data) }),
-  createConnection: (data: { providerId: number; accountName?: string; credentialReference?: string }) =>
-    request<AiConnection>('/ai-providers/connections', { method: 'POST', body: JSON.stringify(data) }),
-  checkConnection: (id: number) => request<AiConnection>(`/ai-connections/${id}/check`, { method: 'POST' }),
   deleteProvider: (id: number) => request<void>(`/ai-providers/${id}`, { method: 'DELETE' }),
-  createProviderConnection: (providerId: number) =>
-    request<AiConnection>(`/ai-providers/${providerId}/connection`, { method: 'POST' }),
-  deleteConnection: (id: number) => request<void>(`/ai-connections/${id}`, { method: 'DELETE' }),
+  setProviderEnabled: (id: number, enabled: boolean) =>
+    request<AiProvider>(`/ai-providers/${id}/enabled`, { method: 'PUT', body: JSON.stringify({ enabled }) }),
   updateProviderCapabilities: (id: number, data: ProviderCapabilities) =>
     request<AiProvider>(`/ai-providers/${id}/capabilities`, { method: 'PUT', body: JSON.stringify(data) }),
-  startLogin: (connectionId: number) =>
-    request<{ sessionId: string }>(`/ai-connections/${connectionId}/login`, { method: 'POST' }),
+  startLogin: (providerId: number) =>
+    request<{ sessionId: string }>(`/ai-providers/${providerId}/login`, { method: 'POST' }),
   sendLoginInput: (sessionId: string, text: string) =>
-    request<void>(`/ai-connections/login-sessions/${sessionId}/input`, {
+    request<void>(`/ai-providers/login-sessions/${sessionId}/input`, {
       method: 'POST',
       body: JSON.stringify({ text }),
     }),
   stopLogin: (sessionId: string) =>
-    request<void>(`/ai-connections/login-sessions/${sessionId}`, { method: 'DELETE' }),
+    request<void>(`/ai-providers/login-sessions/${sessionId}`, { method: 'DELETE' }),
 
   listWorkspaces: () => request<Workspace[]>('/workspaces'),
   createWorkspace: (data: { name: string; path: string; description?: string }) =>
     request<Workspace>('/workspaces', { method: 'POST', body: JSON.stringify(data) }),
   browseWorkspace: (path?: string) =>
     request<WorkspaceBrowseResult>(`/workspaces/browse${path ? `?path=${encodeURIComponent(path)}` : ''}`),
+  listWorkspaceRuntimes: (workspaceId: number) => request<WorkspaceRuntime[]>(`/workspaces/${workspaceId}/runtimes`),
+  checkWorkspaceRuntime: (workspaceId: number, providerId: number) =>
+    request<WorkspaceRuntime>(`/workspaces/${workspaceId}/runtimes/${providerId}/check`, { method: 'POST' }),
 
   listProjects: () => request<Project[]>('/projects'),
-  createProject: (data: { name: string; workspaceId: number; description?: string }) =>
+  createProject: (data: { name: string; workspaceId?: number; description?: string }) =>
     request<Project>('/projects', { method: 'POST', body: JSON.stringify(data) }),
+  assignProjectWorkspace: (projectId: number, workspaceId: number, isDefault = false) =>
+    request<Project>(`/projects/${projectId}/workspaces`, {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId, isDefault }),
+    }),
+  removeProjectWorkspace: (projectId: number, workspaceId: number) =>
+    request<void>(`/projects/${projectId}/workspaces/${workspaceId}`, { method: 'DELETE' }),
 
   listGroups: (projectId?: number) =>
     request<AgentGroup[]>(`/groups${projectId ? `?projectId=${projectId}` : ''}`),

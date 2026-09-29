@@ -3,7 +3,7 @@ import { api } from '../lib/api';
 import styles from './Providers.module.css';
 
 interface LoginPanelProps {
-  connectionId: number;
+  providerId: number;
   onClose: () => void;
   onExit: (exitCode: number) => void;
 }
@@ -33,7 +33,7 @@ function renderOutput(text: string): ReactNode[] {
     );
 }
 
-export default function LoginPanel({ connectionId, onClose, onExit }: LoginPanelProps) {
+export default function LoginPanel({ providerId, onClose, onExit }: LoginPanelProps) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [output, setOutput] = useState('');
   const [exitCode, setExitCode] = useState<number | null>(null);
@@ -48,13 +48,13 @@ export default function LoginPanel({ connectionId, onClose, onExit }: LoginPanel
     let cancelled = false;
 
     api
-      .startLogin(connectionId)
+      .startLogin(providerId)
       .then(({ sessionId: id }) => {
         // 취소된 실행(개발 모드 StrictMode 재실행 등)은 같은 세션을 공유하므로 여기서 세션을 끊지 않는다
         if (cancelled) return;
         startedId = id;
         setSessionId(id);
-        source = new EventSource(`${api.base}/ai-connections/login-sessions/${id}/stream`);
+        source = new EventSource(`${api.base}/ai-providers/login-sessions/${id}/stream`);
         source.onmessage = (event) => {
           try {
             const data: LoginEventData = JSON.parse(event.data);
@@ -78,7 +78,7 @@ export default function LoginPanel({ connectionId, onClose, onExit }: LoginPanel
       source?.close();
       if (startedId) api.stopLogin(startedId).catch(() => {});
     };
-  }, [connectionId]);
+  }, [providerId]);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -97,7 +97,9 @@ export default function LoginPanel({ connectionId, onClose, onExit }: LoginPanel
       <pre className={styles.output}>{output ? renderOutput(output) : '로그인 명령을 시작하는 중...'}</pre>
       {exitCode !== null && (
         <p className={styles.checkedAt}>
-          {exitCode === 0 ? '로그인 명령이 끝났습니다. 연결을 다시 확인했습니다.' : `로그인 명령이 종료되었습니다 (exit ${exitCode}).`}
+          {exitCode === 0
+            ? '로그인 명령이 끝났습니다. 각 워크스페이스에서 "이 폴더에서 확인"을 눌러 상태를 갱신하세요.'
+            : `로그인 명령이 종료되었습니다 (exit ${exitCode}).`}
         </p>
       )}
       {error && <p className="errorText">{error}</p>}
