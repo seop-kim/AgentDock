@@ -2,58 +2,63 @@ package com.agent.dock.agent;
 
 import com.agent.dock.provider.ConnectionStatus;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
-
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class AgentAvailabilityTest {
 
     @Test
-    void deletedProviderIsUnavailableEvenWhenConnected() {
-        var result = AgentAvailability.evaluate(true, List.of(ConnectionStatus.CONNECTED));
+    void deletedRuntimeIsUnavailableEvenWhenEnabledAndConnected() {
+        var result = AgentAvailability.evaluate(true, true, ConnectionStatus.CONNECTED);
 
         assertThat(result.available()).isFalse();
         assertThat(result.reason()).isEqualTo(AgentAvailability.Reason.PROVIDER_DELETED);
     }
 
     @Test
-    void noConnectionIsUnavailable() {
-        var result = AgentAvailability.evaluate(false, List.of());
+    void disabledRuntimeIsUnavailableEvenWhenConnected() {
+        var result = AgentAvailability.evaluate(false, false, ConnectionStatus.CONNECTED);
 
         assertThat(result.available()).isFalse();
-        assertThat(result.reason()).isEqualTo(AgentAvailability.Reason.CONNECTION_NOT_CONNECTED);
+        assertThat(result.reason()).isEqualTo(AgentAvailability.Reason.RUNTIME_DISABLED);
     }
 
-    @ParameterizedTest
-    @EnumSource(value = ConnectionStatus.class, names = {"DISCONNECTED", "ERROR"})
-    void notConnectedStatusIsUnavailable(ConnectionStatus status) {
-        var result = AgentAvailability.evaluate(false, List.of(status));
+    @Test
+    void workspaceWithoutConnectedStatusIsUnavailable() {
+        var result = AgentAvailability.evaluate(false, true, ConnectionStatus.ERROR);
 
         assertThat(result.available()).isFalse();
         assertThat(result.reason()).isEqualTo(AgentAvailability.Reason.CONNECTION_NOT_CONNECTED);
     }
 
     @Test
-    void connectedIsAvailable() {
-        var result = AgentAvailability.evaluate(false, List.of(ConnectionStatus.CONNECTED));
+    void unknownWorkspaceStatusIsUnavailable() {
+        var result = AgentAvailability.evaluate(false, true, ConnectionStatus.DISCONNECTED);
+
+        assertThat(result.available()).isFalse();
+        assertThat(result.reason()).isEqualTo(AgentAvailability.Reason.CONNECTION_NOT_CONNECTED);
+    }
+
+    @Test
+    void enabledRuntimeInConnectedWorkspaceIsAvailable() {
+        var result = AgentAvailability.evaluate(false, true, ConnectionStatus.CONNECTED);
 
         assertThat(result.available()).isTrue();
         assertThat(result.reason()).isNull();
+        assertThat(result.message()).contains("available");
     }
 
     @Test
-    void anyConnectedAmongLegacyMultipleConnectionsIsAvailable() {
-        var result = AgentAvailability.evaluate(false, List.of(ConnectionStatus.ERROR, ConnectionStatus.CONNECTED));
+    void deletionTakesPrecedenceOverDisabledAndStatus() {
+        var result = AgentAvailability.evaluate(true, false, ConnectionStatus.DISCONNECTED);
 
-        assertThat(result.available()).isTrue();
+        assertThat(result.reason()).isEqualTo(AgentAvailability.Reason.PROVIDER_DELETED);
     }
 
     @Test
     void messageDiffersPerReason() {
-        assertThat(AgentAvailability.evaluate(true, List.of()).message()).contains("deleted");
-        assertThat(AgentAvailability.evaluate(false, List.of()).message()).contains("not CONNECTED");
+        assertThat(AgentAvailability.evaluate(true, true, ConnectionStatus.CONNECTED).message()).contains("deleted");
+        assertThat(AgentAvailability.evaluate(false, false, ConnectionStatus.CONNECTED).message()).contains("turned off");
+        assertThat(AgentAvailability.evaluate(false, true, ConnectionStatus.ERROR).message()).contains("not verified");
     }
 }

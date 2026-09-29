@@ -28,4 +28,17 @@ public class ProjectController {
     public ProjectResponse create(@Valid @RequestBody CreateProjectRequest request) {
         return service.create(request);
     }
+
+    /** 프로젝트에 워크스페이스 할당(여러 개 가능, 기본 1개). */
+    @PostMapping("/{id}/workspaces")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ProjectResponse assignWorkspace(@PathVariable Long id, @Valid @RequestBody AssignWorkspaceRequest request) {
+        return service.assignWorkspace(id, request.workspaceId(), Boolean.TRUE.equals(request.isDefault()));
+    }
+
+    @DeleteMapping("/{id}/workspaces/{workspaceId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void removeWorkspace(@PathVariable Long id, @PathVariable Long workspaceId) {
+        service.removeWorkspace(id, workspaceId);
+    }
 }

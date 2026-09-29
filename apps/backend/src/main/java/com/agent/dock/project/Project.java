@@ -1,6 +1,5 @@
 package com.agent.dock.project;
 
-import com.agent.dock.workspace.Workspace;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -22,13 +21,6 @@ public class Project {
     private String name;
 
     private String description;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "workspace_id", nullable = false)
-    private Workspace workspace;
-
-    @Column(name = "workspace_id", insertable = false, updatable = false)
-    private Long workspaceId;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)

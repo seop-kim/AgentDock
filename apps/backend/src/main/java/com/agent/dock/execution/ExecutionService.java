@@ -8,12 +8,15 @@ import com.agent.dock.common.ForbiddenException;
 import com.agent.dock.common.NotFoundException;
 import com.agent.dock.permission.PermissionAction;
 import com.agent.dock.permission.PermissionService;
-import com.agent.dock.project.Project;
 import com.agent.dock.project.ProjectRepository;
-import com.agent.dock.provider.AiConnectionRepository;
+import com.agent.dock.project.ProjectService;
+import com.agent.dock.provider.ConnectionStatus;
 import com.agent.dock.runtime.AgentExecutionRequest;
 import com.agent.dock.runtime.AgentRuntime;
 import com.agent.dock.runtime.RuntimeRegistry;
+import com.agent.dock.workspace.Workspace;
+import com.agent.dock.workspace.WorkspaceRuntimeStatus;
+import com.agent.dock.workspace.WorkspaceRuntimeStatusRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -37,9 +40,10 @@ public class ExecutionService {
     private final ExecutionLogRepository logRepository;
     private final AgentRepository agentRepository;
     private final ProjectRepository projectRepository;
+    private final ProjectService projectService;
     private final RuntimeRegistry runtimeRegistry;
     private final PermissionService permissionService;
-    private final AiConnectionRepository connectionRepository;
+    private final WorkspaceRuntimeStatusRepository runtimeStatusRepository;
     private final ApplicationEventPublisher eventPublisher;
 
     private final Map<String, List<SseEmitter>> streams = new ConcurrentHashMap<>();
@@ -63,8 +67,7 @@ public class ExecutionService {
     public ExecutionResponse create(Long agentId, Long projectId, String prompt, Long taskId) {
         Agent agent = agentRepository.findByIdWithRelations(agentId)
                 .orElseThrow(() -> new NotFoundException("Agent %d not found".formatted(agentId)));
-        // 작업 디렉터리는 프로젝트가 결정한다 (워크스페이스는 프로젝트에 귀속)
-        Project project = projectRepository.findWithWorkspace(projectId)
+        projectRepository.findById(projectId)
                 .orElseThrow(() -> new NotFoundException("Project %d not found".formatted(projectId)));
 
         // Permission Enforcement: Prompt 설명이 아니라 실행 전 Backend에서 실제로 차단한다.
@@ -72,22 +75,29 @@ public class ExecutionService {
             throw new ForbiddenException("Agent permission profile does not allow TERMINAL_EXECUTE");
         }
 
-        // Provider 가 삭제됐거나 연결이 CONNECTED 가 아니면 Runtime 을 호출하지 않고 즉시 거부한다(새 실행만 차단).
-        var availability = AgentAvailability.evaluate(agent.getProvider(),
-                connectionRepository.findByProviderId(agent.getProvider().getId()));
+        // 작업 디렉터리는 프로젝트의 기본 워크스페이스다. 할당된 워크스페이스가 없으면 실행할 수 없다.
+        Workspace workspace = projectService.defaultWorkspace(projectId);
+
+        // 런타임이 꺼져 있거나 그 폴더에서 확인되지 않았으면 Runtime 을 호출하지 않고 즉시 거부한다(새 실행만 차단).
+        ConnectionStatus workspaceStatus = runtimeStatusRepository
+                .findByWorkspaceIdAndProviderId(workspace.getId(), agent.getProvider().getId())
+                .map(WorkspaceRuntimeStatus::getStatus)
+                .orElse(ConnectionStatus.DISCONNECTED);
+        var availability = AgentAvailability.evaluate(
+                agent.getProvider().getDeletedAt() != null, agent.getProvider().isEnabled(), workspaceStatus);
         if (!availability.available()) {
             throw new ConflictException(availability.message());
         }
 
         Execution execution = new Execution();
         execution.setAgent(agent);
-        execution.setWorkspace(project.getWorkspace());
+        execution.setWorkspace(workspace);
         execution.setTaskId(taskId);
         execution.setPrompt(prompt);
         execution.setStatus(ExecutionStatus.PENDING);
         Execution saved = executionRepository.save(execution);
 
-        executor.submit(() -> run(saved.getId(), agent, project.getWorkspace().getPath(), prompt, taskId));
+        executor.submit(() -> run(saved.getId(), agent, workspace.getPath(), prompt, taskId));
 
         return ExecutionResponse.from(saved);
     }
@@ -124,7 +134,7 @@ public class ExecutionService {
         try {
             AgentRuntime runtime = runtimeRegistry.resolve(agent.getProvider().getKey().name());
             var result = runtime.execute(new AgentExecutionRequest(
-                    streamKey, prompt, workspacePath, agent.getModel(), agent.getMode(),
+                    streamKey, prompt, workspacePath, agent.getPersona(), agent.getModel(), agent.getMode(),
                     (chunk, stream) -> {
                         broadcast(streamKey, stream, chunk);
                         persistLog(id, stream, chunk);
