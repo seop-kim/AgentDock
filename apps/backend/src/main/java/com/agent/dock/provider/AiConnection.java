@@ -33,6 +33,11 @@ public class AiConnection {
     @Column(nullable = false)
     private ConnectionStatus status = ConnectionStatus.DISCONNECTED;
 
+    private Instant lastCheckedAt;
+
+    @Column(columnDefinition = "text")
+    private String lastError;
+
     @OneToMany(mappedBy = "connection")
     private List<Agent> agents;
 

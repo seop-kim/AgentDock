@@ -4,3 +4,12 @@
   max-width: 480px;
   margin-bottom: 24px;
 }
+
+.unavailable {
+  margin-left: var(--spacing-sm);
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-error);
+  color: var(--color-error);
+}

@@ -10,6 +10,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     const body = await res.text();
     throw new Error(`${res.status} ${res.statusText}: ${body}`);
   }
+  if (res.status === 204) {
+    return undefined as T;
+  }
   return res.json() as Promise<T>;
 }
 
@@ -28,6 +31,17 @@ export interface AiProvider {
   id: number;
   key: string;
   name: string;
+  connections?: AiConnection[];
+}
+
+export interface AiConnection {
+  id: number;
+  providerId: number;
+  accountName: string | null;
+  credentialReference: string | null;
+  status: string;
+  lastCheckedAt: string | null;
+  lastError: string | null;
 }
 
 export interface Workspace {
@@ -77,6 +91,9 @@ export interface Agent {
   provider: AiProvider;
   model: string | null;
   mode: string | null;
+  providerId: number;
+  available: boolean;
+  unavailableReason: 'PROVIDER_DELETED' | 'CONNECTION_NOT_CONNECTED' | null;
 }
 
 export interface Execution {
@@ -110,6 +127,22 @@ export const api = {
   listProviders: () => request<AiProvider[]>('/ai-providers'),
   createProvider: (data: { key: string; name: string }) =>
     request<AiProvider>('/ai-providers', { method: 'POST', body: JSON.stringify(data) }),
+  createConnection: (data: { providerId: number; accountName?: string; credentialReference?: string }) =>
+    request<AiConnection>('/ai-providers/connections', { method: 'POST', body: JSON.stringify(data) }),
+  checkConnection: (id: number) => request<AiConnection>(`/ai-connections/${id}/check`, { method: 'POST' }),
+  deleteProvider: (id: number) => request<void>(`/ai-providers/${id}`, { method: 'DELETE' }),
+  createProviderConnection: (providerId: number) =>
+    request<AiConnection>(`/ai-providers/${providerId}/connection`, { method: 'POST' }),
+  deleteConnection: (id: number) => request<void>(`/ai-connections/${id}`, { method: 'DELETE' }),
+  startLogin: (connectionId: number) =>
+    request<{ sessionId: string }>(`/ai-connections/${connectionId}/login`, { method: 'POST' }),
+  sendLoginInput: (sessionId: string, text: string) =>
+    request<void>(`/ai-connections/login-sessions/${sessionId}/input`, {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    }),
+  stopLogin: (sessionId: string) =>
+    request<void>(`/ai-connections/login-sessions/${sessionId}`, { method: 'DELETE' }),
 
   listWorkspaces: () => request<Workspace[]>('/workspaces'),
   createWorkspace: (data: { name: string; path: string; description?: string }) =>
@@ -144,6 +177,8 @@ export const api = {
   runTask: (id: number) => request<Execution>(`/tasks/${id}/run`, { method: 'POST' }),
 
   listAgents: () => request<Agent[]>('/agents'),
+  assignAgentProvider: (agentId: number, providerId: number) =>
+    request<Agent>(`/agents/${agentId}/provider`, { method: 'PUT', body: JSON.stringify({ providerId }) }),
   createAgent: (data: Record<string, unknown>) =>
     request<Agent>('/agents', { method: 'POST', body: JSON.stringify(data) }),
 

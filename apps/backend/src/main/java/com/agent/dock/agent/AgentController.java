@@ -28,4 +28,9 @@ public class AgentController {
     public AgentResponse create(@Valid @RequestBody CreateAgentRequest request) {
         return service.create(request);
     }
+
+    @PutMapping("/{id}/provider")
+    public AgentResponse assignProvider(@PathVariable Long id, @Valid @RequestBody AssignProviderRequest request) {
+        return service.assignProvider(id, request.providerId());
+    }
 }

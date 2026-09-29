@@ -24,10 +24,22 @@ public class AiProviderController {
         return service.create(request);
     }
 
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable Long id) {
+        service.delete(id);
+    }
+
     @PostMapping("/connections")
     @ResponseStatus(HttpStatus.CREATED)
     public AiConnectionResponse createConnection(@Valid @RequestBody CreateAiConnectionRequest request) {
         return service.createConnection(request);
+    }
+
+    @PostMapping("/{id}/connection")
+    @ResponseStatus(HttpStatus.CREATED)
+    public AiConnectionResponse createProviderConnection(@PathVariable Long id) {
+        return service.createProviderConnection(id);
     }
 
     @GetMapping("/{id}/connections")

@@ -1,8 +1,14 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Agent, AgentRole, AiProvider, PermissionProfile, api } from '../lib/api';
+import AgentProviderAssign from './AgentProviderAssign';
 import RunAgentModal from './RunAgentModal';
 import styles from './Agents.module.css';
+
+const UNAVAILABLE_LABELS: Record<string, string> = {
+  PROVIDER_DELETED: 'Provider 삭제됨',
+  CONNECTION_NOT_CONNECTED: '연결 안 됨',
+};
 
 export default function Agents() {
   const navigate = useNavigate();
@@ -146,11 +152,25 @@ export default function Agents() {
         <tbody>
           {agents.map((a) => (
             <tr key={a.id}>
-              <td>{a.name}</td>
-              <td>{a.role.name}</td>
-              <td>{a.provider.name}</td>
               <td>
-                <button onClick={() => setRunTarget(a)}>Run</button>
+                {a.name}
+                {!a.available && a.unavailableReason && (
+                  <span className={styles.unavailable}>{UNAVAILABLE_LABELS[a.unavailableReason] ?? '사용 불가'}</span>
+                )}
+              </td>
+              <td>{a.role.name}</td>
+              <td>
+                {a.provider.name}{' '}
+                <AgentProviderAssign agent={a} providers={providers} onAssigned={loadAll} onError={setError} />
+              </td>
+              <td>
+                <button
+                  onClick={() => setRunTarget(a)}
+                  disabled={!a.available}
+                  title={a.available ? undefined : '사용 불가 상태입니다. Agent 연결 설정에서 연결을 확인하세요.'}
+                >
+                  Run
+                </button>
               </td>
             </tr>
           ))}
