@@ -24,7 +24,7 @@ public class AiProvider {
     private Long id;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private ProviderKey key;
 
     @Column(nullable = false)
@@ -47,4 +47,7 @@ public class AiProvider {
     @UpdateTimestamp
     @Column(nullable = false)
     private Instant updatedAt;
+
+    /** 논리 삭제 시각. null 이면 사용 가능한 Provider. */
+    private Instant deletedAt;
 }
