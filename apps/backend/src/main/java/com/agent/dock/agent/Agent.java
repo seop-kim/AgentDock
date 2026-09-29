@@ -5,7 +5,6 @@ import com.agent.dock.permission.PermissionProfile;
 import com.agent.dock.provider.AiConnection;
 import com.agent.dock.provider.AiProvider;
 import com.agent.dock.role.AgentRole;
-import com.agent.dock.workspace.Workspace;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -57,13 +56,6 @@ public class Agent {
 
     @Column(name = "connection_id", insertable = false, updatable = false)
     private Long connectionId;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "workspace_id")
-    private Workspace workspace;
-
-    @Column(name = "workspace_id", insertable = false, updatable = false)
-    private Long workspaceId;
 
     private String model;
     private String mode;

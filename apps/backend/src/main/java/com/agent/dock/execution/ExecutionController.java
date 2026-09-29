@@ -19,7 +19,7 @@ public class ExecutionController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ExecutionResponse create(@Valid @RequestBody CreateExecutionRequest request) {
-        return service.create(request.agentId(), request.prompt());
+        return service.create(request.agentId(), request.projectId(), request.prompt());
     }
 
     @GetMapping("/{id}")

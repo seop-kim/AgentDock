@@ -44,7 +44,7 @@ npm workspaces는 `apps/frontend`만 포함한다 (루트 `package.json`). 백�
 4. Agent 간 통신은 전체 대화 공유가 아니라 Context/Message/Artifact/Decision 단위로 제한한다.
 5. 모든 실행은 DB에 기록해 추적 가능해야 한다 (execution, execution_log).
 
-## Phase 1 (현재 구현 범위)
+## Phase 1 (구현 완료)
 
 - AI Provider/Connection 등록
 - Agent 생성 + Role/Permission 설정
@@ -52,26 +52,45 @@ npm workspaces는 `apps/frontend`만 포함한다 (루트 `package.json`). 백�
 - Agent에게 Prompt 전달 → CLI 실행 (spawn) → 실시간 로그(SSE)
 - 모든 Execution/Log는 PostgreSQL에 저장
 
-Group/Workflow/Task/Shared Context/Message/Artifact/Review/Decision은 이후 Phase(2~4)에서 확장. Phase 1 스캐폴딩 단계에서는 해당 엔티티를 만들지 않는다.
+## Phase 2 (구현 완료)
+
+- **Project** — 작업 디렉터리(워크스페이스)를 결정하는 최상위 단위
+- **Group** — 프로젝트를 수행하는 팀. 리더(leader agent)와 멤버(agents)로 구성
+- **Task** — 프로젝트에 속하고, 그룹 또는 개별 Agent에 할당되는 작업 단위
+- **Task 실행** — 할당 대상에게 기존 Execution 파이프라인을 위임한다(그룹이면 리더 Agent). 실행/로그/SSE/상태 추적은 Phase 1 경로를 그대로 재사용한다
+
+계층은 `Project → Group → Agent` 다. **워크스페이스는 프로젝트에 귀속**하며 Agent에는 워크스페이스가 없다. Agent 직접 실행(`POST /executions`)도 `projectId`를 함께 받아 프로젝트의 워크스페이스를 작업 디렉터리로 사용한다.
+
+Workflow/WorkflowStep(순차·병렬 실행), Shared Context, Message, Artifact, Review, Decision, `max_parallel_agents`는 이후 Phase(3~4)에서 확장한다.
 
 ## Backend 모듈 (`apps/backend/src/main/java/com/agent/dock`)
 
-- `common/` — `GlobalExceptionHandler`(400/403/404 응답 형태), `BadRequestException`/`NotFoundException`/`ForbiddenException`, `WebConfig`(CORS), `QueryDslConfig`(`JPAQueryFactory` 빈)
+- `common/` — `GlobalExceptionHandler`(400/403/404/409 응답 형태), `BadRequestException`/`NotFoundException`/`ForbiddenException`/`ConflictException`, `WebConfig`(CORS), `QueryDslConfig`(`JPAQueryFactory` 빈)
 - `provider/` — AiProvider·AiConnection 엔티티/Repository/Service/Controller (Credential은 DB에 평문 저장 금지, `credentialReference`만 저장)
-- `agent/` — Agent CRUD. Role/Permission/Provider/Connection/Workspace 참조. 목록 조회는 QueryDSL fetch join(`AgentRepositoryImpl`)
+- `agent/` — Agent CRUD. Role/Permission/Provider/Connection 참조. 목록 조회는 QueryDSL fetch join(`AgentRepositoryImpl`)
 - `role/`, `permission/` — Role, PermissionProfile CRUD. `PermissionService.isAllowed(profile, action)`가 enforcement primitive
-- `workspace/` — Workspace CRUD, 로컬 폴더 브라우징 API(`GET /workspaces/browse`), UNC 경로 차단(`WorkspaceFs`)
+- `workspace/` — Workspace CRUD, 로컬 폴더 브라우징 API(`GET /workspaces/browse`), UNC 경로 차단(`WorkspaceFs`), 기동 시 드라이브 루트 메타데이터 워밍
+- `project/` — Project CRUD. 워크스페이스 참조(프로젝트가 작업 디렉터리를 결정)
+- `group/` — `AgentGroup`(프로젝트 소속 팀, 리더 지정)과 `AgentGroupMember`(멤버 추가/제거) 관리 API
+- `task/` — `Task`(프로젝트 소속, 그룹 또는 개별 Agent 할당) CRUD와 실행(`POST /tasks/{id}/run`). 실행 종료 시 `ExecutionFinishedEvent`를 받아 상태 갱신
 - `process/` — `ProcessService`: `ProcessBuilder` 래퍼, 실행 중 프로세스 Map 관리/취소
 - `runtime/` — `AgentRuntime` 인터페이스, `ClaudeCodeRuntime` 구현체, `RuntimeRegistry` (provider key → runtime 매핑)
-- `execution/` — Execution 생성/조회, ExecutionLog 저장, SSE 스트리밍 (`GET /executions/{id}/stream`), 취소
+- `execution/` — Execution 생성/조회(작업 디렉터리는 프로젝트의 워크스페이스), ExecutionLog 저장, SSE 스트리밍 (`GET /executions/{id}/stream`), 취소, 실행 종료 이벤트 발행
 
-## DB 스키마 (Phase 1)
+## DB 스키마 (Phase 1~2)
 
-`ai_provider`, `ai_connection`, `agent_role`, `permission_profile`, `agent`, `workspace`, `execution`, `execution_log`. 스키마의 단일 진실은 **Flyway 마이그레이션**(`apps/backend/src/main/resources/db/migration/`)이며, 컬럼명은 snake_case다. JPA는 `ddl-auto: validate`로 엔티티와 스키마 일치만 검증하고 스키마를 만들지 않는다. 이후 Phase에서 `group`, `task`, `workflow`, `context`, `agent_message`, `artifact`, `review`, `decision` 등을 추가한다 (스펙 23장 Entity 목록).
+`ai_provider`, `ai_connection`, `agent_role`, `permission_profile`, `workspace`, `agent`, `execution`, `execution_log`, `project`, `agent_group`, `agent_group_member`, `task`. 스키마의 단일 진실은 **Flyway 마이그레이션**(`apps/backend/src/main/resources/db/migration/`)이며, 컬럼명은 snake_case다. JPA는 `ddl-auto: validate`로 엔티티와 스키마 일치만 검증하고 스키마를 만들지 않는다.
+
+- `project.workspace_id`가 NOT NULL 이며 작업 디렉터리를 결정한다. `agent.workspace_id`는 V2에서 제거됐다.
+- `agent_group` 은 SQL 예약어 `group` 을 피한 테이블명이다(엔티티 `AgentGroup`). 같은 프로젝트 안에서 이름이 유일하다.
+- `task` 는 `project_id` 가 필수이고 `group_id`/`agent_id` 중 정확히 하나만 가진다(DB CHECK + 서비스 검증).
+- `execution.task_id` 는 Task 실행으로 만들어진 실행을 표시한다. 관계 매핑 없이 컬럼만 두어 `execution` → `task` 패키지 의존을 피한다.
+
+이후 Phase에서 `workflow`, `workflow_step`, `context`, `agent_message`, `artifact`, `review`, `decision` 등을 추가한다 (스펙 23장 Entity 목록).
 
 ## Permission Enforcement
 
-Agent의 `permissionProfile`은 DB의 boolean 플래그(FILE_READ/FILE_WRITE/TERMINAL/GIT_*/DB_*/DEPLOY 등)로 저장한다. Execution 생성 시 `ExecutionService`가 `PermissionService.isAllowed(profile, TERMINAL_EXECUTE)`를 검사하고, 허용되지 않으면 Runtime을 호출하지 않고 **403**으로 즉시 거부한다. Prompt에 권한을 설명하는 것으로 끝내지 않는다.
+Agent의 `permissionProfile`은 DB의 boolean 플래그(FILE_READ/FILE_WRITE/TERMINAL/GIT_*/DB_*/DEPLOY 등)로 저장한다. Execution을 만드는 경로(`POST /executions`, `POST /tasks/{id}/run`)는 모두 `ExecutionService`를 지나며, `PermissionService.isAllowed(profile, TERMINAL_EXECUTE)`가 false면 Runtime을 호출하지 않고 **403**으로 즉시 거부한다. Task 실행으로 위임하는 경우에도 검사 대상은 실행을 담당하는 Agent(그룹이면 리더)의 프로필이다. Prompt에 권한을 설명하는 것으로 끝내지 않는다.
 
 ## 실행 방법
 

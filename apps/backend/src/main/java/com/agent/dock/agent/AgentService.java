@@ -5,7 +5,6 @@ import com.agent.dock.permission.PermissionProfileRepository;
 import com.agent.dock.provider.AiConnectionRepository;
 import com.agent.dock.provider.AiProviderRepository;
 import com.agent.dock.role.AgentRoleRepository;
-import com.agent.dock.workspace.WorkspaceRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -19,7 +18,6 @@ public class AgentService {
     private final PermissionProfileRepository permissionProfileRepository;
     private final AiProviderRepository providerRepository;
     private final AiConnectionRepository connectionRepository;
-    private final WorkspaceRepository workspaceRepository;
 
     public List<AgentResponse> findAll() {
         return agentRepository.findAllWithRelations().stream().map(AgentResponse::from).toList();
@@ -43,10 +41,6 @@ public class AgentService {
         if (request.connectionId() != null) {
             agent.setConnection(connectionRepository.findById(request.connectionId())
                     .orElseThrow(() -> new NotFoundException("AiConnection %d not found".formatted(request.connectionId()))));
-        }
-        if (request.workspaceId() != null) {
-            agent.setWorkspace(workspaceRepository.findById(request.workspaceId())
-                    .orElseThrow(() -> new NotFoundException("Workspace %d not found".formatted(request.workspaceId()))));
         }
         agent.setModel(request.model());
         agent.setMode(request.mode());

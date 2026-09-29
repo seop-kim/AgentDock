@@ -36,13 +36,45 @@ export interface Workspace {
   path: string;
 }
 
+export interface Project {
+  id: number;
+  name: string;
+  description?: string | null;
+  workspaceId: number;
+  workspace: Workspace | null;
+}
+
+export interface AgentSummary {
+  id: number;
+  name: string;
+}
+
+export interface AgentGroup {
+  id: number;
+  projectId: number;
+  name: string;
+  description?: string | null;
+  leader: AgentSummary | null;
+  members: AgentSummary[];
+}
+
+export interface Task {
+  id: number;
+  project: Project | null;
+  group: AgentSummary | null;
+  agent: AgentSummary | null;
+  title: string;
+  prompt: string;
+  status: string;
+  latestExecutionId: number | null;
+}
+
 export interface Agent {
   id: number;
   name: string;
   role: AgentRole;
   permissionProfile: PermissionProfile;
   provider: AiProvider;
-  workspace: Workspace | null;
   model: string | null;
   mode: string | null;
 }
@@ -85,11 +117,37 @@ export const api = {
   browseWorkspace: (path?: string) =>
     request<WorkspaceBrowseResult>(`/workspaces/browse${path ? `?path=${encodeURIComponent(path)}` : ''}`),
 
+  listProjects: () => request<Project[]>('/projects'),
+  createProject: (data: { name: string; workspaceId: number; description?: string }) =>
+    request<Project>('/projects', { method: 'POST', body: JSON.stringify(data) }),
+
+  listGroups: (projectId?: number) =>
+    request<AgentGroup[]>(`/groups${projectId ? `?projectId=${projectId}` : ''}`),
+  createGroup: (data: { projectId: number; name: string; description?: string; leaderAgentId?: number }) =>
+    request<AgentGroup>('/groups', { method: 'POST', body: JSON.stringify(data) }),
+  updateGroup: (id: number, data: { name: string; description?: string; leaderAgentId?: number | null }) =>
+    request<AgentGroup>(`/groups/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  addGroupMember: (groupId: number, agentId: number) =>
+    request<AgentGroup>(`/groups/${groupId}/members`, { method: 'POST', body: JSON.stringify({ agentId }) }),
+  removeGroupMember: (groupId: number, agentId: number) =>
+    request<AgentGroup>(`/groups/${groupId}/members/${agentId}`, { method: 'DELETE' }),
+
+  listTasks: (projectId?: number, groupId?: number) => {
+    const params = new URLSearchParams();
+    if (projectId) params.set('projectId', String(projectId));
+    if (groupId) params.set('groupId', String(groupId));
+    const query = params.toString();
+    return request<Task[]>(`/tasks${query ? `?${query}` : ''}`);
+  },
+  createTask: (data: { projectId: number; title: string; prompt: string; groupId?: number; agentId?: number }) =>
+    request<Task>('/tasks', { method: 'POST', body: JSON.stringify(data) }),
+  runTask: (id: number) => request<Execution>(`/tasks/${id}/run`, { method: 'POST' }),
+
   listAgents: () => request<Agent[]>('/agents'),
   createAgent: (data: Record<string, unknown>) =>
     request<Agent>('/agents', { method: 'POST', body: JSON.stringify(data) }),
 
-  createExecution: (data: { agentId: number; prompt: string }) =>
+  createExecution: (data: { agentId: number; projectId: number; prompt: string }) =>
     request<Execution>('/executions', { method: 'POST', body: JSON.stringify(data) }),
   getExecution: (id: number | string) => request<Execution>(`/executions/${id}`),
 };
