@@ -31,6 +31,12 @@ export interface ProviderCapabilities {
   models?: string[] | null;
   modes?: string[] | null;
   notes?: string | null;
+  /** CLI 설치 단계(순서대로 실행). 셸을 통해 실행된다. */
+  install?: string[] | null;
+  /** 먼저 있어야 하는 실행 파일(예: npm). 없으면 installPrerequisite 를 먼저 실행한다. */
+  installRequire?: string | null;
+  /** 필수 실행 파일이 없을 때 실행할 단계들(예: nvm install lts). */
+  installPrerequisite?: string[] | null;
 }
 
 export interface AiProvider {
@@ -48,6 +54,9 @@ export interface WorkspaceRuntime {
   name: string;
   enabled: boolean;
   status: string;
+  cliMissing: boolean;
+  install: string[];
+  installRequire: string | null;
   lastCheckedAt: string | null;
   lastError: string | null;
 }
@@ -156,13 +165,15 @@ export const api = {
     request<AiProvider>(`/ai-providers/${id}/capabilities`, { method: 'PUT', body: JSON.stringify(data) }),
   startLogin: (providerId: number) =>
     request<{ sessionId: string }>(`/ai-providers/${providerId}/login`, { method: 'POST' }),
-  sendLoginInput: (sessionId: string, text: string) =>
-    request<void>(`/ai-providers/login-sessions/${sessionId}/input`, {
+  startInstall: (providerId: number) =>
+    request<{ sessionId: string }>(`/ai-providers/${providerId}/install`, { method: 'POST' }),
+  sendSessionInput: (sessionId: string, text: string) =>
+    request<void>(`/ai-providers/command-sessions/${sessionId}/input`, {
       method: 'POST',
       body: JSON.stringify({ text }),
     }),
-  stopLogin: (sessionId: string) =>
-    request<void>(`/ai-providers/login-sessions/${sessionId}`, { method: 'DELETE' }),
+  stopSession: (sessionId: string) =>
+    request<void>(`/ai-providers/command-sessions/${sessionId}`, { method: 'DELETE' }),
 
   listWorkspaces: () => request<Workspace[]>('/workspaces'),
   createWorkspace: (data: { name: string; path: string; description?: string }) =>

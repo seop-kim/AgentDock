@@ -1,12 +1,20 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Workspace, WorkspaceRuntime, api } from '../../lib/api';
+import CommandPanel from '../CommandPanel';
 import WorkspacePicker from './WorkspacePicker';
 import styles from './page.module.css';
+
+interface InstallTarget {
+  workspaceId: number;
+  providerId: number;
+  install: string[];
+}
 
 export default function Workspaces() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [runtimes, setRuntimes] = useState<Record<number, WorkspaceRuntime[]>>({});
   const [checking, setChecking] = useState<string | null>(null);
+  const [installTarget, setInstallTarget] = useState<InstallTarget | null>(null);
   const [name, setName] = useState('');
   const [path, setPath] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -64,8 +72,8 @@ export default function Workspaces() {
     <div>
       <h1>Workspaces</h1>
       <p>
-        폴더를 등록하고, 그 폴더에서 각 런타임이 실제로 실행되는지 확인합니다. 상태는 폴더별로 따로 기록됩니다(로그인은
-        런타임 전역이며 에이전트 설정에서 합니다).
+        폴더를 등록하고, 그 폴더에서 각 런타임이 실제로 실행되는지 확인합니다. CLI 가 설치돼 있지 않으면 여기서 바로
+        설치할 수 있고, 설치가 끝나면 자동으로 다시 확인합니다. 로그인은 런타임 전역이며 에이전트 설정에서 합니다.
       </p>
       <form onSubmit={onSubmit} className="formRow">
         <input placeholder="이름" value={name} onChange={(e) => setName(e.target.value)} required />
@@ -115,11 +123,33 @@ export default function Workspaces() {
                         >
                           {checking === `${w.id}:${r.providerId}` ? '확인 중...' : '이 폴더에서 확인'}
                         </button>
+                        {r.status !== 'CONNECTED' && (
+                          <button
+                            onClick={() => setInstallTarget({ workspaceId: w.id, providerId: r.providerId, install: r.install })}
+                            disabled={r.install.length === 0}
+                            title={r.install.length > 0 ? `실행: ${r.install.join(' → ')}` : '에이전트 설정에서 설치 명령을 입력하세요'}
+                          >
+                            {r.cliMissing ? 'CLI 설치' : '설치/재설치'}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            )}
+            {installTarget && installTarget.workspaceId === w.id && (
+              <CommandPanel
+                providerId={installTarget.providerId}
+                kind="install"
+                commands={installTarget.install}
+                onClose={() => setInstallTarget(null)}
+                onExit={(exitCode) => {
+                  if (exitCode === 0) {
+                    onCheck(installTarget.workspaceId, installTarget.providerId);
+                  }
+                }}
+              />
             )}
           </li>
         ))}
