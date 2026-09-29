@@ -1,5 +1,6 @@
 package com.agent.dock.task;
 
+import com.agent.dock.execution.ExecutionResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -28,5 +29,11 @@ public class TaskController {
     @ResponseStatus(HttpStatus.CREATED)
     public TaskResponse create(@Valid @RequestBody CreateTaskRequest request) {
         return service.create(request);
+    }
+
+    @PostMapping("/{id}/run")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ExecutionResponse run(@PathVariable Long id) {
+        return service.run(id);
     }
 }

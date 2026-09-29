@@ -34,6 +34,10 @@ public class Execution {
     @Column(name = "workspace_id", insertable = false, updatable = false)
     private Long workspaceId;
 
+    // Task 실행으로 만들어진 실행이면 해당 Task id. 관계 매핑 없이 컬럼만 두어 task 패키지 의존을 피한다.
+    @Column(name = "task_id")
+    private Long taskId;
+
     @Column(nullable = false, columnDefinition = "text")
     private String prompt;
 
