@@ -51,12 +51,13 @@ npm run build --workspace=apps/mockup    # tsc --noEmit && vite build (커밋 �
 | 상세 › 구성도 캔버스 | **놓인(`placed`) 에이전트만** 그린다(빼 둔 에이전트는 목록에만). 그룹은 상자, 에이전트는 노드. 그룹 안에서 리더가 위, 멤버가 아래에 선으로 이어진다. **그룹에 속하지 않은 에이전트는 이름표·상자 없이 노드만** 놓인다. 배경 드래그로 이동, 휠로 확대/축소, 오른쪽 위 도구에서 −/+/맞춤/**위치 초기화**. **왼쪽 목록의 에이전트 카드를 캔버스로 끌어다 놓으면 그 자리에 배치된다**(미배치가 배치되고, 그룹에 있던 것은 그룹에서 빠진다). **노드를 끌어 자유 위치로 옮긴다**(그룹에 속하지 않은 노드만): 그룹 상자 위에 놓으면 그 그룹으로, 빈 곳에 놓으면 그룹에서 빠져 그 자리에 선다. **그룹 상자도 머리말을 끌어 통째로 옮긴다**(노드·선 포함). 그룹 상자 머리말의 **`⋮` 메뉴**(프롬프트 편집 / 삭제)로 상자를 지우거나 프롬프트를 고친다. 자유 위치는 `MockStore` 의 `nodePositions`·`groupPositions` 에 쌓이고 맞춤 크기에도 포함되며, 옮긴 것은 제자리를 차지한 채 좌표만 바뀌어 다른 것이 밀리지 않는다. 좌표는 음수도 될 수 있어 **캔버스 왼쪽·위까지 놓을 수 있고**, 맞춤은 경계 상자(`layout.minX`·`minY`)를 기준으로 한다. 왼쪽 목록의 카드·멤버 칩은 HTML5 DnD 로 그룹에 넣거나 뺀다. **노드에는 버튼을 늘어놓지 않고 `⋮` 메뉴 하나만** 둔다(`AgentNodeMenu`: 리더로 지정 / 그룹에서 제거 / 구성도에서 빼기). 리더는 노드에 **★** 로만 표시. 구성도에서 빼면 **그룹에서도 빠지고** 에이전트 목록에만 남는다(다시 놓으면 그룹 없이 노드만). |
 | 상세 › 채팅(명령) 창 | 구성도 **아래 가운데**에 떠 있다. **기본 대상은 마스터**(`Master (마스터)`)이고 그룹/에이전트도 고를 수 있다. 명령을 보내면 **실행 트리**가 만들어지고(라우팅 규칙 → 실행 계획), Task 수가 늘며, 응답은 계획이 다 끝난 뒤에 온다. 리더가 없거나 실행 불가면 시스템 메시지로 사유를 알린다. 기록은 접고 펼 수 있다. |
 | 상세 › 실행(위임) 흐름 | 명령을 보내면 실행 트리가 **실제 순서대로** 돈다: 마스터 `RUNNING` → 계약 `delegate`(`WAITING_CHILD`) → 하위 실행 `RUNNING` → 끝나면 부모가 다시 `RUNNING` → `done`. **라우팅은 규칙 먼저**: 요청에 팀 키워드가 걸리면 그 팀 리더에게, 걸리는 팀이 없으면 마스터가 직접 처리(실행 1회). 리더는 팀이 크면(비리더 멤버 2명 이상) 하위 한 명에게 한 번 더 넘기고, 작으면 직접 처리한다. 채팅 응답 아래 **실행 요약 카드**(상태 · 실행 N회 · 위임 N건 · 비용 · 소요 + 실행별 한 줄)가 붙고, **실행 트리 보기**로 창(`ExecutionTreeModal`)을 열면 실행별 상태·계약·Handoff 요약·변경 파일·토큰·비용·시간·세션 id 를 본다. 값은 전부 **모의**(재생도 압축)이고 창 아래에 그 사실과 실제 값의 출처(CLI `-p --output-format json`)를 적어 둔다. |
+| 상세 › 파일 첨부 | 입력줄 왼쪽 **📎 버튼** → **파일 첨부 창**(`AttachFilesModal`). 프로젝트 **워크스페이스 폴더 안의 파일만** 붙일 수 있고(모의 목록 `SEED_FILES`), **폴더별로 묶어** 체크박스로 고른다. 워크스페이스가 2개 이상이면 고르는 셀렉트가 뜬다(shop = shop-web ★ / shop-api). 붙인 파일은 입력줄 위 **칩**(파일명 + ×)으로 보이고, 보내면 사용자 말풍선에 남는다. **경로·확장자로도 팀이 정해진다**(문장에 키워드가 없어도 `.tsx` → Frontend, `.java` → Backend). 파일만 붙이고 보내면 지시는 "첨부한 파일을 확인해줘". |
 | 상세 › 프로젝트 설정 창 | 이름 변경, **마스터 에이전트 지정 + 마스터 프롬프트**(미지정이면 경고), **워크스페이스 할당/해제/기본 지정**(할당은 여기서만), 프로젝트 삭제(에이전트·그룹·Task·실행 기록도 함께 삭제). |
 | **현실성 점검** (`/reality-check`) | 실제 구현으로 갈 때 막히는 지점 9가지를 **흐름도**(사용자 → 마스터 → 그룹 리더 → 하위 에이전트, 리더는 필수 경로가 아니라고 명시) + **위험 카드**(문제 / 지금 / **결정** / 할 일)로 정리. 위에 **확인된 사실**(`VERIFIED`: CLI `--help` 와 실측 1회로 확인한 세션 재개 · `--json-schema` · 계측값 · 호출 고정비 · 내장 서브에이전트)을 함께 둔다. 내용은 `pages/RealityCheck.tsx` 의 `RISKS`·`VERIFIED` 배열(데이터). |
 | **설정 › 에이전트 연결 설정** | 런타임 카드(ON/OFF, 삭제, 추가 모달, 모델/모드/설치 계획 편집, CLI 확인 창에서 로그인·설치 가짜 로그). |
 | **설정 › 테마** | 시스템/라이트/다크 선택. localStorage 에 저장. |
 
-초기 시드 데이터(`store/seed.ts`): 런타임 2개(Claude Code, Command Code 켜짐; Codex, Gemini 는 삭제 상태라 추가 모달에서 고를 수 있음), 워크스페이스 3개, 프로젝트 3개(`test` 1개 워크스페이스·에이전트 1, `shop` 2개 워크스페이스·**에이전트 30·그룹 5**, `blog` 비어 있음). `shop` 은 **마스터 1**(`Master`, 그룹 없이 배치) + **그룹 소속 20**(Backend Team 6 / Frontend Team 5 / QA Team 4 / DevOps Team 3 / Docs Team 2, 각 그룹 첫 멤버가 리더) + **그룹 없이 배치 5**(Reviewer A~C, Planner A·B) + **미배치 4**(Reviewer D·E, Planner D·E)로 나뉜다. 프로젝트마다 **마스터 프롬프트**가 있고 그룹 5개에는 **그룹 프롬프트**가 들어 있다. 에이전트마다 맡은 Task 상태가 달라 카드에 **작업 중 6 / 작업 대기중 4 / 작업 없음 16 / 미배치 4** 가 골고루 보인다. 완료된 위임 1건(`재고 조회 API 응답 지연 조사`: 마스터 → Backend Team 리더 → Backend Dev B, 결과 요약·변경 파일·지표 포함)을 **실행 예시**(`SEED_EXECUTIONS`)로 넣어 두어, 화면을 처음 열어도 실행 트리를 볼 수 있다.
+초기 시드 데이터(`store/seed.ts`): 런타임 2개(Claude Code, Command Code 켜짐; Codex, Gemini 는 삭제 상태라 추가 모달에서 고를 수 있음), 워크스페이스 3개, 프로젝트 3개(`test` 1개 워크스페이스·에이전트 1, `shop` 2개 워크스페이스·**에이전트 30·그룹 5**, `blog` 비어 있음). 워크스페이스마다 **파일 목록**(`SEED_FILES`)이 있어 첨부 창에서 고를 수 있다. `shop` 은 **마스터 1**(`Master`, 그룹 없이 배치) + **그룹 소속 20**(Backend Team 6 / Frontend Team 5 / QA Team 4 / DevOps Team 3 / Docs Team 2, 각 그룹 첫 멤버가 리더) + **그룹 없이 배치 5**(Reviewer A~C, Planner A·B) + **미배치 4**(Reviewer D·E, Planner D·E)로 나뉜다. 프로젝트마다 **마스터 프롬프트**가 있고 그룹 5개에는 **그룹 프롬프트**가 들어 있다. 에이전트마다 맡은 Task 상태가 달라 카드에 **작업 중 6 / 작업 대기중 4 / 작업 없음 16 / 미배치 4** 가 골고루 보인다. 완료된 위임 1건(`재고 조회 API 응답 지연 조사`: 마스터 → Backend Team 리더 → Backend Dev B, 결과 요약·변경 파일·지표 포함)을 **실행 예시**(`SEED_EXECUTIONS`)로 넣어 두어, 화면을 처음 열어도 실행 트리를 볼 수 있다.
 
 ## 4. 코드 구조 (`apps/mockup/src`)
 
@@ -66,16 +67,16 @@ components/  Sidebar, icons(인라인 SVG)
 lib/         storage(localStorage 헬퍼), dnd(드래그 페이로드), useGroupDrop(그룹 드롭 공통 처리),
              canvasLayout(순수 함수: 에이전트/그룹 → 좌표), agentAvailability(실행 불가 사유),
              agentStatus(상태: 미배치 / 작업 중 / 작업 대기중 / 작업 없음),
-             executionSim(실행 계획: 규칙 라우팅 · 상태 타임라인 · 모의 지표),
+             executionSim(실행 계획: 규칙 라우팅(문장 키워드 + 첨부 경로·확장자) · 상태 타임라인 · 모의 지표),
              executions(실행 트리 조회·표시: treeOrder · summarize · formatCost/Duration/Tokens)
-store/       MockStore(전체 메모리 상태 + reducer + sendCommand), ThemeContext, seed(테스트 데이터 + 실행 예시)
+store/       MockStore(전체 메모리 상태 + reducer + sendCommand), ThemeContext, seed(테스트 데이터 + 실행 예시 + 파일 목록)
 styles/      tokens.css(색 토큰: 라이트/다크), globals.css, glass.module.css, modal.module.css, menu.module.css(⋮ 메뉴 공용),
-             execution.module.css(실행 배지·요약 카드·실행 트리 창), shared.module.css
+             execution.module.css(실행 배지·요약 카드·실행 트리 창), attachment.module.css(첨부 창·칩), shared.module.css
 pages/Projects/   Projects, ProjectDetail, AgentList, AgentCardMenu(카드 ⋮ 메뉴), AgentNodeMenu(노드 ⋮ 메뉴),
                   AgentHoverCard, AgentFormModal(생성/수정 겸용, 창), GroupList, GroupCardMenu(그룹 ⋮ 메뉴),
                   GroupFormModal(새 그룹, 창), GroupPromptModal(그룹 프롬프트, 창), GroupCanvas, ChatPanel,
-                  ExecutionTree(실행 요약 카드 + 실행 트리 창), ProjectSettingsModal(마스터 지정·프롬프트 포함),
-                  ProjectWorkspaces (+ 각각의 *.module.css)
+                  AttachFilesModal(파일 첨부 창), ExecutionTree(실행 요약 카드 + 실행 트리 창),
+                  ProjectSettingsModal(마스터 지정·프롬프트 포함), ProjectWorkspaces (+ 각각의 *.module.css)
 pages/            Dashboard, RealityCheck(현실성 점검: 확인된 사실 + 흐름도 + 위험 카드, 내용은 VERIFIED·RISKS 배열)
 pages/Settings/   Settings(안쪽 왼쪽 메뉴), AgentConnectionSettings, ThemeSettings, RuntimeCard, AddRuntimeModal, CliPanel, CommandPanel
 ```
@@ -102,6 +103,7 @@ pages/Settings/   Settings(안쪽 왼쪽 메뉴), AgentConnectionSettings, Theme
 13. **프로젝트마다 마스터 에이전트가 하나 있고**(최상위 리더) **그룹에 속하지 않는다**. 설정에서 기존 에이전트 중 하나를 마스터로 **지정**한다(별도 마스터 에이전트를 새로 두지 않는다). **마스터는 구성도에서 뺄 수 없고 삭제도 안 된다**(변경만 가능 — 설정에서 다른 에이전트로 바꾼 뒤에야 그 에이전트를 지울 수 있다). 프롬프트는 **마스터 → 그룹 → 에이전트** 순서로 겹친다: 마스터 프롬프트는 프로젝트 설정 창, 그룹 프롬프트는 그룹 카드 `⋮` → 프롬프트 편집, 에이전트 프롬프트는 에이전트 창. 채팅은 **마스터가 기본 대상**이고, 마스터에게 보내면 팀 리더들에게 나눠 맡긴다.
 14. **구성도의 배치는 손으로 조정할 수 있다.** 노드를 끌어 옮기고(그룹 상자 위에 놓으면 그 그룹으로), **그룹 상자도 머리말을 끌어** 옮기며, **위치 초기화**로 자동 배치로 되돌린다. 캔버스 어디든(왼쪽·위 포함, 좌표 음수 허용) 놓을 수 있다. 셀렉트는 모드에 맞는 토큰 화살표로 그린다(`--select-arrow`).
 15. **실행(위임) 흐름은 모의지만 순서는 실제와 같게 둔다.** 명령 하나가 실행 트리 하나(`Execution`, `parentExecutionId`)이고, 상태는 `QUEUED → RUNNING → WAITING_CHILD → RUNNING → DONE`. 판단이 필요한 실행(마스터·리더)은 계약(`delegate` | `done`)을 남기고 **위임 대상이 화면에 남는다**. 라우팅은 **규칙 먼저**(팀 키워드 → 없으면 마스터 직접). **계약·지표·세션 id 는 모의 값**이고, 화면에 모의임을 밝히고 실제 출처(CLI `-p --output-format json` 의 usage / total_cost_usd / duration_ms / session_id)를 함께 적는다(사용자에게 실제 구현처럼 보이게 두지 않는다).
+16. **명령에 파일을 첨부할 수 있다.** 입력줄 왼쪽 📎 → **프로젝트 워크스페이스 폴더 안의 파일만** 고른다(실제로도 에이전트가 볼 수 있는 것은 그 폴더뿐이다). 붙인 파일은 **라우팅에도 쓰인다**: 문장에 팀 키워드가 없어도 경로·확장자로 팀이 정해지고(`FILE_ROUTES`), 실행 지시에는 ` · 첨부: 파일명` 이 붙어 하위 실행까지 내려간다. 파일 목록은 모의값(`SEED_FILES`)이며, 목록이 실제 폴더를 읽는 것처럼 보이게 두지 않는다(실제 제품은 `GET /workspaces/browse`).
 
 ## 6. 사용자와 일하는 방식
 
