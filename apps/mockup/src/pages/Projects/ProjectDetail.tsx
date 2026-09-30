@@ -6,6 +6,7 @@ import shared from '../../styles/shared.module.css';
 import type { ChatTarget } from '../../types';
 import AgentList from './AgentList';
 import ChatPanel from './ChatPanel';
+import ExecutionTreeModal from './ExecutionTree';
 import GroupCanvas from './GroupCanvas';
 import GroupList from './GroupList';
 import styles from './ProjectDetail.module.css';
@@ -25,9 +26,11 @@ const CHAT_EXPANDED_INSET = 380;
 export default function ProjectDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { projects, workspaces, agents, groups, tasks } = useMockStore();
+  const { projects, workspaces, agents, groups, tasks, executions } = useMockStore();
   const [notice, setNotice] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /** 실행 트리 창에 띄울 실행(채팅 응답에 딸린 루트 실행 id). */
+  const [executionTreeRoot, setExecutionTreeRoot] = useState<number | null>(null);
   // 에이전트 패널과 그룹 패널은 따로 접고 펼 수 있다(기본은 둘 다 열림).
   const [agentsOpen, setAgentsOpen] = useState(true);
   const [groupsOpen, setGroupsOpen] = useState(true);
@@ -170,9 +173,19 @@ export default function ProjectDetail() {
         expanded={chatExpanded}
         onToggle={() => setChatExpanded((prev) => !prev)}
         onSent={() => setChatExpanded(true)}
+        onOpenExecutions={setExecutionTreeRoot}
       />
 
       {notice && <p className={`errorText ${styles.notice}`}>{notice}</p>}
+
+      {executionTreeRoot !== null && (
+        <ExecutionTreeModal
+          executions={executions.filter((e) => e.projectId === project.id)}
+          rootExecutionId={executionTreeRoot}
+          masterAgentId={masterAgentId}
+          onClose={() => setExecutionTreeRoot(null)}
+        />
+      )}
 
       {settingsOpen && (
         <ProjectSettingsModal

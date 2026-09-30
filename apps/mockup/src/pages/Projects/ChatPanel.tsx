@@ -4,6 +4,7 @@ import { useMockStore } from '../../store/MockStore';
 import shared from '../../styles/shared.module.css';
 import type { ChatTarget, Project } from '../../types';
 import styles from './ChatPanel.module.css';
+import { ExecutionSummaryCard } from './ExecutionTree';
 
 const toValue = (target: ChatTarget | null) => (target ? `${target.kind}:${target.id}` : '');
 
@@ -23,6 +24,7 @@ export default function ChatPanel({
   expanded,
   onToggle,
   onSent,
+  onOpenExecutions,
 }: {
   project: Project;
   target: ChatTarget | null;
@@ -31,13 +33,16 @@ export default function ChatPanel({
   expanded: boolean;
   onToggle: () => void;
   onSent: () => void;
+  /** 응답에 딸린 실행 트리를 연다. */
+  onOpenExecutions: (rootExecutionId: number) => void;
 }) {
-  const { agents, groups, providers, chats, sendCommand } = useMockStore();
+  const { agents, groups, providers, chats, executions, sendCommand } = useMockStore();
   const [text, setText] = useState('');
   const logRef = useRef<HTMLDivElement>(null);
 
   const projectAgents = agents.filter((a) => a.projectId === project.id);
   const projectGroups = groups.filter((g) => g.projectId === project.id);
+  const projectExecutions = executions.filter((e) => e.projectId === project.id);
   const messages = chats.filter((m) => m.projectId === project.id);
 
   useEffect(() => {
@@ -107,17 +112,27 @@ export default function ChatPanel({
       {expanded && (
         <div ref={logRef} className={styles.log}>
           {messages.length === 0 && <p className={shared.muted}>아직 보낸 명령이 없습니다.</p>}
-          {messages.map((m) => (
-            <div key={m.id} className={`${styles.message} ${styles[m.role]}`}>
-              <div className={styles.meta}>
-                <strong>{m.author}</strong>
-                {m.targetLabel && <span> → {m.targetLabel}</span>}
+          {messages.map((m) => {
+            const rootId = m.rootExecutionId;
+            return (
+              <div key={m.id} className={`${styles.message} ${styles[m.role]}`}>
+                <div className={styles.meta}>
+                  <strong>{m.author}</strong>
+                  {m.targetLabel && <span> → {m.targetLabel}</span>}
+                </div>
+                <div className={m.status === 'error' ? styles.error : undefined}>
+                  {m.status === 'pending' ? <span className={styles.pending}>작업 중…</span> : m.text}
+                </div>
+                {rootId !== null && (
+                  <ExecutionSummaryCard
+                    executions={projectExecutions}
+                    rootExecutionId={rootId}
+                    onOpen={() => onOpenExecutions(rootId)}
+                  />
+                )}
               </div>
-              <div className={m.status === 'error' ? styles.error : undefined}>
-                {m.status === 'pending' ? <span className={styles.pending}>작업 중…</span> : m.text}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

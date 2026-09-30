@@ -1,5 +1,7 @@
 import { createContext, ReactNode, useContext, useMemo, useReducer, useRef } from 'react';
 import { unavailableReason } from '../lib/agentAvailability';
+import { buildExecutionPlan } from '../lib/executionSim';
+import { formatCost, formatDuration } from '../lib/executions';
 import type {
   Agent,
   AgentGroup,
@@ -7,6 +9,7 @@ import type {
   Capabilities,
   ChatMessage,
   ChatTarget,
+  Execution,
   Project,
   Task,
   Workspace,
@@ -15,6 +18,7 @@ import {
   DEFAULT_CAPABILITIES,
   DEFAULT_PROVIDER_NAMES,
   SEED_AGENTS,
+  SEED_EXECUTIONS,
   SEED_GROUPS,
   SEED_PROJECTS,
   SEED_PROVIDERS,
@@ -30,6 +34,8 @@ interface MockState {
   agents: Agent[];
   groups: AgentGroup[];
   tasks: Task[];
+  /** 실행 트리. 마스터 실행이 루트이고, 위임할 때마다 자식 실행이 붙는다. */
+  executions: Execution[];
   chats: ChatMessage[];
   /** 구성도에서 손으로 옮긴 노드 위치(월드 좌표). 없는 노드는 자동 배치를 따른다. */
   nodePositions: Record<number, { x: number; y: number }>;
@@ -69,8 +75,9 @@ type Action =
   | { type: 'group/setLeader'; groupId: number; agentId: number | null }
   | { type: 'group/setPrompt'; groupId: number; prompt: string }
   | { type: 'chat/system'; message: ChatMessage }
-  | { type: 'chat/send'; user: ChatMessage; pending: ChatMessage; tasks: Task[] }
-  | { type: 'chat/reply'; messageId: number; taskIds: number[]; text: string };
+  | { type: 'chat/send'; user: ChatMessage; pending: ChatMessage; tasks: Task[]; executions: Execution[] }
+  | { type: 'chat/reply'; messageId: number; taskIds: number[]; text: string }
+  | { type: 'execution/patch'; id: number; patch: Partial<Execution> };
 
 const initialState: MockState = {
   providers: SEED_PROVIDERS,
@@ -79,6 +86,7 @@ const initialState: MockState = {
   agents: SEED_AGENTS,
   groups: SEED_GROUPS,
   tasks: SEED_TASKS,
+  executions: SEED_EXECUTIONS,
   chats: [],
   nodePositions: {},
   groupPositions: {},
@@ -168,13 +176,14 @@ function reducer(state: MockState, action: Action): MockState {
     case 'project/setMasterPrompt':
       return mapProject(state, action.projectId, (project) => ({ ...project, masterPrompt: action.prompt }));
     case 'project/delete':
-      // 프로젝트에 속한 에이전트, 그룹, Task 도 함께 사라진다.
+      // 프로젝트에 속한 에이전트, 그룹, Task, 실행 기록도 함께 사라진다.
       return {
         ...state,
         projects: state.projects.filter((p) => p.id !== action.id),
         agents: state.agents.filter((a) => a.projectId !== action.id),
         groups: state.groups.filter((g) => g.projectId !== action.id),
         tasks: state.tasks.filter((t) => t.projectId !== action.id),
+        executions: state.executions.filter((e) => e.projectId !== action.id),
       };
     case 'project/assignWorkspace':
       // 첫 할당은 자동으로 기본이 되고, "기본으로"를 고르면 기존 기본을 대체한다(프로젝트당 기본은 1개).
@@ -304,6 +313,13 @@ function reducer(state: MockState, action: Action): MockState {
         ...state,
         chats: [...state.chats, action.user, action.pending],
         tasks: [...state.tasks, ...action.tasks],
+        executions: [...state.executions, ...action.executions],
+      };
+    case 'execution/patch':
+      // 계획대로 상태를 바꾼다(자식이 도는 동안 부모는 WAITING_CHILD).
+      return {
+        ...state,
+        executions: state.executions.map((e) => (e.id === action.id ? { ...e, ...action.patch } : e)),
       };
     case 'chat/reply':
       // 응답이 오면 대기 중이던 에이전트 메시지를 완료로 바꾸고, 이번 명령으로 만든 Task 를 모두 끝낸다.
@@ -330,6 +346,8 @@ interface MockStore {
   agents: Agent[];
   groups: AgentGroup[];
   tasks: Task[];
+  /** 실행 트리. 마스터 실행이 루트이고, 위임할 때마다 자식 실행이 붙는다. */
+  executions: Execution[];
   createProject: (name: string) => void;
   renameProject: (id: number, name: string) => void;
   deleteProject: (id: number) => void;
@@ -366,8 +384,6 @@ interface MockStore {
   sendCommand: (projectId: number, target: ChatTarget, text: string) => void;
 }
 
-const REPLY_DELAY_MS = 1800;
-
 const MockStoreContext = createContext<MockStore | null>(null);
 
 export function MockStoreProvider({ children }: { children: ReactNode }) {
@@ -389,7 +405,15 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     const system = (message: string) =>
       dispatch({
         type: 'chat/system',
-        message: { id: nextSeq(), projectId, role: 'system', author: '시스템', text: message, status: 'error' },
+        message: {
+          id: nextSeq(),
+          projectId,
+          role: 'system',
+          author: '시스템',
+          text: message,
+          status: 'error',
+          rootExecutionId: null,
+        },
       });
 
     if (target.kind === 'group' && !receiver) {
@@ -411,39 +435,103 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     const targetLabel = target.kind === 'group' ? `${group?.name} → 리더 ${receiver.name}` : receiver.name;
     const title = text.length > 28 ? `${text.slice(0, 28)}…` : text;
 
-    // 마스터에게 보내면 마스터가 팀(그룹) 리더들에게 나눠 맡긴다(모의 응답).
+    // 마스터에게 온 명령만 팀으로 나눠 맡긴다. 그룹/에이전트에게 온 명령은 받은 실행 하나(과 그 하위)로 끝난다.
     const isMaster = project?.masterAgentId === receiver.id;
-    const delegated = isMaster
-      ? state.groups.filter((g) => g.projectId === projectId && g.leaderAgentId !== null)
-      : [];
-    const tasks: Task[] = [
-      { id: nextSeq(), projectId, title, status: 'RUNNING', agentId: receiver.id },
-      ...delegated.map((g) => ({
-        id: nextSeq(),
+    const plan = buildExecutionPlan({
+      text,
+      rootAgentId: receiver.id,
+      fromMaster: isMaster,
+      groups: state.groups.filter((g) => g.projectId === projectId),
+    });
+
+    // 계획된 실행을 먼저 만들어 두고(QUEUED) 타임라인대로 상태를 바꾼다. 부모가 자식보다 먼저 온다.
+    const ids = new Map<string, number>();
+    const executions: Execution[] = plan.nodes.map((node) => {
+      const id = nextSeq();
+      ids.set(node.key, id);
+      return {
+        id,
         projectId,
-        title: `${g.name} 배분: ${title}`,
-        status: 'RUNNING' as const,
-        agentId: g.leaderAgentId,
-      })),
-    ];
+        agentId: node.agentId,
+        parentExecutionId: node.parentKey === null ? null : (ids.get(node.parentKey) ?? null),
+        status: 'QUEUED' as const,
+        prompt: node.prompt,
+        decision: null,
+        handoff: null,
+        metrics: null,
+        sessionId: node.sessionId,
+      };
+    });
+    const agentName = (id: number) => state.agents.find((a) => a.id === id)?.name ?? '에이전트';
+
+    // 실행마다 Task 를 하나씩 만든다(에이전트 상태 표시가 이 Task 를 본다).
+    const tasks: Task[] = executions.map((execution) => ({
+      id: nextSeq(),
+      projectId,
+      title: execution.parentExecutionId === null ? title : `${agentName(execution.agentId)}: ${title}`,
+      status: 'RUNNING' as const,
+      agentId: execution.agentId,
+    }));
 
     dispatch({
       type: 'chat/send',
-      user: { id: userId, projectId, role: 'user', author: '나', text, targetLabel, status: 'done' },
-      pending: { id: agentMessageId, projectId, role: 'agent', author: receiver.name, text: '', status: 'pending' },
+      user: {
+        id: userId,
+        projectId,
+        role: 'user',
+        author: '나',
+        text,
+        targetLabel,
+        status: 'done',
+        rootExecutionId: null,
+      },
+      pending: {
+        id: agentMessageId,
+        projectId,
+        role: 'agent',
+        author: receiver.name,
+        text: '',
+        status: 'pending',
+        rootExecutionId: ids.get('e0') ?? null,
+      },
       tasks,
+      executions,
     });
+
+    // 계획대로 상태를 바꾼다(모의 재생). 자식이 도는 동안 부모는 WAITING_CHILD 로 멈춘다.
+    plan.timeline.forEach((event) => {
+      const id = ids.get(event.key);
+      if (id === undefined) return;
+      window.setTimeout(() => {
+        dispatch({
+          type: 'execution/patch',
+          id,
+          patch: {
+            status: event.status,
+            ...(event.decision === undefined ? {} : { decision: event.decision }),
+            ...(event.handoff === undefined ? {} : { handoff: event.handoff }),
+            ...(event.metrics === undefined ? {} : { metrics: event.metrics }),
+          },
+        });
+      }, event.at);
+    });
+
+    // 마지막 상태 전이가 끝난 뒤에 응답을 남긴다. 숫자는 계획에서 나온 모의 값이다.
+    const doneAt = plan.timeline.reduce((latest, event) => Math.max(latest, event.at), 0);
+    const reply = isMaster
+      ? plan.teamNames.length > 0
+        ? `${plan.teamNames.join(' · ')} 에 나눠 맡기고 결과를 모았습니다. 실행 ${plan.executions}회 · 위임 ${plan.delegations}건 · ${formatCost(plan.costUsd)} · ${formatDuration(plan.durationMs)} (모의)`
+        : `직접 처리했습니다. 실행 1회 · ${formatCost(plan.costUsd)} · ${formatDuration(plan.durationMs)} (모의)`
+      : `요청을 확인했습니다. "${title}" 작업을 진행했고 완료했습니다. (모의)`;
 
     window.setTimeout(() => {
       dispatch({
         type: 'chat/reply',
         messageId: agentMessageId,
         taskIds: tasks.map((t) => t.id),
-        text: isMaster
-          ? `요청을 확인했습니다. 작업을 쪼개 ${delegated.length}개 팀에 나눠 맡기고 결과를 모았습니다. (모의 응답)`
-          : `요청을 확인했습니다. "${title}" 작업을 진행했고 완료했습니다. (모의 응답)`,
+        text: reply,
       });
-    }, REPLY_DELAY_MS);
+    }, doneAt + 300);
   };
 
   const store = useMemo<MockStore>(
@@ -461,6 +549,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       agents: state.agents,
       groups: state.groups,
       tasks: state.tasks,
+      executions: state.executions,
       createProject: (name) => dispatch({ type: 'project/create', name }),
       renameProject: (id, name) => dispatch({ type: 'project/rename', id, name }),
       deleteProject: (id) => dispatch({ type: 'project/delete', id }),

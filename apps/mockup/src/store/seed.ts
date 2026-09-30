@@ -5,6 +5,7 @@ import type {
   AiProvider,
   Capabilities,
   CliStatus,
+  Execution,
   PermissionProfile,
   Project,
   Task,
@@ -228,6 +229,66 @@ export const SEED_PROJECTS: Project[] = [
 
 let nextTaskId = 3;
 
+const shopAgentId = (name: string) => SHOP_FIRST_AGENT_ID + SHOP_AGENTS.findIndex((spec) => spec.name === name);
+
+/* ---------------------------------------------------------------------------
+ * 완료된 위임 한 건을 예시로 넣어 둔다. 화면을 처음 열어도 실행 트리와 지표를 볼 수 있고,
+ * "마스터 → 리더 → 하위" 판단이 어떻게 남는지 확인할 수 있다. 지표는 모의 값이다.
+ * ------------------------------------------------------------------------- */
+const EXAMPLE_REQUEST = '재고 조회 API 응답이 느려요. N+1 의심됩니다.';
+const EXAMPLE_LEADER_ID = shopAgentId('Backend Dev A');
+const EXAMPLE_WORKER_ID = shopAgentId('Backend Dev B');
+
+const EXAMPLE_TASK: Task = {
+  id: nextTaskId++,
+  projectId: SHOP_PROJECT_ID,
+  agentId: SHOP_MASTER_AGENT_ID,
+  title: '재고 조회 API 응답 지연 조사',
+  status: 'DONE',
+};
+
+const exampleFile = 'src/main/java/com/shop/api/InventoryService.java';
+const exampleSummary = '원인을 확인하고 쿼리를 정리했습니다.';
+
+export const SEED_EXECUTIONS: Execution[] = [
+  {
+    id: 1,
+    projectId: SHOP_PROJECT_ID,
+    agentId: SHOP_MASTER_AGENT_ID,
+    parentExecutionId: null,
+    status: 'DONE',
+    prompt: EXAMPLE_REQUEST,
+    decision: { action: 'delegate', targetAgentId: EXAMPLE_LEADER_ID, prompt: `"${EXAMPLE_REQUEST}" 를 Backend Team 범위에서 처리` },
+    handoff: { summary: '1개 실행의 결과를 모아 정리했습니다.', changedFiles: [] },
+    metrics: { inputTokens: 86420, outputTokens: 940, costUsd: 0.547, durationMs: 142000 },
+    sessionId: '4f9a1c62-7d3e',
+  },
+  {
+    id: 2,
+    projectId: SHOP_PROJECT_ID,
+    agentId: EXAMPLE_LEADER_ID,
+    parentExecutionId: 1,
+    status: 'DONE',
+    prompt: `"${EXAMPLE_REQUEST}" 를 Backend Team 범위에서 처리`,
+    decision: { action: 'delegate', targetAgentId: EXAMPLE_WORKER_ID, prompt: `"${EXAMPLE_REQUEST}" 를 Backend Team 범위에서 처리` },
+    handoff: { summary: '1개 실행의 결과를 모아 정리했습니다.', changedFiles: [] },
+    metrics: { inputTokens: 84180, outputTokens: 720, costUsd: 0.527, durationMs: 118000 },
+    sessionId: 'b2c7e441-0a95',
+  },
+  {
+    id: 3,
+    projectId: SHOP_PROJECT_ID,
+    agentId: EXAMPLE_WORKER_ID,
+    parentExecutionId: 2,
+    status: 'DONE',
+    prompt: `"${EXAMPLE_REQUEST}" 를 Backend Team 범위에서 처리`,
+    decision: { action: 'done', summary: exampleSummary },
+    handoff: { summary: exampleSummary, changedFiles: [exampleFile] },
+    metrics: { inputTokens: 92140, outputTokens: 3380, costUsd: 0.654, durationMs: 96000 },
+    sessionId: 'd13f8a20-5c7b',
+  },
+];
+
 export const SEED_AGENTS: Agent[] = [
   { id: 1, projectId: 1, name: 'test', roleId: 1, permissionProfileId: 1, providerId: 12, persona: '', model: '', mode: '', placed: true },
   ...shopAgents,
@@ -239,6 +300,7 @@ export const SEED_GROUPS: AgentGroup[] = shopGroups;
 export const SEED_TASKS: Task[] = [
   { id: 1, projectId: 1, agentId: 1, title: '연결 확인', status: 'DONE' },
   { id: 2, projectId: 1, agentId: 1, title: 'README 정리', status: 'PENDING' },
+  EXAMPLE_TASK,
   ...SHOP_AGENTS.flatMap((spec, index): Task[] => {
     if (!spec.task) return [];
     return [

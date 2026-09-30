@@ -1,0 +1,95 @@
+import type { Execution, ExecutionStatus } from '../types';
+
+/* 실행 트리를 화면에 그릴 때 쓰는 조회·표시 도우미. */
+
+/** 상태 배지에 쓰는 한국어 이름. */
+export const STATUS_LABEL: Record<ExecutionStatus, string> = {
+  QUEUED: '대기',
+  RUNNING: '실행 중',
+  WAITING_CHILD: '하위 대기',
+  DONE: '완료',
+  FAILED: '실패',
+};
+
+/** 배지 색을 고르는 묶음. CSS 에서 이 이름으로 클래스를 만든다. */
+export const STATUS_TONE: Record<ExecutionStatus, 'wait' | 'active' | 'done' | 'failed'> = {
+  QUEUED: 'wait',
+  RUNNING: 'active',
+  WAITING_CHILD: 'wait',
+  DONE: 'done',
+  FAILED: 'failed',
+};
+
+export interface ExecutionRow {
+  execution: Execution;
+  /** 트리에서의 깊이. 들여쓰기에 쓴다. */
+  depth: number;
+}
+
+/** 루트 실행과 그 자손을 트리 순서(부모 → 자식)로 편다. */
+export function treeOrder(executions: Execution[], rootId: number): ExecutionRow[] {
+  const byParent = new Map<number, Execution[]>();
+  executions.forEach((execution) => {
+    if (execution.parentExecutionId === null) return;
+    const siblings = byParent.get(execution.parentExecutionId) ?? [];
+    byParent.set(execution.parentExecutionId, [...siblings, execution]);
+  });
+
+  const root = executions.find((execution) => execution.id === rootId);
+  if (!root) return [];
+
+  const rows: ExecutionRow[] = [{ execution: root, depth: 0 }];
+  const walk = (parentId: number, depth: number) => {
+    (byParent.get(parentId) ?? []).forEach((child) => {
+      rows.push({ execution: child, depth });
+      walk(child.id, depth + 1);
+    });
+  };
+  walk(rootId, 1);
+  return rows;
+}
+
+export interface ExecutionTotals {
+  executions: number;
+  delegations: number;
+  costUsd: number;
+  /** 루트 실행이 끝날 때까지 걸린 시간. 자식들이 병렬로 돈 것이 반영된 값이다. */
+  durationMs: number;
+  inputTokens: number;
+  outputTokens: number;
+  /** 아직 돌고 있는 실행이 있는지. */
+  running: boolean;
+}
+
+/** 실행 트리 하나의 합계. 화면 위쪽 요약줄과 채팅 카드에 쓴다. */
+export function summarize(executions: Execution[]): ExecutionTotals {
+  const sum = <T>(pick: (execution: Execution) => T, add: (a: T, b: T) => T, zero: T): T =>
+    executions.reduce((acc, execution) => add(acc, pick(execution)), zero);
+
+  const root = executions.find((execution) => execution.parentExecutionId === null);
+  return {
+    executions: executions.length,
+    delegations: executions.filter((execution) => execution.decision?.action === 'delegate').length,
+    costUsd: sum((e) => e.metrics?.costUsd ?? 0, (a, b) => a + b, 0),
+    durationMs: root?.metrics?.durationMs ?? 0,
+    inputTokens: sum((e) => e.metrics?.inputTokens ?? 0, (a, b) => a + b, 0),
+    outputTokens: sum((e) => e.metrics?.outputTokens ?? 0, (a, b) => a + b, 0),
+    running: executions.some((e) => e.status === 'QUEUED' || e.status === 'RUNNING' || e.status === 'WAITING_CHILD'),
+  };
+}
+
+export function formatCost(usd: number): string {
+  return `$${usd.toFixed(2)}`;
+}
+
+export function formatTokens(count: number): string {
+  return count.toLocaleString('en-US');
+}
+
+export function formatDuration(ms: number): string {
+  const seconds = Math.round(ms / 1000);
+  if (seconds < 60) return `${seconds}초`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}분 ${seconds % 60}초`;
+  return `${Math.floor(minutes / 60)}시간 ${minutes % 60}분`;
+}

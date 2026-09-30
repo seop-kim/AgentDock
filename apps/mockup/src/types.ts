@@ -89,6 +89,45 @@ export interface Task {
   agentId: number | null;
 }
 
+/** 실행 단위의 상태. 부모는 자식이 도는 동안 WAITING_CHILD 로 멈춘다. */
+export type ExecutionStatus = 'QUEUED' | 'RUNNING' | 'WAITING_CHILD' | 'DONE' | 'FAILED';
+
+/**
+ * 실행 출력의 **마지막 줄에 강제하는 계약**. 판단이 필요한 마스터·리더만 쓴다.
+ * 실제 구현에서는 CLI 의 `--json-schema` 로 이 형식을 강제하므로, 파싱 실패를 거의 걱정하지 않아도 된다.
+ */
+export type ExecutionDecision =
+  | { action: 'delegate'; targetAgentId: number; prompt: string }
+  | { action: 'done'; summary: string };
+
+/** CLI 의 `--output-format json` 이 그대로 돌려주는 값(usage / total_cost_usd / duration_ms). 여기서는 모의 값이다. */
+export interface ExecutionMetrics {
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+  durationMs: number;
+}
+
+/** 특정 Agent 가 실제로 수행한 한 번의 실행. 마스터 실행이 트리의 루트다. */
+export interface Execution {
+  id: number;
+  projectId: number;
+  agentId: number;
+  /** 이 실행을 만든 부모 실행. 루트(마스터) 실행은 null. */
+  parentExecutionId: number | null;
+  status: ExecutionStatus;
+  /** 이 실행이 받은 지시. */
+  prompt: string;
+  /** 이 실행이 낸 판단 계약. 위임한 실행은 위임 대상이, 직접 처리한 실행은 완료 요약이 남는다. */
+  decision: ExecutionDecision | null;
+  /** 끝난 뒤 위로 넘기는 최소 Handoff. 원문 전체가 아니라 요약 + 변경 파일이다. */
+  handoff: { summary: string; changedFiles: string[] } | null;
+  /** 실행이 끝났을 때 채워진다. */
+  metrics: ExecutionMetrics | null;
+  /** 세션 재개(`--resume`)에 쓰는 실행 세션 id. */
+  sessionId: string;
+}
+
 /** 채팅 명령의 대상. 그룹에 보내면 그 그룹의 리더가 받는다. */
 export type ChatTarget = { kind: 'agent'; id: number } | { kind: 'group'; id: number };
 
@@ -103,4 +142,6 @@ export interface ChatMessage {
   targetLabel?: string;
   /** 에이전트 응답이 아직 오는 중이면 pending */
   status: 'pending' | 'done' | 'error';
+  /** 이 응답으로 만들어진 실행 트리의 루트 실행. 명령이 아니면 null. */
+  rootExecutionId: number | null;
 }
