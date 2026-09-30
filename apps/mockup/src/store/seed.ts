@@ -8,6 +8,7 @@ import type {
   PermissionProfile,
   Project,
   Task,
+  TaskStatus,
   Workspace,
 } from '../types';
 
@@ -112,71 +113,120 @@ export const SEED_PERMISSION_PROFILES: PermissionProfile[] = [
   { id: 2, name: 'Read Only (읽기만)' },
 ];
 
-/** Planner(5)는 구성도에 놓지 않은 상태(미배치)로 둔다. 에이전트 목록에만 보인다. */
+/* ---------------------------------------------------------------------------
+ * 테스트 데이터 — shop 프로젝트: 그룹 5개, 에이전트 30개.
+ *   그룹 소속 20 / 그룹 없이 구성도에만 배치 6 / 구성도에 놓지 않음(미배치) 4.
+ *   에이전트마다 맡은 Task 상태를 달리해 카드에 상태가 골고루 보이게 한다.
+ * ------------------------------------------------------------------------- */
+
+const SHOP_PROJECT_ID = 2;
+/** project 1 의 test 에이전트가 id 1 이므로 shop 에이전트는 2 부터 이어 붙인다. */
+const SHOP_FIRST_AGENT_ID = 2;
+
+/** 그룹 5개. 이름 순서가 그룹 id(1~5)이고, 첫 멤버가 리더가 된다. */
+const SHOP_GROUP_NAMES = ['Backend Team', 'Frontend Team', 'QA Team', 'DevOps Team', 'Docs Team'];
+
+/** 모델/모드를 조금씩 다르게 넣어 구성도에 다양하게 보이게 한다(빈 값은 CLI 기본값). */
+const MODEL_CYCLE = ['opus', 'sonnet', ''];
+const MODE_CYCLE = ['acceptEdits', 'plan', ''];
+
+/** shop 에이전트 한 개의 구성. group 이 없으면 그룹 없이 구성도에만 놓인다. */
+interface ShopAgentSpec {
+  name: string;
+  roleId: number;
+  group?: string;
+  /** 구성도에 놓지 않는다(에이전트 목록에만) */
+  unplaced?: boolean;
+  /** 맡은 Task 상태. 없으면 작업 없음 */
+  task?: TaskStatus;
+}
+
+const SHOP_AGENTS: ShopAgentSpec[] = [
+  // 그룹 소속 (20)
+  { name: 'Backend Dev A', roleId: 1, group: 'Backend Team', task: 'RUNNING' },
+  { name: 'Backend Dev B', roleId: 1, group: 'Backend Team' },
+  { name: 'Backend Dev C', roleId: 1, group: 'Backend Team', task: 'PENDING' },
+  { name: 'Backend Dev D', roleId: 1, group: 'Backend Team' },
+  { name: 'Backend Dev E', roleId: 1, group: 'Backend Team', task: 'RUNNING' },
+  { name: 'Backend Dev F', roleId: 1, group: 'Backend Team' },
+  { name: 'Frontend Dev A', roleId: 2, group: 'Frontend Team', task: 'PENDING' },
+  { name: 'Frontend Dev B', roleId: 2, group: 'Frontend Team' },
+  { name: 'Frontend Dev C', roleId: 2, group: 'Frontend Team', task: 'RUNNING' },
+  { name: 'Frontend Dev D', roleId: 2, group: 'Frontend Team' },
+  { name: 'Frontend Dev E', roleId: 2, group: 'Frontend Team' },
+  { name: 'QA A', roleId: 3, group: 'QA Team', task: 'RUNNING' },
+  { name: 'QA B', roleId: 3, group: 'QA Team' },
+  { name: 'QA C', roleId: 3, group: 'QA Team', task: 'PENDING' },
+  { name: 'QA D', roleId: 3, group: 'QA Team' },
+  { name: 'DevOps A', roleId: 1, group: 'DevOps Team' },
+  { name: 'DevOps B', roleId: 1, group: 'DevOps Team', task: 'RUNNING' },
+  { name: 'DevOps C', roleId: 1, group: 'DevOps Team' },
+  { name: 'Docs A', roleId: 4, group: 'Docs Team' },
+  { name: 'Docs B', roleId: 4, group: 'Docs Team', task: 'PENDING' },
+  // 그룹 없이 구성도에만 배치 (6)
+  { name: 'Reviewer A', roleId: 3, task: 'RUNNING' },
+  { name: 'Reviewer B', roleId: 3 },
+  { name: 'Reviewer C', roleId: 3 },
+  { name: 'Planner A', roleId: 4 },
+  { name: 'Planner B', roleId: 4 },
+  { name: 'Planner C', roleId: 4 },
+  // 구성도에 놓지 않음(미배치) (4)
+  { name: 'Reviewer D', roleId: 3, unplaced: true },
+  { name: 'Reviewer E', roleId: 3, unplaced: true },
+  { name: 'Planner D', roleId: 4, unplaced: true },
+  { name: 'Planner E', roleId: 4, unplaced: true },
+];
+
+const shopAgents: Agent[] = SHOP_AGENTS.map((spec, index) => ({
+  id: SHOP_FIRST_AGENT_ID + index,
+  projectId: SHOP_PROJECT_ID,
+  name: spec.name,
+  roleId: spec.roleId,
+  // Reviewer 는 읽기 전용 프로필을 쓴다.
+  permissionProfileId: spec.roleId === 3 ? 2 : 1,
+  providerId: index % 3 === 0 ? 13 : 12,
+  persona: '',
+  model: MODEL_CYCLE[index % MODEL_CYCLE.length],
+  mode: MODE_CYCLE[index % MODE_CYCLE.length],
+  placed: !spec.unplaced,
+}));
+
+const shopGroups: AgentGroup[] = SHOP_GROUP_NAMES.map((name, index) => {
+  const memberIds = SHOP_AGENTS.flatMap((spec, agentIndex) =>
+    spec.group === name ? [SHOP_FIRST_AGENT_ID + agentIndex] : [],
+  );
+  return {
+    id: index + 1,
+    projectId: SHOP_PROJECT_ID,
+    name,
+    leaderAgentId: memberIds[0] ?? null,
+    memberIds,
+  };
+});
+
+let nextTaskId = 3;
+
 export const SEED_AGENTS: Agent[] = [
   { id: 1, projectId: 1, name: 'test', roleId: 1, permissionProfileId: 1, providerId: 12, persona: '', model: '', mode: '', placed: true },
-  {
-    id: 2,
-    projectId: 2,
-    name: 'Backend Dev A',
-    roleId: 1,
-    permissionProfileId: 1,
-    providerId: 12,
-    persona: '테스트를 먼저 작성하고 작은 단위로 커밋한다.',
-    model: 'opus',
-    mode: 'acceptEdits',
-    placed: true,
-  },
-  {
-    id: 3,
-    projectId: 2,
-    name: 'Frontend Dev A',
-    roleId: 2,
-    permissionProfileId: 1,
-    providerId: 12,
-    persona: '',
-    model: 'sonnet',
-    mode: 'plan',
-    placed: true,
-  },
-  {
-    id: 4,
-    projectId: 2,
-    name: 'Reviewer',
-    roleId: 3,
-    permissionProfileId: 2,
-    providerId: 13,
-    persona: '변경 범위와 회귀 위험을 먼저 본다.',
-    model: '',
-    mode: '',
-    placed: true,
-  },
-  {
-    id: 5,
-    projectId: 2,
-    name: 'Planner',
-    roleId: 4,
-    permissionProfileId: 2,
-    providerId: 12,
-    persona: '',
-    model: 'sonnet',
-    mode: 'plan',
-    placed: false,
-  },
+  ...shopAgents,
 ];
 
-export const SEED_GROUPS: AgentGroup[] = [
-  { id: 1, projectId: 2, name: 'Backend Team', leaderAgentId: 2, memberIds: [2, 4] },
-  { id: 2, projectId: 2, name: 'Frontend Team', leaderAgentId: 3, memberIds: [3] },
-];
+export const SEED_GROUPS: AgentGroup[] = shopGroups;
 
-/** 에이전트 상태(작업 중/대기중/없음)가 모두 보이도록 담당(agentId)과 상태를 나눠 둔다. */
+/** 상태(작업 중/대기중/없음)가 골고루 보이도록 맡은 Task 가 있는 에이전트만 Task 를 하나씩 갖는다. */
 export const SEED_TASKS: Task[] = [
   { id: 1, projectId: 1, agentId: 1, title: '연결 확인', status: 'DONE' },
   { id: 2, projectId: 1, agentId: 1, title: 'README 정리', status: 'PENDING' },
-  { id: 3, projectId: 2, agentId: 2, title: '주문 API 추가', status: 'RUNNING' },
-  { id: 4, projectId: 2, agentId: 3, title: '장바구니 화면', status: 'PENDING' },
-  { id: 5, projectId: 2, agentId: 2, title: '결제 오류 수정', status: 'FAILED' },
-  { id: 6, projectId: 2, agentId: 3, title: '상품 목록 페이징', status: 'DONE' },
-  { id: 7, projectId: 2, agentId: 4, title: '코드 리뷰', status: 'DONE' },
+  ...SHOP_AGENTS.flatMap((spec, index): Task[] => {
+    if (!spec.task) return [];
+    return [
+      {
+        id: nextTaskId++,
+        projectId: SHOP_PROJECT_ID,
+        agentId: SHOP_FIRST_AGENT_ID + index,
+        title: `${spec.name} 작업`,
+        status: spec.task,
+      },
+    ];
+  }),
 ];
