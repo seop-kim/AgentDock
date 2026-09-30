@@ -1,7 +1,8 @@
-import { createContext, ReactNode, useContext, useMemo, useReducer, useRef } from 'react';
+import { createContext, ReactNode, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
 import { unavailableReason } from '../lib/agentAvailability';
 import { buildExecutionPlan } from '../lib/executionSim';
 import { formatCost, formatDuration } from '../lib/executions';
+import { publishSnapshot } from '../lib/windowSync';
 import type {
   Agent,
   AgentGroup,
@@ -411,6 +412,20 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     seq.current += 1;
     return seq.current;
   };
+
+  // 터미널을 새 창으로 띄웠을 때 같은 상태를 보도록 넘겨준다.
+  // 터미널 창 자신은 넘기지 않는다(자기 시드 상태로 메인 창을 덮어쓰지 않게).
+  useEffect(() => {
+    if (window.location.pathname.startsWith('/terminal')) return;
+    publishSnapshot({
+      agents: state.agents,
+      groups: state.groups,
+      executions: state.executions,
+      tasks: state.tasks,
+      projects: state.projects,
+      workspaces: state.workspaces,
+    });
+  }, [state.agents, state.groups, state.executions, state.tasks, state.projects, state.workspaces]);
 
   const sendCommand = (projectId: number, target: ChatTarget, text: string, attachments: AttachedFile[]) => {
     const project = state.projects.find((p) => p.id === projectId);

@@ -15,6 +15,7 @@ export default function AgentCardMenu({
   onEdit,
   onTogglePlaced,
   onDelete,
+  onTerminal,
   onClose,
 }: {
   /** "…" 버튼의 화면 좌표 */
@@ -27,6 +28,8 @@ export default function AgentCardMenu({
   /** 구성도에서 빼기 / 구성도에 놓기 */
   onTogglePlaced: () => void;
   onDelete: () => void;
+  /** 이 에이전트가 돌리는 터미널(실행 출력) 창을 연다 */
+  onTerminal: () => void;
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -57,6 +60,9 @@ export default function AgentCardMenu({
     >
       <button type="button" role="menuitem" className={menu.item} onClick={onEdit}>
         상세 설정
+      </button>
+      <button type="button" role="menuitem" className={menu.item} onClick={onTerminal}>
+        터미널 보기
       </button>
       {!isMaster && (
         <button type="button" role="menuitem" className={menu.item} onClick={onTogglePlaced}>

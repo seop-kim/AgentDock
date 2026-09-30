@@ -32,6 +32,9 @@
   --color-output-bg: #14162b;
   --color-output-text: #e6e8f5;
   --color-output-link: #8ab4f8;
+  /* 터미널 보조색(어두운 터미널 배경 위에서 읽히면 된다) */
+  --color-term-ok: #6ee7a8;
+  --color-term-dim: #9aa4c7;
   --color-overlay: rgba(20, 22, 50, 0.35);
   --color-shadow: rgba(40, 50, 120, 0.16);
 
@@ -92,6 +95,9 @@
   --color-output-bg: #0a0a0a;
   --color-output-text: #dcdcdc;
   --color-output-link: #8ab4f8;
+  /* 터미널 보조색(어두운 터미널 배경 위에서 읽히면 된다) */
+  --color-term-ok: #86efac;
+  --color-term-dim: #9a9a9a;
   --color-overlay: rgba(0, 0, 0, 0.6);
   --color-shadow: rgba(0, 0, 0, 0.5);
 
@@ -137,6 +143,9 @@
     --color-output-bg: #0a0a0a;
     --color-output-text: #dcdcdc;
     --color-output-link: #8ab4f8;
+    /* 터미널 보조색(어두운 터미널 배경 위에서 읽히면 된다) */
+    --color-term-ok: #86efac;
+    --color-term-dim: #9a9a9a;
     --color-overlay: rgba(0, 0, 0, 0.6);
     --color-shadow: rgba(0, 0, 0, 0.5);
 

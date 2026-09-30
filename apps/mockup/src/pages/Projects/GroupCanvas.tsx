@@ -15,6 +15,7 @@ import { isAgentDrag, readAgentDrag } from '../../lib/dnd';
 import { useGroupDrop } from '../../lib/useGroupDrop';
 import { useMockStore } from '../../store/MockStore';
 import { SEED_ROLES } from '../../store/seed';
+import { openTerminalWindow } from '../../lib/windowSync';
 import shared from '../../styles/shared.module.css';
 import type { Agent, Project } from '../../types';
 import AgentNodeMenu from './AgentNodeMenu';
@@ -589,6 +590,10 @@ export default function GroupCanvas({
             const agentId = nodeMenu.agent.id;
             setNodeMenu(null);
             setAgentPlaced(agentId, false);
+          }}
+          onTerminal={() => {
+            openTerminalWindow(nodeMenu.agent.id);
+            setNodeMenu(null);
           }}
         />
       )}

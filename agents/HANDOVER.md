@@ -53,6 +53,7 @@ npm run build --workspace=apps/mockup    # tsc --noEmit && vite build (커밋 �
 | 상세 › 채팅(명령) 창 | 구성도 **오른쪽에 세로로 붙는 패널**(너비 360, 위/아래 여백 16). **왼쪽 테두리 안쪽에 얇은 화살표**(세로 가운데에 `‹` 하나만 보이고 **클릭 범위는 왼쪽 세로 전체** — 위아래 16px 만 비운다. 누르면 왼쪽 패널 옆부터 창 오른쪽까지 넓어지고 `›` 원래 크기로 — 팝업이 아니라 같은 패널이라 쓰던 글·첨부가 그대로 남는다. 패널 왼쪽 여백은 14px). 머리말 왼쪽의 접기 버튼을 누르면 머리말만 남고 기록 수만 보이며(접으면 크게 보기도 함께 풀린다) 구성도가 그 폭을 되찾는다. **기본 대상은 마스터**(`Master (마스터)`)이고 그룹/에이전트도 고를 수 있다. 명령을 보내면 **실행 트리**가 만들어지고(라우팅 규칙 → 실행 계획), Task 수가 늘며, 응답은 계획이 다 끝난 뒤에 온다. 리더가 없거나 실행 불가면 시스템 메시지로 사유를 알린다. **기록 영역은 남는 높이를 다 쓰고 길면 안에서 스크롤**한다(내용이 길어져도 창이 커지지 않는다). **입력줄(📎 + 입력 + 보내기)은 상자들과 같은 형태로 한 칸에 묶여 있다**(둥근 테두리 한 칸, 입력은 그 안에서 테두리 없이). |
 | 상세 › 실행(위임) 흐름 | 명령을 보내면 실행 트리가 **실제 순서대로** 돈다: 마스터 `RUNNING` → 계약 `delegate`(`WAITING_CHILD`) → 하위 실행 `RUNNING` → 끝나면 부모가 다시 `RUNNING` → `done`. **라우팅은 규칙 먼저**: 요청에 팀 키워드가 걸리면 그 팀 리더에게, 걸리는 팀이 없으면 마스터가 직접 처리(실행 1회). 리더는 팀이 크면(비리더 멤버 2명 이상) 하위 한 명에게 한 번 더 넘기고, 작으면 직접 처리한다. 채팅 응답 아래 **실행 요약 카드**(상태 · 실행 N회 · 위임 N건 · 비용 · 소요 + 실행별 한 줄)가 붙고, **실행 트리 보기**로 창(`ExecutionTreeModal`)을 열면 실행별 상태·계약·Handoff 요약·변경 파일·토큰·비용·시간·세션 id 를 본다. 값은 전부 **모의**(재생도 압축)이고 창 아래에 그 사실과 실제 값의 출처(CLI `-p --output-format json`)를 적어 둔다. |
 | 상세 › 파일 첨부 | 두 가지 길이 있다. ① 입력줄 왼쪽 **📎 버튼** → **파일 첨부 창**(`AttachFilesModal`): 프로젝트 **워크스페이스 폴더 안의 파일**을 폴더별로 묶어 체크박스로 고른다(워크스페이스가 2개 이상이면 셀렉트, shop = shop-web ★ / shop-api). ② **채팅 창에 아무 파일이나 끌어다 놓기**(**폴더는 받지 않는다 — 파일만**): 창 밖 파일은 **프로젝트 안 폴더 `.agentdock/attachments` 로 복사한 것으로 치고** 그 사본을 첨부로 단다(에이전트가 읽을 수 있는 곳이 거기뿐이다). **저장 이름은 `<uuid 앞 8자>-원래이름`**(`storedName`)이라 같은 이름을 여러 번 붙여도 충돌하지 않고, 첨부 칩에는 **원래 이름**·파일 목록에는 **저장 이름**이 보인다(`displayName`). 복사된 파일은 워크스페이스 파일 목록(`workspaceFiles`)에 더해져 첨부 창에도 나타난다. 끌어오는 동안 창에 점선 테두리와 "여기에 놓으면 프로젝트 폴더로 복사해 붙입니다" 안내가 뜬다. **경로·확장자로도 팀이 정해진다**(문장에 키워드가 없어도 `.tsx` → Frontend, `.java` → Backend, `.pdf` → 어느 팀도 아님). 파일만 붙이고 보내면 지시는 "첨부한 파일을 확인해줘". |
+| 상세 › 에이전트 터미널(새 창) | 에이전트 카드/노드 `⋮` → **터미널 보기** → 그 에이전트의 실행 출력이 **새 창**으로 뜬다(`/terminal/:agentId` — 사이드바 없는 별도 라우트, 메뉴 클릭에서 `window.open`). 제목·상태 배지(`실행 중`/`완료`/`작업 없음`)·실행 폴더 경로 + 어두운 터미널이 창을 채우고, 진행 중이면 0.9초마다 줄이 늘며 커서가 깜빡인다. 메인 창이 상태를 넘겨주고(`lib/windowSync.ts` — localStorage + BroadcastChannel), 실제 구현은 새 창이 로그 SSE 를 직접 구독하면 된다. 출력은 모의다. |
 | 상세 › 프로젝트 설정 창 | 이름 변경, **마스터 에이전트 지정 + 마스터 프롬프트**(미지정이면 경고), **워크스페이스 할당/해제/기본 지정**(할당은 여기서만), 프로젝트 삭제(에이전트·그룹·Task·실행 기록도 함께 삭제). |
 | **현실성 점검** (`/reality-check`) | 실제 구현으로 갈 때 막히는 지점 9가지를 **흐름도**(사용자 → 마스터 → 그룹 리더 → 하위 에이전트, 리더는 필수 경로가 아니라고 명시) + **위험 카드**(문제 / 지금 / **결정** / 할 일)로 정리. 위에 **확인된 사실**(`VERIFIED`: CLI `--help` 와 실측 1회로 확인한 세션 재개 · `--json-schema` · 계측값 · 호출 고정비 · 내장 서브에이전트)을 함께 둔다. 내용은 `pages/RealityCheck.tsx` 의 `RISKS`·`VERIFIED` 배열(데이터). |
 | **설정 › 에이전트 연결 설정** | 런타임 카드(ON/OFF, 삭제, 추가 모달, 모델/모드/설치 계획 편집, CLI 확인 창에서 로그인·설치 가짜 로그). |
@@ -64,22 +65,27 @@ npm run build --workspace=apps/mockup    # tsc --noEmit && vite build (커밋 �
 
 ```
 main.tsx, App.tsx, layout.module.css      진입점, 라우트(프로젝트 상세는 useMatch 로 여백 없는 전체 화면), 레이아웃
-components/  Sidebar, icons(인라인 SVG)
-lib/         storage(localStorage 헬퍼), dnd(드래그 페이로드), useGroupDrop(그룹 드롭 공통 처리),
+components/  Sidebar, icons(인라인 SVG), TerminalView(터미널 몸통: 줄 목록 + 진행 중이면 늘어나는 출력)
+lib/         storage(localStorage 헬퍼 + 목업 창끼리 넘기는 키), dnd(드래그 페이로드), useGroupDrop(그룹 드롭 공통 처리),
              canvasLayout(순수 함수: 에이전트/그룹 → 좌표), agentAvailability(실행 불가 사유),
              agentStatus(상태: 미배치 / 작업 중 / 작업 대기중 / 작업 없음),
              attachments(첨부 복사 폴더 규칙: ATTACHMENT_FOLDER = '.agentdock/attachments' · attachmentPath),
              executionSim(실행 계획: 규칙 라우팅(문장 키워드 + 첨부 경로·확장자) · 상태 타임라인 · 모의 지표),
-             executions(실행 트리 조회·표시: treeOrder · summarize · formatCost/Duration/Tokens)
-store/       MockStore(전체 메모리 상태 + reducer + sendCommand + workspaceFiles), ThemeContext, seed(테스트 데이터 + 실행 예시 + 파일 목록)
+             executions(실행 트리 조회·표시: treeOrder · summarize · formatCost/Duration/Tokens),
+             terminal(터미널 줄 만들기 + 상태: terminalState · currentExecution · currentTask · tailLine),
+             windowSync(터미널을 새 창으로 띄우고 상태 넘기기: openTerminalWindow · publishSnapshot · subscribeSnapshot)
+store/       MockStore(전체 메모리 상태 + reducer + sendCommand + workspaceFiles + 새 창으로 상태 넘기기), ThemeContext, seed(테스트 데이터 + 실행 예시 + 파일 목록)
 styles/      tokens.css(색 토큰: 라이트/다크), globals.css, glass.module.css, modal.module.css, menu.module.css(⋮ 메뉴 공용),
-             execution.module.css(실행 배지·요약 카드·실행 트리 창), attachment.module.css(첨부 창·칩), shared.module.css
-pages/Projects/   Projects, ProjectDetail, AgentList, AgentCardMenu(카드 ⋮ 메뉴), AgentNodeMenu(노드 ⋮ 메뉴),
+             execution.module.css(실행 배지·요약 카드·실행 트리 창), attachment.module.css(첨부 창·칩),
+             terminal.module.css(터미널: 어두운 출력 + 커서), shared.module.css
+pages/Projects/   Projects, ProjectDetail, AgentList, AgentCardMenu(카드 ⋮ 메뉴: 상세 설정 / 터미널 보기 / …),
+                  AgentNodeMenu(노드 ⋮ 메뉴: 터미널 보기 / 리더로 지정 / …),
                   AgentHoverCard, AgentFormModal(생성/수정 겸용, 창), GroupList, GroupCardMenu(그룹 ⋮ 메뉴),
                   GroupFormModal(새 그룹, 창), GroupPromptModal(그룹 프롬프트, 창), GroupCanvas, ChatPanel,
                   AttachFilesModal(파일 첨부 창), ExecutionTree(실행 요약 카드 + 실행 트리 창),
                   ProjectSettingsModal(마스터 지정·프롬프트 포함), ProjectWorkspaces (+ 각각의 *.module.css)
-pages/            Dashboard, RealityCheck(현실성 점검: 확인된 사실 + 흐름도 + 위험 카드, 내용은 VERIFIED·RISKS 배열)
+pages/            Dashboard, TerminalWindow(에이전트 터미널 새 창, 레이아웃 없이),
+                  RealityCheck(현실성 점검: 확인된 사실 + 흐름도 + 위험 카드, 내용은 VERIFIED·RISKS 배열)
 pages/Settings/   Settings(안쪽 왼쪽 메뉴), AgentConnectionSettings, ThemeSettings, RuntimeCard, AddRuntimeModal, CliPanel, CommandPanel
 ```
 

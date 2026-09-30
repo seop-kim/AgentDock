@@ -2,6 +2,7 @@ import { DragEvent, useEffect, useRef, useState } from 'react';
 import { unavailableReason } from '../../lib/agentAvailability';
 import { agentStatus } from '../../lib/agentStatus';
 import { isAgentDrag, readAgentDrag, startAgentDrag } from '../../lib/dnd';
+import { openTerminalWindow } from '../../lib/windowSync';
 import { ChevronDownIcon, ChevronUpIcon, PlusIcon } from '../../components/icons';
 import { useMockStore } from '../../store/MockStore';
 import { SEED_ROLES } from '../../store/seed';
@@ -208,6 +209,10 @@ export default function AgentList({
             const target = menu.agent;
             setMenu(null);
             setAgentPlaced(target.id, !target.placed);
+          }}
+          onTerminal={() => {
+            openTerminalWindow(menu.agent.id);
+            setMenu(null);
           }}
           onDelete={() => {
             const target = menu.agent;

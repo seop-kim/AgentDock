@@ -40,8 +40,8 @@ const TEAM_SUMMARY: Record<string, string> = {
 
 const DEFAULT_SUMMARY = '맡은 범위를 확인하고 정리했습니다.';
 
-/** 팀별로 나올 법한 변경 파일(모의). Handoff 의 changedFiles 자리에 넣는다. */
-const TEAM_FILES: Record<string, string[]> = {
+/** 팀별로 나올 법한 변경 파일(모의). Handoff 의 changedFiles 로 쓴다. 터미널 화면도 이 목록을 쓴다. */
+export const TEAM_FILES: Record<string, string[]> = {
   'Backend Team': ['src/main/java/com/shop/api/InventoryService.java'],
   'Frontend Team': ['src/components/InventoryTable.tsx'],
   'QA Team': ['src/test/java/com/shop/api/InventoryServiceTest.java'],

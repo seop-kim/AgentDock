@@ -16,6 +16,7 @@ export default function AgentNodeMenu({
   onSetLeader,
   onRemoveFromGroup,
   onRemoveFromCanvas,
+  onTerminal,
 }: {
   /** "⋮" 버튼의 화면 좌표 */
   anchor: DOMRect;
@@ -26,6 +27,8 @@ export default function AgentNodeMenu({
   onSetLeader: () => void;
   onRemoveFromGroup: () => void;
   onRemoveFromCanvas: () => void;
+  /** 이 에이전트가 돌리는 터미널(실행 출력) 창을 연다 */
+  onTerminal: () => void;
 }) {
   useEffect(() => {
     const onPointerDown = (e: PointerEvent) => {
@@ -53,6 +56,9 @@ export default function AgentNodeMenu({
       role="menu"
       style={{ '--top': `${anchor.bottom + 4}px`, '--left': `${left}px` } as React.CSSProperties}
     >
+      <button type="button" role="menuitem" className={menu.item} onClick={onTerminal}>
+        터미널 보기
+      </button>
       {inGroup && !isLeader && (
         <button type="button" role="menuitem" className={menu.item} onClick={onSetLeader}>
           리더로 지정

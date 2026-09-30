@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import ProjectDetail from './pages/Projects/ProjectDetail';
 import Projects from './pages/Projects/Projects';
 import RealityCheck from './pages/RealityCheck';
+import TerminalWindow from './pages/TerminalWindow';
 import AgentConnectionSettings from './pages/Settings/AgentConnectionSettings';
 import Settings from './pages/Settings/Settings';
 import ThemeSettings from './pages/Settings/ThemeSettings';
@@ -25,6 +26,8 @@ function Layout() {
 export default function App() {
   return (
     <Routes>
+      {/* 터미널 창은 새 창으로 뜨므로 사이드바·레이아웃 없이 그린다 */}
+      <Route path="/terminal/:agentId" element={<TerminalWindow />} />
       <Route element={<Layout />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/projects" element={<Projects />} />

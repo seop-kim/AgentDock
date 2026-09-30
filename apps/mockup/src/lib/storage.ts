@@ -6,6 +6,8 @@ export const STORAGE_KEYS = {
   /** index.html 의 초기 적용 스크립트도 같은 키를 쓴다. */
   theme: 'agentdock-mockup-theme',
   sidebarExpanded: 'agentdock-mockup-sidebar-expanded',
+  /** 터미널을 새 창으로 띄울 때 창끼리 상태를 넘기는 값(데이터가 아니라 "넘겨주기"용이다). */
+  terminalSnapshot: 'agentdock-mockup-terminal-snapshot',
 } as const;
 
 export function readStorage(key: string): string | null {
