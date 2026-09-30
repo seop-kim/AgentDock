@@ -11,6 +11,7 @@ const MENU_WIDTH = 168;
 export default function AgentCardMenu({
   anchor,
   placed,
+  isMaster,
   onEdit,
   onTogglePlaced,
   onDelete,
@@ -20,6 +21,8 @@ export default function AgentCardMenu({
   anchor: DOMRect;
   /** 구성도에 놓여 있는지(메뉴 문구가 바뀐다) */
   placed: boolean;
+  /** 프로젝트 마스터면 구성도에서 빼기·삭제를 숨긴다(최상위 리더라 빠질 수 없다) */
+  isMaster: boolean;
   onEdit: () => void;
   /** 구성도에서 빼기 / 구성도에 놓기 */
   onTogglePlaced: () => void;
@@ -55,12 +58,16 @@ export default function AgentCardMenu({
       <button type="button" role="menuitem" className={menu.item} onClick={onEdit}>
         상세 설정
       </button>
-      <button type="button" role="menuitem" className={menu.item} onClick={onTogglePlaced}>
-        {placed ? '구성도에서 빼기' : '구성도에 놓기'}
-      </button>
-      <button type="button" role="menuitem" className={`${menu.item} ${menu.danger}`} onClick={onDelete}>
-        삭제
-      </button>
+      {!isMaster && (
+        <button type="button" role="menuitem" className={menu.item} onClick={onTogglePlaced}>
+          {placed ? '구성도에서 빼기' : '구성도에 놓기'}
+        </button>
+      )}
+      {!isMaster && (
+        <button type="button" role="menuitem" className={`${menu.item} ${menu.danger}`} onClick={onDelete}>
+          삭제
+        </button>
+      )}
     </div>,
     document.body,
   );

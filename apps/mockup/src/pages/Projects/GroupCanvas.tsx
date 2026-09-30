@@ -288,18 +288,21 @@ export default function GroupCanvas({
                 {agent.id === project.masterAgentId && <span className={styles.masterTag}>마스터</span>}
                 {reason && <span className={styles.warnDot} aria-label={reason} />}
                 {isSelected && <span className={styles.selectedTag}>선택됨</span>}
-                <button
-                  type="button"
-                  className={styles.nodeMenuButton}
-                  aria-label={`${agent.name} 메뉴`}
-                  aria-haspopup="menu"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setNodeMenu({ node, agent, rect: e.currentTarget.getBoundingClientRect() });
-                  }}
-                >
-                  ⋮
-                </button>
+                {/* 마스터는 그룹에 속하지 않고 구성도에서 뺄 수도 없어 노드에 할 동작이 없다 */}
+                {agent.id !== project.masterAgentId && (
+                  <button
+                    type="button"
+                    className={styles.nodeMenuButton}
+                    aria-label={`${agent.name} 메뉴`}
+                    aria-haspopup="menu"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setNodeMenu({ node, agent, rect: e.currentTarget.getBoundingClientRect() });
+                    }}
+                  >
+                    ⋮
+                  </button>
+                )}
               </div>
             );
           })}

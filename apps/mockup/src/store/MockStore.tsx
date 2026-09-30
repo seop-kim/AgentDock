@@ -191,22 +191,30 @@ function reducer(state: MockState, action: Action): MockState {
         ...state,
         agents: state.agents.map((a) => (a.id === action.id ? { ...a, ...action.input } : a)),
       };
-    case 'agent/delete':
+    case 'agent/delete': {
+      // 마스터는 지울 수 없다(먼저 설정에서 다른 에이전트로 마스터를 바꿔야 한다).
+      if (state.projects.some((p) => p.masterAgentId === action.id)) {
+        return state;
+      }
       // 에이전트가 사라지면 모든 그룹에서도 빠지고, 리더였다면 남은 첫 멤버가 이어받는다. 이미 만든 Task 는 남긴다.
-      // 마스터를 지우면 그 프로젝트는 마스터 미지정이 된다(화면에서 다시 지정하라고 알린다).
       return {
         ...state,
         agents: state.agents.filter((a) => a.id !== action.id),
         groups: withoutMember(state.groups, action.id),
-        projects: state.projects.map((p) => (p.masterAgentId === action.id ? { ...p, masterAgentId: null } : p)),
       };
-    case 'agent/setPlaced':
+    }
+    case 'agent/setPlaced': {
+      // 마스터는 최상위 리더라 구성도에서 뺄 수 없다(항상 놓여 있다).
+      if (!action.placed && state.projects.some((p) => p.masterAgentId === action.id)) {
+        return state;
+      }
       // 구성도에서 빼면 그룹에서도 빠진다(다시 놓으면 그룹 없이 노드만 놓인다).
       return {
         ...state,
         agents: state.agents.map((a) => (a.id === action.id ? { ...a, placed: action.placed } : a)),
         groups: action.placed ? state.groups : withoutMember(state.groups, action.id),
       };
+    }
     case 'group/create':
       return {
         ...state,
@@ -290,8 +298,9 @@ interface MockStore {
   removeWorkspace: (projectId: number, workspaceId: number) => void;
   createAgent: (input: NewAgentInput) => void;
   updateAgent: (id: number, input: AgentUpdateInput) => void;
+  /** 마스터는 지울 수 없다(설정에서 다른 에이전트로 먼저 변경). */
   deleteAgent: (id: number) => void;
-  /** 구성도에 놓기/빼기. 빼면 그룹에서도 빠지고 에이전트 목록에만 남는다. */
+  /** 구성도에 놓기/빼기. 빼면 그룹에서도 빠지고 에이전트 목록에만 남는다. 마스터는 뺄 수 없다. */
   setAgentPlaced: (id: number, placed: boolean) => void;
   createGroup: (projectId: number, name: string) => void;
   deleteGroup: (id: number) => void;

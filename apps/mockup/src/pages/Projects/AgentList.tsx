@@ -159,6 +159,7 @@ export default function AgentList({
         <AgentCardMenu
           anchor={menu.rect}
           placed={menu.agent.placed}
+          isMaster={project.masterAgentId === menu.agent.id}
           onClose={() => setMenu(null)}
           onEdit={() => {
             setEditing(menu.agent);
