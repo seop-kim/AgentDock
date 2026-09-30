@@ -79,6 +79,26 @@ export const FileIcon = ({ size = 20 }: { size?: number }) => (
   </Icon>
 );
 
+/** 크게 보기(네 귀퉁이로 벌어지는 화살표) */
+export const ExpandIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
+    <path d="M4 9V4h5" />
+    <path d="M20 9V4h-5" />
+    <path d="M4 15v5h5" />
+    <path d="M20 15v5h-5" />
+  </Icon>
+);
+
+/** 원래 크기로(안쪽으로 모이는 화살표) */
+export const CollapseIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
+    <path d="M9 4v5H4" />
+    <path d="M15 4v5h5" />
+    <path d="M9 20v-5H4" />
+    <path d="M15 20v-5h5" />
+  </Icon>
+);
+
 export const ChevronDownIcon = () => (
   <Icon>
     <path d="M6 9l6 6 6-6" />

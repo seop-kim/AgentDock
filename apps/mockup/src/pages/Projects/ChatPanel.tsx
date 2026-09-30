@@ -1,5 +1,5 @@
 import { DragEvent, FormEvent, useEffect, useRef, useState } from 'react';
-import { ChevronDownIcon, ClipIcon, FileIcon } from '../../components/icons';
+import { ChevronDownIcon, ClipIcon, CollapseIcon, ExpandIcon, FileIcon } from '../../components/icons';
 import { unavailableReason } from '../../lib/agentAvailability';
 import { ATTACHMENT_FOLDER, attachmentPath, hasAttachment, storedName } from '../../lib/attachments';
 import { useMockStore } from '../../store/MockStore';
@@ -27,6 +27,8 @@ export default function ChatPanel({
   onTargetChange,
   open,
   onToggle,
+  wide,
+  onToggleWide,
   onOpenExecutions,
 }: {
   project: Project;
@@ -35,6 +37,9 @@ export default function ChatPanel({
   /** 패널을 펼쳐 두었는지(접으면 머리말만 남는다). */
   open: boolean;
   onToggle: () => void;
+  /** 크게 보기(일시적으로 구성도를 덮고 넓게 쓴다). */
+  wide: boolean;
+  onToggleWide: () => void;
   /** 응답에 딸린 실행 트리를 연다. */
   onOpenExecutions: (rootExecutionId: number) => void;
 }) {
@@ -123,7 +128,9 @@ export default function ChatPanel({
 
   return (
     <section
-      className={`${styles.chat} ${dragging ? styles.dropTarget : ''} ${open ? '' : styles.collapsed}`}
+      className={`${styles.chat} ${wide ? styles.wide : ''} ${open ? '' : styles.collapsed} ${
+        dragging ? styles.dropTarget : ''
+      }`}
       aria-label="에이전트 명령"
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
@@ -132,6 +139,17 @@ export default function ChatPanel({
       <div className={styles.header}>
         <h2 className={styles.title}>명령</h2>
         {!open && messages.length > 0 && <span className={styles.count}>기록 {messages.length}</span>}
+        {open && (
+          <button
+            type="button"
+            className={styles.fold}
+            onClick={onToggleWide}
+            aria-label={wide ? '원래 크기로' : '크게 보기'}
+            title={wide ? '원래 크기로' : '크게 보기'}
+          >
+            {wide ? <CollapseIcon size={16} /> : <ExpandIcon size={16} />}
+          </button>
+        )}
         <button
           type="button"
           className={styles.fold}

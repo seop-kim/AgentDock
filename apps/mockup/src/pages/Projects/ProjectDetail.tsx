@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { CSSProperties, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { SettingsIcon } from '../../components/icons';
 import { useMockStore } from '../../store/MockStore';
@@ -38,6 +38,8 @@ export default function ProjectDetail() {
   const [chatTarget, setChatTarget] = useState<ChatTarget | null>(null);
   /** 오른쪽 명령 패널을 펼쳐 두었는지(기본 열림). 접으면 머리말만 남는다. */
   const [chatOpen, setChatOpen] = useState(true);
+  /** 명령 패널을 크게 보는 중인지(일시적으로 구성도를 덮는다). */
+  const [chatWide, setChatWide] = useState(false);
   // 선택된 에이전트: 왼쪽 카드와 구성도 노드가 함께 강조된다. focusSeq 가 오를 때마다 구성도가 그쪽으로 이동한다.
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
   const [focusSeq, setFocusSeq] = useState(0);
@@ -102,7 +104,7 @@ export default function ProjectDetail() {
   const chatInset = chatOpen ? CHAT_PANEL_INSET : NO_PANEL_INSET;
 
   return (
-    <div className={styles.stage}>
+    <div className={styles.stage} style={{ '--left-inset': `${panelInset}px` } as CSSProperties}>
       <GroupCanvas
         project={project}
         insetLeft={panelInset}
@@ -175,7 +177,13 @@ export default function ProjectDetail() {
         target={chatTarget}
         onTargetChange={setChatTarget}
         open={chatOpen}
-        onToggle={() => setChatOpen((prev) => !prev)}
+        // 접으면 크게 보기도 함께 푼다(넓고 얇은 띠가 남지 않게).
+        onToggle={() => {
+          setChatOpen((prev) => !prev);
+          setChatWide(false);
+        }}
+        wide={chatWide}
+        onToggleWide={() => setChatWide((prev) => !prev)}
         onOpenExecutions={setExecutionTreeRoot}
       />
 

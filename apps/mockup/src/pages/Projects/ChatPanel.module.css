@@ -19,6 +19,17 @@
   bottom: auto;
 }
 
+/* 크게 보기: 왼쪽 패널 옆부터 창 오른쪽까지 차지해 구성도를 덮는다(일시적). */
+.wide {
+  left: calc(var(--left-inset, 352px) + var(--spacing-md));
+  width: auto;
+}
+
+/* 넓어져도 말풍선이 너무 길어지지 않게 한다. */
+.wide .message {
+  max-width: 720px;
+}
+
 .header {
   display: flex;
   align-items: center;
