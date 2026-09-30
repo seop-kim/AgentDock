@@ -1,6 +1,7 @@
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { DragEvent, FormEvent, useEffect, useRef, useState } from 'react';
 import { ClipIcon, FileIcon } from '../../components/icons';
 import { unavailableReason } from '../../lib/agentAvailability';
+import { ATTACHMENT_FOLDER, attachmentPath, hasAttachment } from '../../lib/attachments';
 import { fileName } from '../../lib/executionSim';
 import { useMockStore } from '../../store/MockStore';
 import attach from '../../styles/attachment.module.css';
@@ -40,11 +41,13 @@ export default function ChatPanel({
   /** 응답에 딸린 실행 트리를 연다. */
   onOpenExecutions: (rootExecutionId: number) => void;
 }) {
-  const { agents, groups, providers, chats, executions, sendCommand } = useMockStore();
+  const { agents, groups, providers, chats, executions, sendCommand, addWorkspaceFile } = useMockStore();
   const [text, setText] = useState('');
   /** 이번 명령에 붙일 파일(보내면 비운다). */
   const [attachments, setAttachments] = useState<AttachedFile[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
+  /** 파일을 끌어오는 중인지(놓을 곳을 보여 준다). */
+  const [dragging, setDragging] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
 
   const projectAgents = agents.filter((a) => a.projectId === project.id);
@@ -74,6 +77,38 @@ export default function ChatPanel({
     return reason ? `리더 ${leader.name}: ${reason}` : `리더 ${leader.name} 이(가) 받습니다.`;
   })();
 
+  /** 끌어온 파일을 복사해 둘 워크스페이스(기본 워크스페이스, 없으면 첫 번째). */
+  const defaultWorkspaceId =
+    project.workspaces.find((w) => w.isDefault)?.workspaceId ?? project.workspaces[0]?.workspaceId ?? null;
+
+  /**
+   * 창 밖에서 끌어온 파일을 붙인다. 에이전트는 워크스페이스 폴더 밖을 볼 수 없으므로
+   * 프로젝트 안 폴더(`ATTACHMENT_FOLDER`)로 **복사한 것으로 치고**, 그 사본 경로를 첨부로 단다.
+   */
+  const onDrop = (e: DragEvent<HTMLElement>) => {
+    e.preventDefault();
+    setDragging(false);
+    if (defaultWorkspaceId === null) return;
+    const dropped = Array.from(e.dataTransfer.files);
+    if (dropped.length === 0) return;
+    const copies = dropped.map((file) => {
+      addWorkspaceFile(defaultWorkspaceId, file.name);
+      return { workspaceId: defaultWorkspaceId, path: attachmentPath(file.name) };
+    });
+    setAttachments((prev) => [...prev, ...copies.filter((copy) => !hasAttachment(prev, copy))]);
+  };
+
+  const onDragOver = (e: DragEvent<HTMLElement>) => {
+    e.preventDefault();
+    setDragging(true);
+  };
+
+  const onDragLeave = (e: DragEvent<HTMLElement>) => {
+    // 자식 요소로 옮겨 다닐 때도 dragleave 가 오므로, 창 밖으로 나갈 때만 끈다.
+    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+    setDragging(false);
+  };
+
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!target) return;
@@ -87,7 +122,13 @@ export default function ChatPanel({
   };
 
   return (
-    <section className={styles.chat} aria-label="에이전트 명령">
+    <section
+      className={`${styles.chat} ${dragging ? styles.dropTarget : ''}`}
+      aria-label="에이전트 명령"
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
       <div className={styles.header}>
         <h2 className={styles.title}>명령</h2>
         <select
@@ -175,6 +216,18 @@ export default function ChatPanel({
         </ul>
       )}
 
+      {dragging && (
+        <p className={styles.dropHint}>
+          {defaultWorkspaceId === null ? (
+            '워크스페이스가 없어 파일을 붙일 수 없습니다.'
+          ) : (
+            <>
+              여기에 놓으면 프로젝트 폴더(<code>{ATTACHMENT_FOLDER}</code>)로 복사해 붙입니다.
+            </>
+          )}
+        </p>
+      )}
+
       <form onSubmit={onSubmit} className={styles.form}>
         <button
           type="button"
@@ -182,7 +235,11 @@ export default function ChatPanel({
           onClick={() => setPickerOpen(true)}
           disabled={project.workspaces.length === 0}
           aria-label="파일 첨부"
-          title={project.workspaces.length === 0 ? '워크스페이스가 없어 파일을 붙일 수 없습니다' : '파일 첨부'}
+          title={
+            project.workspaces.length === 0
+              ? '워크스페이스가 없어 파일을 붙일 수 없습니다'
+              : '파일 첨부 (창에 끌어다 놓아도 됩니다)'
+          }
         >
           <ClipIcon size={18} />
         </button>

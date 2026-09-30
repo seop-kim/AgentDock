@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FileIcon } from '../../components/icons';
+import { ATTACHMENT_FOLDER } from '../../lib/attachments';
 import { fileName } from '../../lib/executionSim';
 import { useMockStore } from '../../store/MockStore';
-import { SEED_FILES } from '../../store/seed';
 import attach from '../../styles/attachment.module.css';
 import modal from '../../styles/modal.module.css';
 import shared from '../../styles/shared.module.css';
@@ -24,13 +24,13 @@ export default function AttachFilesModal({
   onClose: () => void;
   onApply: (files: AttachedFile[]) => void;
 }) {
-  const { workspaces } = useMockStore();
+  const { workspaces, workspaceFiles } = useMockStore();
   const initialWorkspaceId = project.workspaces.find((w) => w.isDefault)?.workspaceId ?? project.workspaces[0]?.workspaceId ?? 0;
   const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId);
   const [picked, setPicked] = useState<AttachedFile[]>(attached);
 
   const workspace = workspaces.find((w) => w.id === workspaceId);
-  const files = SEED_FILES[workspaceId] ?? [];
+  const files = workspaceFiles[workspaceId] ?? [];
   const folders = groupByFolder(files);
 
   const isPicked = (path: string) => picked.some((file) => file.workspaceId === workspaceId && file.path === path);
@@ -47,8 +47,9 @@ export default function AttachFilesModal({
         <div>
           <h2>파일 첨부</h2>
           <p className={shared.hint}>
-            워크스페이스 폴더 안의 파일만 붙일 수 있습니다. 붙인 파일은 <strong>라우팅(경로·확장자)</strong>과 실행 지시에 함께
-            쓰입니다.
+            프로젝트 워크스페이스 폴더 안의 파일 목록입니다. 여기 없는 파일은 <strong>채팅 창에 끌어다 놓으면</strong>{' '}
+            <code>{ATTACHMENT_FOLDER}</code> 로 복사되어 붙습니다. 붙인 파일은 <strong>라우팅(경로·확장자)</strong>과 실행
+            지시에 함께 쓰입니다.
           </p>
         </div>
 

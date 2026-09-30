@@ -129,3 +129,18 @@
   background: var(--color-code-bg);
   color: var(--color-text);
 }
+
+/* 파일을 끌어오는 동안: 놓을 곳을 보여 준다(테두리는 글래스가 정하므로 outline 을 쓴다) */
+.dropTarget {
+  outline: 2px dashed var(--color-primary);
+  outline-offset: 2px;
+}
+
+.dropHint {
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px dashed var(--color-primary);
+  border-radius: var(--radius);
+  color: var(--color-primary);
+  font-size: 12px;
+}

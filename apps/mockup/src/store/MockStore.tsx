@@ -1,5 +1,6 @@
 import { createContext, ReactNode, useContext, useMemo, useReducer, useRef } from 'react';
 import { unavailableReason } from '../lib/agentAvailability';
+import { attachmentPath } from '../lib/attachments';
 import { buildExecutionPlan } from '../lib/executionSim';
 import { formatCost, formatDuration } from '../lib/executions';
 import type {
@@ -20,6 +21,7 @@ import {
   DEFAULT_PROVIDER_NAMES,
   SEED_AGENTS,
   SEED_EXECUTIONS,
+  SEED_FILES,
   SEED_GROUPS,
   SEED_PROJECTS,
   SEED_PROVIDERS,
@@ -31,6 +33,8 @@ import {
 interface MockState {
   providers: AiProvider[];
   workspaces: Workspace[];
+  /** 워크스페이스 폴더 안의 파일 목록(모의). 밖에서 끌어온 파일은 `.agentdock/attachments` 로 복사해 여기 더한다. */
+  workspaceFiles: Record<number, string[]>;
   projects: Project[];
   agents: Agent[];
   groups: AgentGroup[];
@@ -78,11 +82,13 @@ type Action =
   | { type: 'chat/system'; message: ChatMessage }
   | { type: 'chat/send'; user: ChatMessage; pending: ChatMessage; tasks: Task[]; executions: Execution[] }
   | { type: 'chat/reply'; messageId: number; taskIds: number[]; text: string }
-  | { type: 'execution/patch'; id: number; patch: Partial<Execution> };
+  | { type: 'execution/patch'; id: number; patch: Partial<Execution> }
+  | { type: 'file/add'; workspaceId: number; name: string };
 
 const initialState: MockState = {
   providers: SEED_PROVIDERS,
   workspaces: SEED_WORKSPACES,
+  workspaceFiles: SEED_FILES,
   projects: SEED_PROJECTS,
   agents: SEED_AGENTS,
   groups: SEED_GROUPS,
@@ -322,6 +328,13 @@ function reducer(state: MockState, action: Action): MockState {
         ...state,
         executions: state.executions.map((e) => (e.id === action.id ? { ...e, ...action.patch } : e)),
       };
+    case 'file/add': {
+      // 밖에서 끌어온 파일을 프로젝트 폴더로 복사한 것으로 친다(같은 이름이면 덮어쓴 것으로 보고 한 번만 둔다).
+      const path = attachmentPath(action.name);
+      const files = state.workspaceFiles[action.workspaceId] ?? [];
+      if (files.includes(path)) return state;
+      return { ...state, workspaceFiles: { ...state.workspaceFiles, [action.workspaceId]: [...files, path] } };
+    }
     case 'chat/reply':
       // 응답이 오면 대기 중이던 에이전트 메시지를 완료로 바꾸고, 이번 명령으로 만든 Task 를 모두 끝낸다.
       return {
@@ -343,6 +356,10 @@ interface MockStore {
   addProvider: (key: string, name: string) => void;
   updateCapabilities: (id: number, capabilities: Capabilities) => void;
   workspaces: Workspace[];
+  /** 워크스페이스 폴더 안의 파일 목록(모의). 첨부 창에서 고르는 목록이기도 하다. */
+  workspaceFiles: Record<number, string[]>;
+  /** 밖에서 끌어온 파일을 프로젝트 폴더(`.agentdock/attachments`)로 복사한 것으로 친다. */
+  addWorkspaceFile: (workspaceId: number, name: string) => void;
   projects: Project[];
   agents: Agent[];
   groups: AgentGroup[];
@@ -551,6 +568,8 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       addProvider: (key, name) => dispatch({ type: 'provider/add', key, name }),
       updateCapabilities: (id, capabilities) => dispatch({ type: 'provider/capabilities', id, capabilities }),
       workspaces: state.workspaces,
+      workspaceFiles: state.workspaceFiles,
+      addWorkspaceFile: (workspaceId, name) => dispatch({ type: 'file/add', workspaceId, name }),
       projects: state.projects,
       agents: state.agents,
       groups: state.groups,
