@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AiProvider, api } from '../lib/api';
-import CommandPanel, { CommandKind } from './CommandPanel';
+import CliPanel from './CliPanel';
 import styles from './Providers.module.css';
 
 interface ProviderCardProps {
@@ -20,7 +20,7 @@ const parseSteps = (text: string) =>
   text.split('\n').map((line) => line.trim()).filter((line) => line !== '' && !line.startsWith('#'));
 
 export default function ProviderCard({ provider, onChanged, onError }: ProviderCardProps) {
-  const [panel, setPanel] = useState<CommandKind | null>(null);
+  const [cliOpen, setCliOpen] = useState(false);
   const [capabilitiesOpen, setCapabilitiesOpen] = useState(false);
   const [modelsText, setModelsText] = useState('');
   const [modesText, setModesText] = useState('');
@@ -94,25 +94,19 @@ export default function ProviderCard({ provider, onChanged, onError }: ProviderC
 
       <div className={styles.actions}>
         <button onClick={onToggleEnabled}>{provider.enabled ? '끄기' : '켜기'}</button>
-        <button onClick={() => setPanel('install')} disabled={panel !== null || installSteps.length === 0}>
-          CLI 설치
-        </button>
-        <button onClick={() => setPanel('login')} disabled={panel !== null}>
-          로그인
-        </button>
+        <button onClick={() => setCliOpen(true)}>CLI 확인</button>
       </div>
       {installSteps.length === 0 && (
         <p className={styles.checkedAt}>
-          설치 명령이 비어 있습니다("모델/모드/설치 편집"에서 입력하면 CLI 설치 버튼이 켜집니다).
+          설치 명령이 비어 있습니다("모델/모드/설치 편집"에서 입력하면 CLI 확인 창의 설치 버튼이 켜집니다).
         </p>
       )}
-      {panel && (
-        <CommandPanel
+      {cliOpen && (
+        <CliPanel
           providerId={provider.id}
-          kind={panel}
-          commands={installSteps}
-          onClose={() => setPanel(null)}
-          onExit={() => {}}
+          providerName={provider.name}
+          installCommands={installSteps}
+          onClose={() => setCliOpen(false)}
         />
       )}
 

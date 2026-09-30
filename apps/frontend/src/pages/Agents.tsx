@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Agent, AgentRole, AiProvider, PermissionProfile, Project, api } from '../lib/api';
 import AgentProviderAssign from './AgentProviderAssign';
+import CliPanel from './CliPanel';
 import RunAgentModal from './RunAgentModal';
 import styles from './Agents.module.css';
 
@@ -31,6 +32,12 @@ export default function Agents() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [runTarget, setRunTarget] = useState<Agent | null>(null);
+  const [cliTarget, setCliTarget] = useState<{
+    providerId: number;
+    providerName: string;
+    install: string[];
+    workspaceId?: number;
+  } | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
 
   const loadAll = () => {
@@ -49,6 +56,9 @@ export default function Agents() {
   const selectedProvider = enabledProviders.find((p) => String(p.id) === form.providerId) ?? null;
   const modelOptions = selectedProvider?.capabilities?.models ?? [];
   const modeOptions = selectedProvider?.capabilities?.modes ?? [];
+
+  const defaultWorkspaceId = (projectId: number) =>
+    projects.find((p) => p.id === projectId)?.workspaces.find((w) => w.isDefault)?.workspaceId;
 
   const quickCreateRole = async () => {
     const name = window.prompt('Role 이름 (예: Backend Developer)');
@@ -245,11 +255,34 @@ export default function Agents() {
                 >
                   Run
                 </button>
+                <button
+                  onClick={() =>
+                    setCliTarget({
+                      providerId: a.providerId,
+                      providerName: a.provider.name,
+                      install: a.provider.capabilities?.install ?? [],
+                      workspaceId: defaultWorkspaceId(a.projectId),
+                    })
+                  }
+                >
+                  CLI 확인
+                </button>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+
+      {cliTarget && (
+        <CliPanel
+          providerId={cliTarget.providerId}
+          providerName={cliTarget.providerName}
+          workspaceId={cliTarget.workspaceId}
+          installCommands={cliTarget.install}
+          onClose={() => setCliTarget(null)}
+          onChecked={loadAll}
+        />
+      )}
 
       {runTarget && (
         <RunAgentModal

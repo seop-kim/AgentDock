@@ -47,6 +47,14 @@ export interface AiProvider {
   enabled: boolean;
 }
 
+/** 런타임 CLI 실행 파일 상태(폴더와 무관한 런타임 전역). */
+export interface CliStatus {
+  resolvedPath: string | null;
+  version: string | null;
+  runnable: boolean;
+  detail: string | null;
+}
+
 /** 워크스페이스(폴더)에서의 런타임 상태. */
 export interface WorkspaceRuntime {
   providerId: number;
@@ -163,6 +171,7 @@ export const api = {
     request<AiProvider>(`/ai-providers/${id}/enabled`, { method: 'PUT', body: JSON.stringify({ enabled }) }),
   updateProviderCapabilities: (id: number, data: ProviderCapabilities) =>
     request<AiProvider>(`/ai-providers/${id}/capabilities`, { method: 'PUT', body: JSON.stringify(data) }),
+  getProviderCli: (providerId: number) => request<CliStatus>(`/ai-providers/${providerId}/cli`),
   startLogin: (providerId: number) =>
     request<{ sessionId: string }>(`/ai-providers/${providerId}/login`, { method: 'POST' }),
   startInstall: (providerId: number) =>
