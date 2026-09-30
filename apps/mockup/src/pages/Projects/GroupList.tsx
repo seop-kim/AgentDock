@@ -58,7 +58,8 @@ export default function GroupList({
 
   return (
     <aside className={`${styles.panel} ${open ? '' : styles.panelCollapsed}`}>
-      {/* 상자 위 테두리에 붙는 접기/펴기 탭 */}
+      <div className={styles.list}>
+      {/* 상자 안 상단 중앙의 얇은 화살표 손잡이 */}
       <button
         type="button"
         className={styles.tab}
@@ -70,7 +71,6 @@ export default function GroupList({
         {open ? <ChevronUpIcon /> : <ChevronDownIcon />}
       </button>
 
-      <div className={styles.list}>
       <div
         className={styles.header}
         role="button"

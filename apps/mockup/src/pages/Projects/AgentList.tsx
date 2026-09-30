@@ -86,7 +86,8 @@ export default function AgentList({
       onDragLeave={() => setDropActive(false)}
       onDrop={onDrop}
     >
-      {/* 상자 위 테두리에 붙는 접기/펴기 탭 */}
+      <div className={`${styles.list} ${dropActive ? styles.dropActive : ''}`}>
+      {/* 상자 안 상단 중앙의 얇은 화살표 손잡이 */}
       <button
         type="button"
         className={styles.tab}
@@ -98,7 +99,6 @@ export default function AgentList({
         {open ? <ChevronUpIcon /> : <ChevronDownIcon />}
       </button>
 
-      <div className={`${styles.list} ${dropActive ? styles.dropActive : ''}`}>
       <div
         className={styles.header}
         role="button"

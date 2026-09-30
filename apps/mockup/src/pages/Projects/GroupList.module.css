@@ -1,10 +1,10 @@
-/* 패널 한 벌: 상자 위 테두리에 붙는 손잡이 + 상자. 접으면 손잡이와 머리말만 남는다. */
+/* 패널 한 벌: 상자 + 상자 안 상단 화살표 손잡이. 접으면 손잡이와 머리말만 남는다. */
 .panel {
   display: flex;
   flex-direction: column;
   flex: 1 1 0;
-  /* 손잡이(16) + 머리말 + 상자 위아래 여백: 접었을 때 이만큼만 남는다 */
-  min-height: 82px;
+  /* 손잡이 영역(22) + 머리말 + 상자 위아래 여백: 접었을 때 이만큼만 남는다 */
+  min-height: 88px;
   overflow: hidden;
   transition: flex-grow 0.22s ease;
 }
@@ -13,36 +13,28 @@
   flex-grow: 0;
 }
 
-/* 상자 위 테두리에 붙는 접기/펴기 손잡이.
-   위쪽 두 모서리를 큰 타원으로 깎아 **가운데(화살표)가 가장 높은 산능선** 모양이 된다:
-   양 끝에서 0 으로 시작해 가운데로 갈수록 높아졌다가 지나면 다시 낮아진다. */
+/* 상자 **안** 상단 중앙에 놓는 얇은 화살표 손잡이(⌃ 펼침 / ⌄ 접힘). 누르면 접히고 펴진다. */
 .tab {
   align-self: center;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 160px;
-  height: 16px;
-  margin-bottom: -1px;
-  padding: 0;
-  border: 1px solid var(--glass-border);
-  border-bottom: none;
-  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  backdrop-filter: blur(var(--glass-blur));
+  /* 얇은 화살표지만 누를 수 있는 넓이는 남긴다(머리말 줄도 같은 동작) */
+  padding: 2px 16px;
+  border: none;
+  background: transparent;
   color: var(--color-muted);
+  line-height: 0;
   cursor: pointer;
 }
 
 .tab:hover {
-  background: var(--glass-bg-strong);
   color: var(--color-text);
 }
 
 .tab svg {
-  width: 12px;
-  height: 12px;
+  width: 18px;
+  height: 18px;
 }
 
 .list {
