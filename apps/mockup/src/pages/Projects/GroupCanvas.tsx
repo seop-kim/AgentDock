@@ -11,7 +11,7 @@ import {
 } from 'react';
 import { unavailableReason } from '../../lib/agentAvailability';
 import { layoutCanvas, NODE_H, NODE_W, type CanvasNode } from '../../lib/canvasLayout';
-import { isAgentDrag } from '../../lib/dnd';
+import { isAgentDrag, readAgentDrag } from '../../lib/dnd';
 import { useGroupDrop } from '../../lib/useGroupDrop';
 import { useMockStore } from '../../store/MockStore';
 import { SEED_ROLES } from '../../store/seed';
@@ -238,7 +238,32 @@ export default function GroupCanvas({
 
   const onDropOnGroup = (e: DragEvent, groupId: number) => {
     setOverKey(null);
+    // 캔버스 전체 드롭(자유 배치)으로 번지지 않게 한다.
+    e.stopPropagation();
     dropOnGroup(e, groupId);
+  };
+
+  /** 캔버스로 끌어 온 에이전트를 그 자리에 놓는다(미배치는 배치되고, 그룹에 있던 것은 그룹에서 빠진다). */
+  const onCanvasDragOver = (e: DragEvent) => {
+    if (!isAgentDrag(e)) return;
+    e.preventDefault();
+  };
+
+  const onCanvasDrop = (e: DragEvent) => {
+    if (!isAgentDrag(e)) return;
+    e.preventDefault();
+    const payload = readAgentDrag(e);
+    if (!payload) return;
+    // 그룹 상자 위에 놓인 경우는 상자가 먼저 처리하고 전파를 막는다.
+    if (project.masterAgentId !== payload.agentId) {
+      groups
+        .filter((g) => g.memberIds.includes(payload.agentId))
+        .forEach((g) => removeGroupMember(g.id, payload.agentId));
+    }
+    const world = worldAt(e.clientX, e.clientY, view);
+    setAgentPlaced(payload.agentId, true);
+    setAgentPosition(payload.agentId, world.x - NODE_W / 2, world.y - NODE_H / 2);
+    touchedRef.current = true;
   };
 
   const onDeleteGroup = (id: number, groupName: string) => {
@@ -367,6 +392,8 @@ export default function GroupCanvas({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
+        onDragOver={onCanvasDragOver}
+        onDrop={onCanvasDrop}
       >
         <div className={`${styles.world} ${smooth ? styles.worldSmooth : ''}`}>
           {layout.boxes.map((box) => {
