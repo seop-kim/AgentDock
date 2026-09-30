@@ -75,11 +75,6 @@
   transition: border-color 0.12s ease, background 0.12s ease;
 }
 
-.boxUngrouped {
-  border-style: dashed;
-  background: transparent;
-}
-
 /* 에이전트를 끌어 왔을 때 놓을 수 있음을 알린다 */
 .boxOver {
   border-color: var(--color-primary);

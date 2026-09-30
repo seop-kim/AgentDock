@@ -37,8 +37,8 @@ const vars = (values: Record<string, string | number>) => values as unknown as C
 
 /**
  * 프로젝트의 에이전트와 그룹을 보여 주는 캔버스. 그룹은 상자, 에이전트는 노드로 그리고 리더에서 멤버로 선을 잇는다.
- * 그룹에 속하지 않은 에이전트는 "그룹 없음" 영역에 놓인다. 배경을 끌어 이동하고 휠로 확대/축소한다.
- * 에이전트 노드를 그룹 상자로 끌어 놓으면 멤버가 되고, "그룹 없음" 영역이나 왼쪽 목록으로 끌면 그룹에서 빠진다.
+ * 그룹에 속하지 않은 에이전트는 상자 없이 노드만 놓인다. 배경을 끌어 이동하고 휠로 확대/축소한다.
+ * 에이전트 노드를 그룹 상자로 끌어 놓으면 멤버가 되고, 왼쪽 목록으로 끌면 그룹에서 빠진다.
  */
 export default function GroupCanvas({ project, onNotice }: { project: Project; onNotice: (message: string) => void }) {
   const { agents, groups, providers, createGroup, deleteGroup, addGroupMember, removeGroupMember, setGroupLeader } =
@@ -156,15 +156,8 @@ export default function GroupCanvas({ project, onNotice }: { project: Project; o
     }
   };
 
-  const onDropOnUngrouped = (e: DragEvent) => {
-    e.preventDefault();
-    setOverKey(null);
-    const payload = readAgentDrag(e);
-    if (payload?.fromGroupId !== undefined) removeGroupMember(payload.fromGroupId, payload.agentId);
-  };
-
   const onDeleteGroup = (id: number, groupName: string) => {
-    if (!window.confirm(`"${groupName}" 그룹을 삭제할까요? 에이전트는 삭제되지 않고 "그룹 없음"으로 돌아갑니다.`)) return;
+    if (!window.confirm(`"${groupName}" 그룹을 삭제할까요? 에이전트는 삭제되지 않습니다.`)) return;
     deleteGroup(id);
   };
 
@@ -209,31 +202,28 @@ export default function GroupCanvas({ project, onNotice }: { project: Project; o
       >
         <div className={styles.world}>
           {layout.boxes.map((box) => {
-            const isUngrouped = box.groupId === null;
             return (
               <div
                 key={box.key}
-                className={`${styles.box} ${isUngrouped ? styles.boxUngrouped : ''} ${overKey === box.key ? styles.boxOver : ''}`}
+                className={`${styles.box} ${overKey === box.key ? styles.boxOver : ''}`}
                 style={vars({ '--x': `${box.x}px`, '--y': `${box.y}px`, '--w': `${box.w}px`, '--h': `${box.h}px` })}
                 onDragOver={(e) => onDragOver(e, box.key)}
                 onDragLeave={() => setOverKey(null)}
-                onDrop={(e) => (box.groupId === null ? onDropOnUngrouped(e) : onDropOnGroup(e, box.groupId))}
+                onDrop={(e) => onDropOnGroup(e, box.groupId)}
               >
                 <div className={styles.boxHeader}>
                   <div className={styles.boxTitles}>
                     <strong className={styles.boxTitle}>{box.title}</strong>
                     <span className={shared.muted}>{box.subtitle}</span>
                   </div>
-                  {box.groupId !== null && (
-                    <button
-                      type="button"
-                      className={styles.boxDelete}
-                      onClick={() => onDeleteGroup(box.groupId!, box.title)}
-                      aria-label={`${box.title} 그룹 삭제`}
-                    >
-                      삭제
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className={styles.boxDelete}
+                    onClick={() => onDeleteGroup(box.groupId, box.title)}
+                    aria-label={`${box.title} 그룹 삭제`}
+                  >
+                    삭제
+                  </button>
                 </div>
                 {box.isEmpty && <div className={styles.emptyDrop}>에이전트를 여기로 끌어 놓으세요</div>}
               </div>

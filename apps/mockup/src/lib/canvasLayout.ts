@@ -16,8 +16,7 @@ const UNGROUPED_COLS = 2;
 
 export interface CanvasBox {
   key: string;
-  /** null 이면 "그룹 없음" 영역이다. */
-  groupId: number | null;
+  groupId: number;
   title: string;
   subtitle: string;
   x: number;
@@ -56,7 +55,11 @@ interface LocalNode extends Omit<CanvasNode, 'x' | 'y'> {
 }
 
 interface LocalBox {
-  box: Omit<CanvasBox, 'x' | 'y'>;
+  /** 그룹 없는 에이전트 묶음은 상자 없이 노드만 놓이므로 null 이다. */
+  box: Omit<CanvasBox, 'x' | 'y'> | null;
+  /** 상자가 없어도 배치에는 필요한 크기 */
+  w: number;
+  h: number;
   nodes: LocalNode[];
   edges: { key: string; x1: number; y1: number; x2: number; y2: number }[];
 }
@@ -126,6 +129,7 @@ function layoutGroup(group: AgentGroup, agents: Agent[]): LocalBox {
   }
 
   const contentH = members.length === 0 ? EMPTY_H : leader ? (others.length > 0 ? NODE_H + ROW_GAP + grid.height : NODE_H) : grid.height;
+  const h = HEADER_H + PAD + contentH + PAD;
   return {
     box: {
       key: `group-${group.id}`,
@@ -133,36 +137,27 @@ function layoutGroup(group: AgentGroup, agents: Agent[]): LocalBox {
       title: group.name,
       subtitle: `멤버 ${members.length}${leader ? ` · 리더 ${leader.name}` : ''}`,
       w,
-      h: HEADER_H + PAD + contentH + PAD,
+      h,
       isEmpty: members.length === 0,
     },
+    w,
+    h,
     nodes,
     edges,
   };
 }
 
+/** 그룹에 속하지 않은 에이전트는 상자나 이름표 없이 노드만 격자로 놓는다. */
 function layoutUngrouped(agents: Agent[]): LocalBox {
   const cols = Math.min(UNGROUPED_COLS, agents.length);
-  const w = Math.max(cols * NODE_W + (cols - 1) * GAP + PAD * 2, MIN_BOX_W);
-  const grid = placeGrid(agents, w, cols, HEADER_H + PAD, { groupId: null });
-  return {
-    box: {
-      key: 'ungrouped',
-      groupId: null,
-      title: '그룹 없음',
-      subtitle: `에이전트 ${agents.length}`,
-      w,
-      h: HEADER_H + PAD + grid.height + PAD,
-      isEmpty: false,
-    },
-    nodes: grid.nodes,
-    edges: [],
-  };
+  const w = cols * NODE_W + (cols - 1) * GAP;
+  const grid = placeGrid(agents, w, cols, 0, { groupId: null });
+  return { box: null, w, h: grid.height, nodes: grid.nodes, edges: [] };
 }
 
 /**
  * 프로젝트의 에이전트와 그룹을 캔버스 좌표로 배치한다.
- * "그룹 없음" 영역(있을 때)이 맨 앞, 이어서 그룹 상자들이 줄바꿈하며 놓인다.
+ * 그룹에 속하지 않은 에이전트 노드(있을 때)가 맨 앞, 이어서 그룹 상자들이 줄바꿈하며 놓인다.
  * 그룹 안에서는 리더가 위, 나머지 멤버가 아래에 놓이고 리더에서 멤버로 선이 이어진다.
  */
 export function layoutCanvas(agents: Agent[], groups: AgentGroup[]): CanvasLayout {
@@ -182,12 +177,12 @@ export function layoutCanvas(agents: Agent[], groups: AgentGroup[]): CanvasLayou
   let width = 0;
 
   locals.forEach((local) => {
-    if (x > 0 && x + local.box.w > MAX_ROW_W) {
+    if (x > 0 && x + local.w > MAX_ROW_W) {
       x = 0;
       y += rowH + GROUP_GAP;
       rowH = 0;
     }
-    boxes.push({ ...local.box, x, y });
+    if (local.box) boxes.push({ ...local.box, x, y });
     local.nodes.forEach(({ lx, ly, ...node }) => nodes.push({ ...node, x: x + lx, y: y + ly }));
     local.edges.forEach((e) => {
       const x1 = x + e.x1;
@@ -197,8 +192,8 @@ export function layoutCanvas(agents: Agent[], groups: AgentGroup[]): CanvasLayou
       const ym = (y1 + y2) / 2;
       edges.push({ key: e.key, d: `M ${x1} ${y1} C ${x1} ${ym}, ${x2} ${ym}, ${x2} ${y2}` });
     });
-    x += local.box.w + GROUP_GAP;
-    rowH = Math.max(rowH, local.box.h);
+    x += local.w + GROUP_GAP;
+    rowH = Math.max(rowH, local.h);
     width = Math.max(width, x - GROUP_GAP);
   });
 
