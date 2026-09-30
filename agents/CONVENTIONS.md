@@ -61,7 +61,7 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
 - **메뉴는 왼쪽 사이드바**(`components/Sidebar.tsx`)에 모은다. 기본은 아이콘만 보이고, 위의 메뉴 버튼을 누르면 이름까지 펼쳐지며 다시 누르면 접힌다. 메뉴를 추가하려면 `Sidebar.tsx` 의 `MENUS` 에 항목을, `components/icons.tsx` 에 아이콘을 추가한다.
 - **설정 화면**(`/settings`)은 사이드바에 "설정" 아이콘 하나만 두고, 화면 안쪽 왼쪽 메뉴(`pages/Settings/Settings.tsx`)로 항목을 구분한다(탭·사이드바 하위 메뉴 아님): **에이전트 연결 설정**(`/settings/agents`, 런타임 카드), **테마**(`/settings/theme`, 시스템/라이트/다크. `store/ThemeContext.tsx`). 항목을 추가하려면 `Settings.tsx` 의 `SECTIONS` 와 `App.tsx` 의 중첩 라우트에 추가한다.
 - 내용 영역은 사이드바를 뺀 화면 전체 폭을 쓴다(`max-width` 로 가운데 정렬하지 않는다).
-- **프로젝트**: 목록(`/projects`)은 이름·워크스페이스·에이전트 수·총 Task 수를 보여 주고 행을 누르면 상세(`/projects/:id`)로 간다. **워크스페이스 할당은 상세에서만** 한다. 상세는 위에 워크스페이스, 왼쪽에 에이전트 목록(+ 새 에이전트), 오른쪽에 그룹 카드다. 에이전트 카드를 그룹으로 **드래그 앤 드롭**하면 멤버가 된다(HTML5 DnD, `lib/dnd.ts`). 멤버 칩은 다른 그룹으로 옮기거나 왼쪽 목록으로 끌어 빼낸다. 첫 멤버는 자동으로 리더가 되고, 한 에이전트는 여러 그룹에 속할 수 있다.
+- **프로젝트**: 목록(`/projects`)은 **카드 뷰**로 이름·워크스페이스·에이전트 수·총 Task 수를 보여 주고 카드를 누르면 상세(`/projects/:id`)로 간다. **워크스페이스 할당은 상세에서만** 한다. 상세는 위에 워크스페이스, 왼쪽에 에이전트 목록(+ 새 에이전트), 오른쪽에 그룹 카드다. 에이전트 카드를 그룹으로 **드래그 앤 드롭**하면 멤버가 된다(HTML5 DnD, `lib/dnd.ts`). 멤버 칩은 다른 그룹으로 옮기거나 왼쪽 목록으로 끌어 빼낸다. 첫 멤버는 자동으로 리더가 되고, 한 에이전트는 여러 그룹에 속할 수 있다.
 - 현재 화면: Dashboard, 프로젝트(`/projects`, `/projects/:id`), 설정. 나머지 화면은 순서대로 추가한다.
 
 ## Backend 모듈 (`apps/backend/src/main/java/com/agent/dock`)
