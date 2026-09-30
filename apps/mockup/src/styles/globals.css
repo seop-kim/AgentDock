@@ -48,6 +48,28 @@ textarea {
   color: var(--color-text);
 }
 
+/* 셀렉트: OS 기본 화살표 대신 모드에 맞는 화살표를 쓴다(색은 tokens.css 의 --select-arrow). */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 32px;
+  background-image: var(--select-arrow);
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 14px 14px;
+  cursor: pointer;
+}
+
+/* 펼친 목록도 모드에 맞춘다(운영체제가 무시하는 경우가 있어 배경·글자색을 함께 지정한다). */
+select option {
+  background: var(--color-sidebar);
+  color: var(--color-text);
+}
+
+select:disabled {
+  cursor: not-allowed;
+}
+
 input::placeholder,
 textarea::placeholder {
   color: var(--color-muted);

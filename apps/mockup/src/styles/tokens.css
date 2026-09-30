@@ -15,6 +15,8 @@
   --color-surface: rgba(255, 255, 255, 0.55);
   --color-sidebar: #ffffff;
   --color-input-bg: rgba(255, 255, 255, 0.78);
+  /* 셀렉트 화살표(색은 --color-muted 값과 같게 유지) */
+  --select-arrow: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 6 8 10.5 12.5 6' fill='none' stroke='%23616680' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --color-text: #161a33;
   --color-border: rgba(30, 36, 90, 0.1);
   --color-border-strong: rgba(30, 36, 90, 0.2);
@@ -73,6 +75,8 @@
   --color-surface: rgba(255, 255, 255, 0.06);
   --color-sidebar: #1b1b1b;
   --color-input-bg: rgba(255, 255, 255, 0.08);
+  /* 셀렉트 화살표(색은 --color-muted 값과 같게 유지) */
+  --select-arrow: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 6 8 10.5 12.5 6' fill='none' stroke='%23a6a6a6' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --color-text: #ececec;
   --color-border: rgba(255, 255, 255, 0.12);
   --color-border-strong: rgba(255, 255, 255, 0.22);
@@ -116,6 +120,8 @@
     --color-surface: rgba(255, 255, 255, 0.06);
     --color-sidebar: #1b1b1b;
     --color-input-bg: rgba(255, 255, 255, 0.08);
+    /* 셀렉트 화살표(색은 --color-muted 값과 같게 유지) */
+    --select-arrow: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 6 8 10.5 12.5 6' fill='none' stroke='%23a6a6a6' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
     --color-text: #ececec;
     --color-border: rgba(255, 255, 255, 0.12);
     --color-border-strong: rgba(255, 255, 255, 0.22);
