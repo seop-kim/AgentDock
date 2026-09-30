@@ -30,6 +30,8 @@ type Action =
   | { type: 'provider/add'; key: string; name: string }
   | { type: 'provider/capabilities'; id: number; capabilities: Capabilities }
   | { type: 'project/create'; name: string }
+  | { type: 'project/rename'; id: number; name: string }
+  | { type: 'project/delete'; id: number }
   | { type: 'project/assignWorkspace'; projectId: number; workspaceId: number; asDefault: boolean }
   | { type: 'project/removeWorkspace'; projectId: number; workspaceId: number }
   | { type: 'agent/create'; input: NewAgentInput }
@@ -95,6 +97,17 @@ function reducer(state: MockState, action: Action): MockState {
         ...state,
         projects: [...state.projects, { id: state.nextId, name: action.name, workspaces: [] }],
         nextId: state.nextId + 1,
+      };
+    case 'project/rename':
+      return mapProject(state, action.id, (project) => ({ ...project, name: action.name }));
+    case 'project/delete':
+      // 프로젝트에 속한 에이전트, 그룹, Task 도 함께 사라진다.
+      return {
+        ...state,
+        projects: state.projects.filter((p) => p.id !== action.id),
+        agents: state.agents.filter((a) => a.projectId !== action.id),
+        groups: state.groups.filter((g) => g.projectId !== action.id),
+        tasks: state.tasks.filter((t) => t.projectId !== action.id),
       };
     case 'project/assignWorkspace':
       // 첫 할당은 자동으로 기본이 되고, "기본으로"를 고르면 기존 기본을 대체한다(프로젝트당 기본은 1개).
@@ -173,6 +186,8 @@ interface MockStore {
   groups: AgentGroup[];
   tasks: Task[];
   createProject: (name: string) => void;
+  renameProject: (id: number, name: string) => void;
+  deleteProject: (id: number) => void;
   assignWorkspace: (projectId: number, workspaceId: number, asDefault: boolean) => void;
   removeWorkspace: (projectId: number, workspaceId: number) => void;
   createAgent: (input: NewAgentInput) => void;
@@ -204,6 +219,8 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       groups: state.groups,
       tasks: state.tasks,
       createProject: (name) => dispatch({ type: 'project/create', name }),
+      renameProject: (id, name) => dispatch({ type: 'project/rename', id, name }),
+      deleteProject: (id) => dispatch({ type: 'project/delete', id }),
       assignWorkspace: (projectId, workspaceId, asDefault) =>
         dispatch({ type: 'project/assignWorkspace', projectId, workspaceId, asDefault }),
       removeWorkspace: (projectId, workspaceId) =>

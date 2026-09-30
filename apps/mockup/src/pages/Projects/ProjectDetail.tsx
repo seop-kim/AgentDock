@@ -1,18 +1,21 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { SettingsIcon } from '../../components/icons';
 import { useMockStore } from '../../store/MockStore';
 import shared from '../../styles/shared.module.css';
 import AgentList from './AgentList';
-import GroupBoard from './GroupBoard';
+import GroupCanvas from './GroupCanvas';
 import styles from './ProjectDetail.module.css';
-import ProjectWorkspaces from './ProjectWorkspaces';
+import ProjectSettingsModal from './ProjectSettingsModal';
 
 const NOTICE_MS = 2500;
 
 export default function ProjectDetail() {
   const { id } = useParams();
-  const { projects, agents, tasks } = useMockStore();
+  const navigate = useNavigate();
+  const { projects, workspaces, agents, groups, tasks } = useMockStore();
   const [notice, setNotice] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     if (notice === null) return;
@@ -33,29 +36,62 @@ export default function ProjectDetail() {
     );
   }
 
-  const agentCount = agents.filter((a) => a.projectId === project.id).length;
-  const taskCount = tasks.filter((t) => t.projectId === project.id).length;
+  const defaultWorkspace = project.workspaces.find((w) => w.isDefault);
+  const workspaceName = workspaces.find((w) => w.id === defaultWorkspace?.workspaceId)?.name;
+  const extra = project.workspaces.length - 1;
+  const stats = [
+    { label: '에이전트', value: agents.filter((a) => a.projectId === project.id).length },
+    { label: '그룹', value: groups.filter((g) => g.projectId === project.id).length },
+    { label: '총 Task', value: tasks.filter((t) => t.projectId === project.id).length },
+  ];
 
   return (
     <div>
       <Link to="/projects" className={styles.back}>
         ← 프로젝트 목록
       </Link>
-      <div className={styles.titleRow}>
-        <h1 className={styles.title}>{project.name}</h1>
-        <span className={shared.muted}>
-          에이전트 {agentCount} · 총 Task {taskCount}
-        </span>
-      </div>
+
+      <header className={styles.header}>
+        <div className={styles.headerMain}>
+          <h1 className={styles.title}>{project.name}</h1>
+          <div className={styles.meta}>
+            <span className={styles.workspace}>
+              {workspaceName ? (
+                <>
+                  ★ {workspaceName}
+                  {extra > 0 && <span className={shared.muted}> 외 {extra}개</span>}
+                </>
+              ) : (
+                <span className={shared.muted}>워크스페이스 없음</span>
+              )}
+            </span>
+            {stats.map((stat) => (
+              <span key={stat.label} className={styles.stat}>
+                <strong>{stat.value}</strong> {stat.label}
+              </span>
+            ))}
+          </div>
+        </div>
+        <button type="button" className={styles.settingsButton} onClick={() => setSettingsOpen(true)}>
+          <SettingsIcon />
+          설정
+        </button>
+      </header>
 
       {notice && <p className="errorText">{notice}</p>}
 
-      <ProjectWorkspaces project={project} />
-
       <div className={styles.body}>
         <AgentList project={project} />
-        <GroupBoard project={project} onNotice={setNotice} />
+        <GroupCanvas project={project} onNotice={setNotice} />
       </div>
+
+      {settingsOpen && (
+        <ProjectSettingsModal
+          project={project}
+          onClose={() => setSettingsOpen(false)}
+          onDeleted={() => navigate('/projects')}
+        />
+      )}
     </div>
   );
 }

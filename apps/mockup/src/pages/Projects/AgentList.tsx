@@ -9,8 +9,8 @@ import styles from './AgentList.module.css';
 import NewAgentModal from './NewAgentModal';
 
 /**
- * 프로젝트 상세 왼쪽의 에이전트 목록. 카드를 그룹으로 끌어 놓아 멤버로 넣는다.
- * 그룹 멤버 칩을 이 목록으로 끌어 놓으면 그 그룹에서 빠진다.
+ * 프로젝트 상세 왼쪽의 에이전트 목록. 카드를 캔버스의 그룹으로 끌어 놓아 멤버로 넣는다(그룹은 필수가 아니다).
+ * 캔버스의 멤버 노드를 이 목록으로 끌어 놓으면 그 그룹에서 빠진다.
  */
 export default function AgentList({ project }: { project: Project }) {
   const { agents, groups, providers, removeGroupMember } = useMockStore();
@@ -94,7 +94,7 @@ export default function AgentList({ project }: { project: Project }) {
       </div>
 
       {projectAgents.length > 0 && (
-        <p className={styles.tip}>카드를 오른쪽 그룹으로 끌어 놓으면 멤버가 됩니다.</p>
+        <p className={styles.tip}>카드를 캔버스의 그룹으로 끌어 놓으면 멤버가 됩니다. 그룹에 속하지 않아도 괜찮습니다.</p>
       )}
 
       {creating && <NewAgentModal projectId={project.id} onClose={() => setCreating(false)} />}

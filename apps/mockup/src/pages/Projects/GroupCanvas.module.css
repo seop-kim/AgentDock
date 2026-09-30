@@ -1,0 +1,261 @@
+.canvas {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--color-surface);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: 10px var(--spacing-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.groupForm {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-right: auto;
+}
+
+.zoom {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.zoomValue {
+  min-width: 44px;
+  text-align: center;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 점 격자 배경. 이동/확대에 맞춰 함께 움직인다. */
+.viewport {
+  position: relative;
+  height: clamp(460px, 68vh, 760px);
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  background-color: var(--color-bg);
+  background-image: radial-gradient(var(--color-border-strong) 1px, transparent 1px);
+  background-size: calc(24px * var(--vs)) calc(24px * var(--vs));
+  background-position: var(--vx) var(--vy);
+}
+
+.viewport:active {
+  cursor: grabbing;
+}
+
+.world {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  transform: translate(var(--vx), var(--vy)) scale(var(--vs));
+}
+
+.box {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: var(--w);
+  height: var(--h);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 10px;
+  background: var(--color-surface);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.boxUngrouped {
+  border-style: dashed;
+  background: transparent;
+}
+
+/* 에이전트를 끌어 왔을 때 놓을 수 있음을 알린다 */
+.boxOver {
+  border-color: var(--color-primary);
+  background: var(--color-code-bg);
+}
+
+.boxHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+  padding: 10px 12px 0;
+}
+
+.boxTitles {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.boxTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.boxDelete {
+  padding: 2px 8px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.boxDelete:hover {
+  background: var(--color-error-bg);
+  color: var(--color-error);
+}
+
+.emptyDrop {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  padding: 18px 8px;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius);
+  color: var(--color-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.edges {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.edge {
+  fill: none;
+  stroke: var(--color-border-strong);
+  stroke-width: 1.5;
+}
+
+.node {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: 168px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  background: var(--color-bg);
+  box-shadow: 0 1px 2px var(--color-shadow);
+  cursor: grab;
+}
+
+.node:hover {
+  border-color: var(--color-primary);
+}
+
+.node:active {
+  cursor: grabbing;
+}
+
+.nodeLeader {
+  border-color: var(--color-primary);
+}
+
+.nodeUnavailable {
+  border-style: dashed;
+}
+
+.nodeText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding-left: 4px;
+}
+
+.nodeName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.nodeMeta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.warnDot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-error);
+}
+
+.iconButton {
+  padding: 0 5px;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  line-height: 1.4;
+}
+
+.iconButton:hover {
+  background: transparent;
+  color: var(--color-text);
+}
+
+.leader,
+.leader:hover {
+  color: var(--color-primary);
+}
+
+.emptyState {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--color-muted);
+  text-align: center;
+  pointer-events: none;
+}
+
+.emptyState strong {
+  color: var(--color-text);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px var(--spacing-md);
+  padding: 8px var(--spacing-md);
+  border-top: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-size: 12px;
+}

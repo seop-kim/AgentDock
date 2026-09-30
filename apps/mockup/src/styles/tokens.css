@@ -22,6 +22,7 @@
   --color-output-text: #e6e6e6;
   --color-output-link: #8ab4f8;
   --color-overlay: rgba(0, 0, 0, 0.45);
+  --color-shadow: rgba(0, 0, 0, 0.08);
 
   --radius: 4px;
   --spacing-sm: 8px;
@@ -52,6 +53,7 @@
   --color-output-text: #dcdcdc;
   --color-output-link: #8ab4f8;
   --color-overlay: rgba(0, 0, 0, 0.65);
+  --color-shadow: rgba(0, 0, 0, 0.5);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -74,5 +76,6 @@
     --color-output-text: #dcdcdc;
     --color-output-link: #8ab4f8;
     --color-overlay: rgba(0, 0, 0, 0.65);
+    --color-shadow: rgba(0, 0, 0, 0.5);
   }
 }

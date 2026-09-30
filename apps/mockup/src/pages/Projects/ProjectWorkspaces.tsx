@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { useMockStore } from '../../store/MockStore';
 import shared from '../../styles/shared.module.css';
 import type { Project } from '../../types';
-import styles from './ProjectDetail.module.css';
+import styles from './ProjectWorkspaces.module.css';
 
-/** 프로젝트 상세의 워크스페이스 영역. 할당/해제는 여기서만 한다. */
+/** 프로젝트 워크스페이스 할당/해제. 프로젝트 설정 창 안에서만 쓴다. */
 export default function ProjectWorkspaces({ project }: { project: Project }) {
   const { workspaces, assignWorkspace, removeWorkspace } = useMockStore();
   const [assigning, setAssigning] = useState(false);
@@ -26,27 +26,20 @@ export default function ProjectWorkspaces({ project }: { project: Project }) {
   };
 
   return (
-    <section className={styles.panel}>
-      <div className={styles.panelHeader}>
-        <h2 className={styles.panelTitle}>워크스페이스</h2>
-        {!assigning && (
-          <button onClick={() => setAssigning(true)} disabled={assignable.length === 0}>
-            + 할당
-          </button>
-        )}
-      </div>
-
+    <div>
       {project.workspaces.length === 0 && (
         <p className={shared.muted}>할당된 워크스페이스가 없습니다. 기본 워크스페이스가 있어야 에이전트를 실행할 수 있습니다.</p>
       )}
-      <ul className={styles.workspaceList}>
+      <ul className={styles.list}>
         {project.workspaces.map((pw) => {
           const workspace = workspaces.find((w) => w.id === pw.workspaceId);
           return (
-            <li key={pw.workspaceId} className={styles.workspaceItem}>
+            <li key={pw.workspaceId} className={styles.item}>
               <span className={pw.isDefault ? styles.defaultMark : styles.defaultMarkOff}>★</span>
-              <span className={styles.workspaceName}>{workspace?.name}</span>
-              <span className={styles.workspacePath}>{workspace?.path}</span>
+              <div className={styles.text}>
+                <span className={styles.name}>{workspace?.name}</span>
+                <span className={styles.path}>{workspace?.path}</span>
+              </div>
               {pw.isDefault && <span className={`${shared.badge} ${shared.badgeOk}`}>기본</span>}
               <button className={shared.dangerButton} onClick={() => removeWorkspace(project.id, pw.workspaceId)}>
                 해제
@@ -56,7 +49,7 @@ export default function ProjectWorkspaces({ project }: { project: Project }) {
         })}
       </ul>
 
-      {assigning && (
+      {assigning ? (
         <div className={styles.assignRow}>
           <select value={workspaceId} onChange={(e) => setWorkspaceId(e.target.value)}>
             <option value="">워크스페이스 선택</option>
@@ -77,7 +70,11 @@ export default function ProjectWorkspaces({ project }: { project: Project }) {
             취소
           </button>
         </div>
+      ) : (
+        <button className={styles.addButton} onClick={() => setAssigning(true)} disabled={assignable.length === 0}>
+          + 워크스페이스 할당
+        </button>
       )}
-    </section>
+    </div>
   );
 }
