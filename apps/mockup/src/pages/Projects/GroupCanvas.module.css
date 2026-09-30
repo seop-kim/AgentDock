@@ -167,6 +167,15 @@
   cursor: grabbing;
 }
 
+/* 끌고 있는 노드: 위로 띄우고 살짝 키워 따라오는 느낌을 준다 */
+.nodeDragging,
+.nodeDragging:hover {
+  cursor: grabbing;
+  z-index: 3;
+  border-color: var(--color-primary);
+  box-shadow: 0 10px 26px var(--color-shadow), 0 0 0 1px var(--color-primary);
+}
+
 .nodeLeader {
   border-color: var(--color-primary);
   box-shadow: 0 4px 18px var(--color-shadow), 0 0 0 1px var(--color-primary), var(--glass-highlight);

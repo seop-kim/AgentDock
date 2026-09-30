@@ -31,6 +31,8 @@ interface MockState {
   groups: AgentGroup[];
   tasks: Task[];
   chats: ChatMessage[];
+  /** 구성도에서 손으로 옮긴 노드 위치(월드 좌표). 없는 노드는 자동 배치를 따른다. */
+  nodePositions: Record<number, { x: number; y: number }>;
   nextId: number;
 }
 
@@ -55,6 +57,8 @@ type Action =
   | { type: 'agent/update'; id: number; input: AgentUpdateInput }
   | { type: 'agent/delete'; id: number }
   | { type: 'agent/setPlaced'; id: number; placed: boolean }
+  | { type: 'layout/setPosition'; agentId: number; x: number; y: number }
+  | { type: 'layout/clearPositions' }
   | { type: 'group/create'; projectId: number; name: string }
   | { type: 'group/delete'; id: number }
   | { type: 'group/addMember'; groupId: number; agentId: number }
@@ -73,7 +77,19 @@ const initialState: MockState = {
   groups: SEED_GROUPS,
   tasks: SEED_TASKS,
   chats: [],
+  nodePositions: {},
   nextId: 100,
+};
+
+/** 손으로 옮긴 위치를 지운다(그룹에 들어가거나 구성도에서 빠지면 자동 배치로 돌아간다). */
+const withoutPosition = (
+  positions: Record<number, { x: number; y: number }>,
+  agentId: number,
+): Record<number, { x: number; y: number }> => {
+  if (!(agentId in positions)) return positions;
+  const next = { ...positions };
+  delete next[agentId];
+  return next;
 };
 
 const mapProject = (state: MockState, projectId: number, change: (project: Project) => Project): MockState => ({
@@ -201,6 +217,7 @@ function reducer(state: MockState, action: Action): MockState {
         ...state,
         agents: state.agents.filter((a) => a.id !== action.id),
         groups: withoutMember(state.groups, action.id),
+        nodePositions: withoutPosition(state.nodePositions, action.id),
       };
     }
     case 'agent/setPlaced': {
@@ -213,8 +230,19 @@ function reducer(state: MockState, action: Action): MockState {
         ...state,
         agents: state.agents.map((a) => (a.id === action.id ? { ...a, placed: action.placed } : a)),
         groups: action.placed ? state.groups : withoutMember(state.groups, action.id),
+        nodePositions: action.placed ? state.nodePositions : withoutPosition(state.nodePositions, action.id),
       };
     }
+    case 'layout/setPosition': {
+      // 자유 위치는 그룹에 속하지 않은 노드에만 준다.
+      if (state.groups.some((g) => g.memberIds.includes(action.agentId))) return state;
+      return {
+        ...state,
+        nodePositions: { ...state.nodePositions, [action.agentId]: { x: action.x, y: action.y } },
+      };
+    }
+    case 'layout/clearPositions':
+      return { ...state, nodePositions: {} };
     case 'group/create':
       return {
         ...state,
@@ -233,9 +261,9 @@ function reducer(state: MockState, action: Action): MockState {
       };
     case 'group/delete':
       return { ...state, groups: state.groups.filter((g) => g.id !== action.id) };
-    case 'group/addMember':
-      // 첫 멤버는 리더가 된다(리더가 없을 때만).
-      return mapGroup(state, action.groupId, (group) =>
+    case 'group/addMember': {
+      // 첫 멤버는 리더가 된다(리더가 없을 때만). 그룹에 들어가면 손으로 옮긴 위치는 지운다.
+      const next = mapGroup(state, action.groupId, (group) =>
         group.memberIds.includes(action.agentId)
           ? group
           : {
@@ -244,6 +272,8 @@ function reducer(state: MockState, action: Action): MockState {
               leaderAgentId: group.leaderAgentId ?? action.agentId,
             },
       );
+      return { ...next, nodePositions: withoutPosition(next.nodePositions, action.agentId) };
+    }
     case 'group/removeMember':
       // 리더를 빼면 남은 첫 멤버가 리더를 이어받는다.
       return mapGroup(state, action.groupId, (group) => {
@@ -302,6 +332,11 @@ interface MockStore {
   deleteAgent: (id: number) => void;
   /** 구성도에 놓기/빼기. 빼면 그룹에서도 빠지고 에이전트 목록에만 남는다. 마스터는 뺄 수 없다. */
   setAgentPlaced: (id: number, placed: boolean) => void;
+  /** 구성도에서 손으로 옮긴 노드 위치(월드 좌표). 그룹에 속한 노드는 자동 배치를 따른다. */
+  nodePositions: Record<number, { x: number; y: number }>;
+  setAgentPosition: (agentId: number, x: number, y: number) => void;
+  /** 손으로 옮긴 위치를 모두 지워 자동 배치로 되돌린다. */
+  clearNodePositions: () => void;
   createGroup: (projectId: number, name: string) => void;
   deleteGroup: (id: number) => void;
   addGroupMember: (groupId: number, agentId: number) => void;
@@ -424,6 +459,9 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       updateAgent: (id, input) => dispatch({ type: 'agent/update', id, input }),
       deleteAgent: (id) => dispatch({ type: 'agent/delete', id }),
       setAgentPlaced: (id, placed) => dispatch({ type: 'agent/setPlaced', id, placed }),
+      nodePositions: state.nodePositions,
+      setAgentPosition: (agentId, x, y) => dispatch({ type: 'layout/setPosition', agentId, x, y }),
+      clearNodePositions: () => dispatch({ type: 'layout/clearPositions' }),
       createGroup: (projectId, name) => dispatch({ type: 'group/create', projectId, name }),
       deleteGroup: (id) => dispatch({ type: 'group/delete', id }),
       addGroupMember: (groupId, agentId) => dispatch({ type: 'group/addMember', groupId, agentId }),

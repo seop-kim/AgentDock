@@ -160,9 +160,14 @@ function layoutUngrouped(agents: Agent[]): LocalBox {
  * 그룹에 속하지 않은 에이전트 노드(있을 때)가 맨 앞, 이어서 그룹 상자들이 줄바꿈하며 놓인다.
  * 그룹 안에서는 리더가 위, 나머지 멤버가 아래에 놓이고 리더에서 멤버로 선이 이어진다.
  */
-export function layoutCanvas(agents: Agent[], groups: AgentGroup[]): CanvasLayout {
+export function layoutCanvas(
+  agents: Agent[],
+  groups: AgentGroup[],
+  /** 손으로 옮긴 노드 위치(월드 좌표). 여기 있는 에이전트는 자동 격자 대신 이 좌표에 그린다. */
+  positions: Record<number, { x: number; y: number }> = {},
+): CanvasLayout {
   const groupedIds = new Set(groups.flatMap((g) => g.memberIds));
-  const ungrouped = agents.filter((a) => !groupedIds.has(a.id));
+  const ungrouped = agents.filter((a) => !groupedIds.has(a.id) && !positions[a.id]);
 
   const locals: LocalBox[] = [];
   if (ungrouped.length > 0) locals.push(layoutUngrouped(ungrouped));
@@ -197,5 +202,25 @@ export function layoutCanvas(agents: Agent[], groups: AgentGroup[]): CanvasLayou
     width = Math.max(width, x - GROUP_GAP);
   });
 
-  return { boxes, nodes, edges, width, height: y + rowH };
+  // 손으로 옮긴 노드는 자동 격자에서 빠져 있으므로, 그 좌표로 따로 넣는다.
+  const manualNodes: CanvasNode[] = agents
+    .filter((a) => !groupedIds.has(a.id) && positions[a.id])
+    .map((a) => ({
+      key: `manual-${a.id}`,
+      agentId: a.id,
+      groupId: null,
+      isLeader: false,
+      x: Math.max(0, positions[a.id].x),
+      y: Math.max(0, positions[a.id].y),
+    }));
+  const placedNodes = [...nodes, ...manualNodes];
+
+  // 맞춤이 손으로 옮긴 위치까지 담도록 크기를 다시 계산한다.
+  let height = y + rowH;
+  placedNodes.forEach((node) => {
+    width = Math.max(width, node.x + NODE_W);
+    height = Math.max(height, node.y + NODE_H);
+  });
+
+  return { boxes, nodes: placedNodes, edges, width, height };
 }
