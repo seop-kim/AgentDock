@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FileIcon } from '../../components/icons';
-import { ATTACHMENT_FOLDER } from '../../lib/attachments';
+import { ATTACHMENT_FOLDER, displayName } from '../../lib/attachments';
 import { fileName } from '../../lib/executionSim';
 import { useMockStore } from '../../store/MockStore';
 import attach from '../../styles/attachment.module.css';
@@ -38,7 +38,7 @@ export default function AttachFilesModal({
     setPicked((prev) =>
       prev.some((file) => file.workspaceId === workspaceId && file.path === path)
         ? prev.filter((file) => !(file.workspaceId === workspaceId && file.path === path))
-        : [...prev, { workspaceId, path }],
+        : [...prev, { workspaceId, path, name: displayName(path) }],
     );
 
   return createPortal(

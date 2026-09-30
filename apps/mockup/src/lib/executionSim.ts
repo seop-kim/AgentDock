@@ -302,8 +302,8 @@ export function fileName(path: string): string {
   return path.split('/').pop() ?? path;
 }
 
-/** 첨부한 파일을 지시 한 줄에 붙인다. 마스터가 하위로 넘길 때도 같은 문장이 따라간다. */
+/** 첨부한 파일을 지시 한 줄에 붙인다. 저장 경로가 아니라 **원래 파일 이름**을 쓴다. */
 function withAttachments(prompt: string, attachments: AttachedFile[]): string {
   if (attachments.length === 0) return prompt;
-  return `${prompt} · 첨부: ${attachments.map((file) => fileName(file.path)).join(', ')}`;
+  return `${prompt} · 첨부: ${attachments.map((file) => file.name).join(', ')}`;
 }

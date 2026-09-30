@@ -1,8 +1,7 @@
 import { DragEvent, FormEvent, useEffect, useRef, useState } from 'react';
 import { ClipIcon, FileIcon } from '../../components/icons';
 import { unavailableReason } from '../../lib/agentAvailability';
-import { ATTACHMENT_FOLDER, attachmentPath, hasAttachment } from '../../lib/attachments';
-import { fileName } from '../../lib/executionSim';
+import { ATTACHMENT_FOLDER, attachmentPath, hasAttachment, storedName } from '../../lib/attachments';
 import { useMockStore } from '../../store/MockStore';
 import attach from '../../styles/attachment.module.css';
 import shared from '../../styles/shared.module.css';
@@ -84,16 +83,20 @@ export default function ChatPanel({
   /**
    * 창 밖에서 끌어온 파일을 붙인다. 에이전트는 워크스페이스 폴더 밖을 볼 수 없으므로
    * 프로젝트 안 폴더(`ATTACHMENT_FOLDER`)로 **복사한 것으로 치고**, 그 사본 경로를 첨부로 단다.
+   * 폴더는 받지 않는다(파일만).
    */
   const onDrop = (e: DragEvent<HTMLElement>) => {
     e.preventDefault();
     setDragging(false);
     if (defaultWorkspaceId === null) return;
-    const dropped = Array.from(e.dataTransfer.files);
+    const entries = Array.from(e.dataTransfer.items).map((item) => item.webkitGetAsEntry());
+    const dropped = Array.from(e.dataTransfer.files).filter((_, index) => entries[index]?.isDirectory !== true);
     if (dropped.length === 0) return;
+    // 같은 이름을 여러 번 붙여도 충돌하지 않게 **저장 이름 앞에 id(uuid)를 붙인다**(원래 이름은 화면에 남긴다).
     const copies = dropped.map((file) => {
-      addWorkspaceFile(defaultWorkspaceId, file.name);
-      return { workspaceId: defaultWorkspaceId, path: attachmentPath(file.name) };
+      const path = attachmentPath(storedName(file.name));
+      addWorkspaceFile(defaultWorkspaceId, path);
+      return { workspaceId: defaultWorkspaceId, path, name: file.name };
     });
     setAttachments((prev) => [...prev, ...copies.filter((copy) => !hasAttachment(prev, copy))]);
   };
@@ -179,7 +182,7 @@ export default function ChatPanel({
                     {m.attachments.map((file) => (
                       <li key={`${file.workspaceId}:${file.path}`} className={attach.chip} title={file.path}>
                         <FileIcon size={13} />
-                        <span className={attach.chipName}>{fileName(file.path)}</span>
+                        <span className={attach.chipName}>{file.name}</span>
                       </li>
                     ))}
                   </ul>
@@ -202,12 +205,12 @@ export default function ChatPanel({
           {attachments.map((file) => (
             <li key={`${file.workspaceId}:${file.path}`} className={attach.chip} title={file.path}>
               <FileIcon size={13} />
-              <span className={attach.chipName}>{fileName(file.path)}</span>
+              <span className={attach.chipName}>{file.name}</span>
               <button
                 type="button"
                 className={attach.chipRemove}
                 onClick={() => setAttachments((prev) => prev.filter((item) => item !== file))}
-                aria-label={`${fileName(file.path)} 첨부 빼기`}
+                aria-label={`${file.name} 첨부 빼기`}
               >
                 ×
               </button>

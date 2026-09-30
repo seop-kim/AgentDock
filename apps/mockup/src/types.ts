@@ -131,7 +131,10 @@ export interface Execution {
 /** 명령에 첨부한 파일. 경로는 그 워크스페이스 폴더 기준의 상대 경로다. */
 export interface AttachedFile {
   workspaceId: number;
+  /** 프로젝트 폴더 안에 **저장된** 경로. 밖에서 끌어온 파일은 복사본이라 이름 앞에 id 가 붙는다. */
   path: string;
+  /** 원래 파일 이름(화면 표시용). 저장 경로와 다를 수 있다. */
+  name: string;
 }
 
 /** 채팅 명령의 대상. 그룹에 보내면 그 그룹의 리더가 받는다. */
