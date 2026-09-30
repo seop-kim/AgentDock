@@ -78,7 +78,9 @@ export default function GroupCanvas({
     addGroupMember,
     nodePositions,
     setAgentPosition,
-    clearNodePositions,
+    groupPositions,
+    setGroupPosition,
+    clearPositions,
   } = useMockStore();
   const dropOnGroup = useGroupDrop(onNotice);
   const projectAgents = useMemo(() => agents.filter((a) => a.projectId === project.id), [agents, project.id]);
@@ -86,20 +88,22 @@ export default function GroupCanvas({
   const placedAgents = useMemo(() => projectAgents.filter((a) => a.placed), [projectAgents]);
   const projectGroups = useMemo(() => groups.filter((g) => g.projectId === project.id), [groups, project.id]);
   const layout = useMemo(
-    () => layoutCanvas(placedAgents, projectGroups, nodePositions),
-    [placedAgents, projectGroups, nodePositions],
+    () => layoutCanvas(placedAgents, projectGroups, nodePositions, groupPositions),
+    [placedAgents, projectGroups, nodePositions, groupPositions],
   );
 
   const [view, setView] = useState<View>({ x: 0, y: 0, scale: 1 });
   const [overKey, setOverKey] = useState<string | null>(null);
   // 노드 위에 버튼을 늘어놓지 않고 "⋮" 메뉴 하나로 모은다.
   const [nodeMenu, setNodeMenu] = useState<{ node: CanvasNode; agent: Agent; rect: DOMRect } | null>(null);
-  // 노드를 끌어 위치를 옮긴다(그룹 상자 위에 놓으면 그 그룹으로 들어간다).
-  const [dragAgentId, setDragAgentId] = useState<number | null>(null);
+  // 노드나 그룹 상자를 끌어 위치를 옮긴다(노드를 그룹 상자 위에 놓으면 그 그룹으로 들어간다).
+  type DragTarget = { kind: 'node'; agentId: number } | { kind: 'group'; groupId: number };
+  const [dragTarget, setDragTarget] = useState<DragTarget | null>(null);
   const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
   const dragRef = useRef<{
-    agentId: number;
-    groupId: number | null;
+    target: DragTarget;
+    /** 노드가 속해 있던 그룹(놓을 때 그룹 이동 판단용) */
+    fromGroupId: number | null;
     offsetX: number;
     offsetY: number;
     moved: boolean;
@@ -236,42 +240,49 @@ export default function GroupCanvas({
     deleteGroup(id);
   };
 
-  /** 노드를 끌기 시작한다. 배경 끌기(이동)와 겹치지 않도록 전파를 막는다. */
-  const onNodePointerDown = (e: PointerEvent<HTMLDivElement>, node: CanvasNode) => {
+  /** 화면 좌표를 월드 좌표로 바꾼다. */
+  const worldAt = (clientX: number, clientY: number, at: View) => {
+    const el = viewportRef.current;
+    if (!el) return { x: 0, y: 0 };
+    const rect = el.getBoundingClientRect();
+    return { x: (clientX - rect.left - at.x) / at.scale, y: (clientY - rect.top - at.y) / at.scale };
+  };
+
+  /** 노드나 그룹 상자를 끌기 시작한다. 배경 끌기(이동)와 겹치지 않도록 전파를 막는다. */
+  const startDrag = (
+    e: PointerEvent<HTMLDivElement>,
+    target: DragTarget,
+    origin: { x: number; y: number },
+    fromGroupId: number | null,
+  ) => {
     if (e.button !== 0) return;
     if ((e.target as HTMLElement).closest('button')) return;
     e.stopPropagation();
     // 손으로 옮기기 시작하면 자동 맞춤을 멈춘다(놓을 때 화면이 튀지 않게).
     touchedRef.current = true;
-    const el = viewportRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const worldX = (e.clientX - rect.left - view.x) / view.scale;
-    const worldY = (e.clientY - rect.top - view.y) / view.scale;
-    const manual = nodePositions[node.agentId];
-    const base = manual ? { x: Math.max(0, manual.x), y: Math.max(0, manual.y) } : { x: node.x, y: node.y };
+    const world = worldAt(e.clientX, e.clientY, view);
     dragRef.current = {
-      agentId: node.agentId,
-      groupId: node.groupId,
-      offsetX: worldX - base.x,
-      offsetY: worldY - base.y,
+      target,
+      fromGroupId,
+      offsetX: world.x - origin.x,
+      offsetY: world.y - origin.y,
       moved: false,
       viewX: view.x,
       viewY: view.y,
       scale: view.scale,
     };
-    setDragAgentId(node.agentId);
-    setDragPos(base);
+    setDragTarget(target);
+    setDragPos(origin);
   };
 
   // 끄는 동안에는 창 전체에서 포인터를 받아, 캔버스 밖으로 나가도 놓치지 않는다.
   useEffect(() => {
-    if (dragAgentId === null) return;
+    if (dragTarget === null) return;
     const el = viewportRef.current;
     if (!el) return;
 
     // 끌기 시작할 때 잡아 둔 화면→월드 변환을 그대로 쓴다(끄는 동안에는 화면이 움직이지 않는다).
-    const toWorld = (drag: NonNullable<typeof dragRef.current>, clientX: number, clientY: number) => {
+    const worldOf = (drag: NonNullable<typeof dragRef.current>, clientX: number, clientY: number) => {
       const rect = el.getBoundingClientRect();
       return {
         x: (clientX - rect.left - drag.viewX) / drag.scale,
@@ -282,35 +293,41 @@ export default function GroupCanvas({
     const onMove = (e: globalThis.PointerEvent) => {
       const d = dragRef.current;
       if (!d) return;
-      const world = toWorld(d, e.clientX, e.clientY);
+      const world = worldOf(d, e.clientX, e.clientY);
       d.moved = true;
-      setDragPos({ x: Math.max(0, world.x - d.offsetX), y: Math.max(0, world.y - d.offsetY) });
+      const next = { x: Math.max(0, world.x - d.offsetX), y: Math.max(0, world.y - d.offsetY) };
+      setDragPos(next);
+      // 그룹은 바로 반영해 상자·노드·선이 함께 따라오게 한다.
+      if (d.target.kind === 'group') setGroupPosition(d.target.groupId, next.x, next.y);
     };
 
     const onUp = (e: globalThis.PointerEvent) => {
       const d = dragRef.current;
       dragRef.current = null;
-      setDragAgentId(null);
+      setDragTarget(null);
       setDragPos(null);
       if (!d || !d.moved) return;
       draggedRef.current = true;
-      const world = toWorld(d, e.clientX, e.clientY);
+      // 그룹은 끄는 동안 이미 반영됐다.
+      if (d.target.kind === 'group') return;
+      const agentId = d.target.agentId;
+      const world = worldOf(d, e.clientX, e.clientY);
       const box = layout.boxes.find(
         (b) => world.x >= b.x && world.x <= b.x + b.w && world.y >= b.y && world.y <= b.y + b.h,
       );
       if (box) {
-        if (d.groupId === box.groupId) return; // 같은 그룹 안에서 옮긴 것뿐이면 그대로 둔다
-        if (project.masterAgentId === d.agentId) {
+        if (d.fromGroupId === box.groupId) return; // 같은 그룹 안에서 옮긴 것뿐이면 그대로 둔다
+        if (project.masterAgentId === agentId) {
           onNotice('마스터는 프로젝트 최상위 리더라 그룹에 넣을 수 없습니다.');
           return;
         }
-        addGroupMember(box.groupId, d.agentId);
-        if (d.groupId !== null) removeGroupMember(d.groupId, d.agentId);
+        addGroupMember(box.groupId, agentId);
+        if (d.fromGroupId !== null) removeGroupMember(d.fromGroupId, agentId);
         return;
       }
       // 빈 곳에 놓으면 그룹에서 빠지고 그 자리에 선다.
-      groups.filter((g) => g.memberIds.includes(d.agentId)).forEach((g) => removeGroupMember(g.id, d.agentId));
-      setAgentPosition(d.agentId, Math.max(0, world.x - d.offsetX), Math.max(0, world.y - d.offsetY));
+      groups.filter((g) => g.memberIds.includes(agentId)).forEach((g) => removeGroupMember(g.id, agentId));
+      setAgentPosition(agentId, Math.max(0, world.x - d.offsetX), Math.max(0, world.y - d.offsetY));
     };
 
     window.addEventListener('pointermove', onMove);
@@ -320,13 +337,14 @@ export default function GroupCanvas({
       window.removeEventListener('pointerup', onUp);
     };
   }, [
-    dragAgentId,
+    dragTarget,
     layout.boxes,
     groups,
     project.masterAgentId,
     addGroupMember,
     removeGroupMember,
     setAgentPosition,
+    setGroupPosition,
     onNotice,
   ]);
 
@@ -345,16 +363,26 @@ export default function GroupCanvas({
       >
         <div className={`${styles.world} ${smooth ? styles.worldSmooth : ''}`}>
           {layout.boxes.map((box) => {
+            const manual = groupPositions[box.groupId];
+            const draggingBox = dragTarget?.kind === 'group' && dragTarget.groupId === box.groupId;
+            const boxX = draggingBox && dragPos ? dragPos.x : manual ? Math.max(0, manual.x) : box.x;
+            const boxY = draggingBox && dragPos ? dragPos.y : manual ? Math.max(0, manual.y) : box.y;
             return (
               <div
                 key={box.key}
-                className={`${styles.box} ${overKey === box.key ? styles.boxOver : ''}`}
-                style={vars({ '--x': `${box.x}px`, '--y': `${box.y}px`, '--w': `${box.w}px`, '--h': `${box.h}px` })}
+                className={`${styles.box} ${overKey === box.key ? styles.boxOver : ''} ${draggingBox ? styles.boxDragging : ''}`}
+                style={vars({ '--x': `${boxX}px`, '--y': `${boxY}px`, '--w': `${box.w}px`, '--h': `${box.h}px` })}
                 onDragOver={(e) => onDragOver(e, box.key)}
                 onDragLeave={() => setOverKey(null)}
                 onDrop={(e) => onDropOnGroup(e, box.groupId)}
               >
-                <div className={styles.boxHeader}>
+                <div
+                  className={styles.boxHeader}
+                  onPointerDown={(e) =>
+                    startDrag(e, { kind: 'group', groupId: box.groupId }, { x: boxX, y: boxY }, null)
+                  }
+                  title="끌어서 그룹 상자 옮기기"
+                >
                   <div className={styles.boxTitles}>
                     <strong className={styles.boxTitle}>{box.title}</strong>
                     <span className={shared.muted}>{box.subtitle}</span>
@@ -386,9 +414,10 @@ export default function GroupCanvas({
             const reason = unavailableReason(agent, providers, project);
             const isSelected = node.agentId === selectedAgentId;
             // 끌고 있는 동안에는 포인터를 따라간다.
-            const dragging = dragAgentId === node.agentId;
-            const nodeX = dragging && dragPos ? dragPos.x : node.x;
-            const nodeY = dragging && dragPos ? dragPos.y : node.y;
+            const manual = nodePositions[node.agentId];
+            const dragging = dragTarget?.kind === 'node' && dragTarget.agentId === node.agentId;
+            const nodeX = dragging && dragPos ? dragPos.x : manual ? Math.max(0, manual.x) : node.x;
+            const nodeY = dragging && dragPos ? dragPos.y : manual ? Math.max(0, manual.y) : node.y;
             return (
               <div
                 key={node.key}
@@ -401,7 +430,9 @@ export default function GroupCanvas({
                   }
                   onSelectAgent(node.agentId);
                 }}
-                onPointerDown={(e) => onNodePointerDown(e, node)}
+                onPointerDown={(e) =>
+                  startDrag(e, { kind: 'node', agentId: node.agentId }, { x: nodeX, y: nodeY }, node.groupId)
+                }
                 style={vars({ '--x': `${nodeX}px`, '--y': `${nodeY}px` })}
                 title={reason ?? undefined}
               >
@@ -469,7 +500,7 @@ export default function GroupCanvas({
           type="button"
           onClick={() => {
             touchedRef.current = false;
-            clearNodePositions();
+            clearPositions();
             fit();
           }}
           title="손으로 옮긴 위치를 지우고 자동 배치로 되돌립니다"

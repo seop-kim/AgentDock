@@ -155,6 +155,27 @@ function layoutUngrouped(agents: Agent[]): LocalBox {
   return { box: null, w, h: grid.height, nodes: grid.nodes, edges: [] };
 }
 
+/** LocalBox 를 기준 좌표(ox, oy)에 놓아 boxes/nodes/edges 에 넣는다. */
+function placeLocal(
+  local: LocalBox,
+  ox: number,
+  oy: number,
+  boxes: CanvasBox[],
+  nodes: CanvasNode[],
+  edges: CanvasEdge[],
+): void {
+  if (local.box) boxes.push({ ...local.box, x: ox, y: oy });
+  local.nodes.forEach(({ lx, ly, ...node }) => nodes.push({ ...node, x: ox + lx, y: oy + ly }));
+  local.edges.forEach((e) => {
+    const x1 = ox + e.x1;
+    const y1 = oy + e.y1;
+    const x2 = ox + e.x2;
+    const y2 = oy + e.y2;
+    const ym = (y1 + y2) / 2;
+    edges.push({ key: e.key, d: `M ${x1} ${y1} C ${x1} ${ym}, ${x2} ${ym}, ${x2} ${y2}` });
+  });
+}
+
 /**
  * 프로젝트의 에이전트와 그룹을 캔버스 좌표로 배치한다.
  * 그룹에 속하지 않은 에이전트 노드(있을 때)가 맨 앞, 이어서 그룹 상자들이 줄바꿈하며 놓인다.
@@ -163,11 +184,13 @@ function layoutUngrouped(agents: Agent[]): LocalBox {
 export function layoutCanvas(
   agents: Agent[],
   groups: AgentGroup[],
-  /** 손으로 옮긴 노드 위치(월드 좌표). 여기 있는 에이전트는 자동 격자 대신 이 좌표에 그린다. */
+  /** 손으로 옮긴 노드 위치(월드 좌표). 자리는 그대로 두고 이 좌표에 그린다. */
   positions: Record<number, { x: number; y: number }> = {},
+  /** 손으로 옮긴 그룹 상자 위치(월드 좌표). 자리는 그대로 두고 이 좌표에 그린다. */
+  groupPositions: Record<number, { x: number; y: number }> = {},
 ): CanvasLayout {
   const groupedIds = new Set(groups.flatMap((g) => g.memberIds));
-  const ungrouped = agents.filter((a) => !groupedIds.has(a.id) && !positions[a.id]);
+  const ungrouped = agents.filter((a) => !groupedIds.has(a.id));
 
   const locals: LocalBox[] = [];
   if (ungrouped.length > 0) locals.push(layoutUngrouped(ungrouped));
@@ -187,40 +210,40 @@ export function layoutCanvas(
       y += rowH + GROUP_GAP;
       rowH = 0;
     }
-    if (local.box) boxes.push({ ...local.box, x, y });
-    local.nodes.forEach(({ lx, ly, ...node }) => nodes.push({ ...node, x: x + lx, y: y + ly }));
-    local.edges.forEach((e) => {
-      const x1 = x + e.x1;
-      const y1 = y + e.y1;
-      const x2 = x + e.x2;
-      const y2 = y + e.y2;
-      const ym = (y1 + y2) / 2;
-      edges.push({ key: e.key, d: `M ${x1} ${y1} C ${x1} ${ym}, ${x2} ${ym}, ${x2} ${y2}` });
-    });
+    // 손으로 옮긴 그룹은 제자리를 차지한 채(다른 그룹이 밀리지 않게) 그 좌표에 그린다.
+    const manualBox = local.box ? groupPositions[local.box.groupId] : undefined;
+    placeLocal(
+      local,
+      manualBox ? Math.max(0, manualBox.x) : x,
+      manualBox ? Math.max(0, manualBox.y) : y,
+      boxes,
+      nodes,
+      edges,
+    );
     x += local.w + GROUP_GAP;
     rowH = Math.max(rowH, local.h);
     width = Math.max(width, x - GROUP_GAP);
   });
 
-  // 손으로 옮긴 노드는 자동 격자에서 빠져 있으므로, 그 좌표로 따로 넣는다.
-  const manualNodes: CanvasNode[] = agents
-    .filter((a) => !groupedIds.has(a.id) && positions[a.id])
-    .map((a) => ({
-      key: `manual-${a.id}`,
-      agentId: a.id,
-      groupId: null,
-      isLeader: false,
-      x: Math.max(0, positions[a.id].x),
-      y: Math.max(0, positions[a.id].y),
-    }));
-  const placedNodes = [...nodes, ...manualNodes];
+  // 손으로 옮긴 노드도 자리는 그대로 두고 좌표만 바꾼다(다른 노드가 밀리지 않게).
+  nodes.forEach((node) => {
+    const manual = positions[node.agentId];
+    if (manual) {
+      node.x = Math.max(0, manual.x);
+      node.y = Math.max(0, manual.y);
+    }
+  });
 
-  // 맞춤이 손으로 옮긴 위치까지 담도록 크기를 다시 계산한다.
+  // 맞춤이 손으로 옮긴 위치까지 담도록 상자·노드 전체로 크기를 다시 계산한다.
   let height = y + rowH;
-  placedNodes.forEach((node) => {
+  boxes.forEach((box) => {
+    width = Math.max(width, box.x + box.w);
+    height = Math.max(height, box.y + box.h);
+  });
+  nodes.forEach((node) => {
     width = Math.max(width, node.x + NODE_W);
     height = Math.max(height, node.y + NODE_H);
   });
 
-  return { boxes, nodes: placedNodes, edges, width, height };
+  return { boxes, nodes, edges, width, height };
 }

@@ -33,6 +33,8 @@ interface MockState {
   chats: ChatMessage[];
   /** 구성도에서 손으로 옮긴 노드 위치(월드 좌표). 없는 노드는 자동 배치를 따른다. */
   nodePositions: Record<number, { x: number; y: number }>;
+  /** 손으로 옮긴 그룹 상자 위치(월드 좌표). 없는 그룹은 자동 배치를 따른다. */
+  groupPositions: Record<number, { x: number; y: number }>;
   nextId: number;
 }
 
@@ -58,6 +60,7 @@ type Action =
   | { type: 'agent/delete'; id: number }
   | { type: 'agent/setPlaced'; id: number; placed: boolean }
   | { type: 'layout/setPosition'; agentId: number; x: number; y: number }
+  | { type: 'layout/setGroupPosition'; groupId: number; x: number; y: number }
   | { type: 'layout/clearPositions' }
   | { type: 'group/create'; projectId: number; name: string }
   | { type: 'group/delete'; id: number }
@@ -78,6 +81,7 @@ const initialState: MockState = {
   tasks: SEED_TASKS,
   chats: [],
   nodePositions: {},
+  groupPositions: {},
   nextId: 100,
 };
 
@@ -241,8 +245,13 @@ function reducer(state: MockState, action: Action): MockState {
         nodePositions: { ...state.nodePositions, [action.agentId]: { x: action.x, y: action.y } },
       };
     }
+    case 'layout/setGroupPosition':
+      return {
+        ...state,
+        groupPositions: { ...state.groupPositions, [action.groupId]: { x: action.x, y: action.y } },
+      };
     case 'layout/clearPositions':
-      return { ...state, nodePositions: {} };
+      return { ...state, nodePositions: {}, groupPositions: {} };
     case 'group/create':
       return {
         ...state,
@@ -259,8 +268,11 @@ function reducer(state: MockState, action: Action): MockState {
         ],
         nextId: state.nextId + 1,
       };
-    case 'group/delete':
-      return { ...state, groups: state.groups.filter((g) => g.id !== action.id) };
+    case 'group/delete': {
+      const groupPositions = { ...state.groupPositions };
+      delete groupPositions[action.id];
+      return { ...state, groups: state.groups.filter((g) => g.id !== action.id), groupPositions };
+    }
     case 'group/addMember': {
       // 첫 멤버는 리더가 된다(리더가 없을 때만). 그룹에 들어가면 손으로 옮긴 위치는 지운다.
       const next = mapGroup(state, action.groupId, (group) =>
@@ -335,8 +347,11 @@ interface MockStore {
   /** 구성도에서 손으로 옮긴 노드 위치(월드 좌표). 그룹에 속한 노드는 자동 배치를 따른다. */
   nodePositions: Record<number, { x: number; y: number }>;
   setAgentPosition: (agentId: number, x: number, y: number) => void;
-  /** 손으로 옮긴 위치를 모두 지워 자동 배치로 되돌린다. */
-  clearNodePositions: () => void;
+  /** 손으로 옮긴 그룹 상자 위치(월드 좌표). */
+  groupPositions: Record<number, { x: number; y: number }>;
+  setGroupPosition: (groupId: number, x: number, y: number) => void;
+  /** 손으로 옮긴 위치(노드·그룹)를 모두 지워 자동 배치로 되돌린다. */
+  clearPositions: () => void;
   createGroup: (projectId: number, name: string) => void;
   deleteGroup: (id: number) => void;
   addGroupMember: (groupId: number, agentId: number) => void;
@@ -461,7 +476,9 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       setAgentPlaced: (id, placed) => dispatch({ type: 'agent/setPlaced', id, placed }),
       nodePositions: state.nodePositions,
       setAgentPosition: (agentId, x, y) => dispatch({ type: 'layout/setPosition', agentId, x, y }),
-      clearNodePositions: () => dispatch({ type: 'layout/clearPositions' }),
+      groupPositions: state.groupPositions,
+      setGroupPosition: (groupId, x, y) => dispatch({ type: 'layout/setGroupPosition', groupId, x, y }),
+      clearPositions: () => dispatch({ type: 'layout/clearPositions' }),
       createGroup: (projectId, name) => dispatch({ type: 'group/create', projectId, name }),
       deleteGroup: (id) => dispatch({ type: 'group/delete', id }),
       addGroupMember: (groupId, agentId) => dispatch({ type: 'group/addMember', groupId, agentId }),

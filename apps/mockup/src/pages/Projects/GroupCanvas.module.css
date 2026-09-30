@@ -81,12 +81,25 @@
   background: var(--color-code-bg);
 }
 
+/* 그룹 상자 머리말을 끌면 상자(과 그 안의 노드·선)를 통째로 옮긴다 */
 .boxHeader {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: var(--spacing-sm);
   padding: 10px 12px 0;
+  cursor: grab;
+}
+
+.boxHeader:active {
+  cursor: grabbing;
+}
+
+/* 끌고 있는 그룹 상자 */
+.boxDragging,
+.boxDragging:hover {
+  border-color: var(--color-primary);
+  z-index: 1;
 }
 
 .boxTitles {
