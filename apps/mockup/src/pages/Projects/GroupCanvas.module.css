@@ -230,38 +230,28 @@
   background: var(--color-error);
 }
 
-.iconButton {
-  padding: 0 5px;
-  border: 0;
-  background: transparent;
-  color: var(--color-muted);
-  line-height: 1.4;
-}
-
-.iconButton:hover {
-  background: transparent;
-  color: var(--color-text);
-}
-
-.leader,
-.leader:hover {
-  color: var(--color-primary);
-}
-
-/* 구성도에서 빼기: 노드를 지우고 에이전트 목록에만 남긴다 */
-.canvasRemove {
+/* 노드의 "⋮" 메뉴 버튼. 리더로 지정 / 그룹에서 제거 / 구성도에서 빼기를 여기에 모은다. */
+.nodeMenuButton {
   flex-shrink: 0;
-  padding: 0 4px;
+  padding: 0 6px 2px;
   border: 0;
   background: transparent;
   color: var(--color-muted);
-  font-size: 11px;
-  line-height: 1.4;
+  font-size: 16px;
+  line-height: 1;
 }
 
-.canvasRemove:hover {
+.nodeMenuButton:hover {
   background: transparent;
   color: var(--color-text);
+}
+
+/* 리더 표시(누를 수 있는 버튼이 아니라 이름표) */
+.leaderMark {
+  flex-shrink: 0;
+  padding-left: 4px;
+  color: var(--color-primary);
+  font-size: 12px;
 }
 
 .emptyState {

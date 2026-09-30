@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import styles from './AgentCardMenu.module.css';
+import menu from '../../styles/menu.module.css';
 
 const MENU_WIDTH = 168;
 
@@ -47,18 +47,18 @@ export default function AgentCardMenu({
 
   return createPortal(
     <div
-      className={styles.menu}
+      className={menu.menu}
       data-agent-menu
       role="menu"
       style={{ '--top': `${anchor.bottom + 4}px`, '--left': `${left}px` } as React.CSSProperties}
     >
-      <button type="button" role="menuitem" className={styles.item} onClick={onEdit}>
+      <button type="button" role="menuitem" className={menu.item} onClick={onEdit}>
         상세 설정
       </button>
-      <button type="button" role="menuitem" className={styles.item} onClick={onTogglePlaced}>
+      <button type="button" role="menuitem" className={menu.item} onClick={onTogglePlaced}>
         {placed ? '구성도에서 빼기' : '구성도에 놓기'}
       </button>
-      <button type="button" role="menuitem" className={`${styles.item} ${styles.danger}`} onClick={onDelete}>
+      <button type="button" role="menuitem" className={`${menu.item} ${menu.danger}`} onClick={onDelete}>
         삭제
       </button>
     </div>,

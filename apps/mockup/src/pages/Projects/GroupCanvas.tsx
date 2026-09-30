@@ -10,13 +10,14 @@ import {
   useState,
 } from 'react';
 import { unavailableReason } from '../../lib/agentAvailability';
-import { layoutCanvas, NODE_H, NODE_W } from '../../lib/canvasLayout';
+import { layoutCanvas, NODE_H, NODE_W, type CanvasNode } from '../../lib/canvasLayout';
 import { isAgentDrag, startAgentDrag } from '../../lib/dnd';
 import { useGroupDrop } from '../../lib/useGroupDrop';
 import { useMockStore } from '../../store/MockStore';
 import { SEED_ROLES } from '../../store/seed';
 import shared from '../../styles/shared.module.css';
-import type { Project } from '../../types';
+import type { Agent, Project } from '../../types';
+import AgentNodeMenu from './AgentNodeMenu';
 import styles from './GroupCanvas.module.css';
 
 interface View {
@@ -76,6 +77,8 @@ export default function GroupCanvas({
 
   const [view, setView] = useState<View>({ x: 0, y: 0, scale: 1 });
   const [overKey, setOverKey] = useState<string | null>(null);
+  // 노드 위에 버튼을 늘어놓지 않고 "⋮" 메뉴 하나로 모은다.
+  const [nodeMenu, setNodeMenu] = useState<{ node: CanvasNode; agent: Agent; rect: DOMRect } | null>(null);
   // 선택한 에이전트로 옮길 때만 부드럽게 움직이고, 드래그/휠은 즉시 따라간다.
   const [smooth, setSmooth] = useState(false);
   const smoothTimer = useRef<number | undefined>(undefined);
@@ -257,7 +260,6 @@ export default function GroupCanvas({
             if (!agent) return null;
             const role = SEED_ROLES.find((r) => r.id === agent.roleId);
             const reason = unavailableReason(agent, providers, project);
-            const inGroup = node.groupId !== null;
             const isSelected = node.agentId === selectedAgentId;
             return (
               <div
@@ -272,16 +274,10 @@ export default function GroupCanvas({
                 }
                 title={reason ?? undefined}
               >
-                {inGroup && (
-                  <button
-                    type="button"
-                    className={`${styles.iconButton} ${node.isLeader ? styles.leader : ''}`}
-                    title={node.isLeader ? '리더' : '리더로 지정'}
-                    aria-label={node.isLeader ? `${agent.name} 리더` : `${agent.name} 리더로 지정`}
-                    onClick={() => setGroupLeader(node.groupId!, agent.id)}
-                  >
-                    {node.isLeader ? '★' : '☆'}
-                  </button>
+                {node.isLeader && (
+                  <span className={styles.leaderMark} title="리더">
+                    ★
+                  </span>
                 )}
                 <div className={styles.nodeText}>
                   <span className={styles.nodeName}>{agent.name}</span>
@@ -291,25 +287,17 @@ export default function GroupCanvas({
                 </div>
                 {reason && <span className={styles.warnDot} aria-label={reason} />}
                 {isSelected && <span className={styles.selectedTag}>선택됨</span>}
-                {inGroup && (
-                  <button
-                    type="button"
-                    className={styles.iconButton}
-                    title="그룹에서 제거"
-                    aria-label={`${agent.name} 그룹에서 제거`}
-                    onClick={() => removeGroupMember(node.groupId!, agent.id)}
-                  >
-                    ×
-                  </button>
-                )}
                 <button
                   type="button"
-                  className={styles.canvasRemove}
-                  title="구성도에서 빼기 (에이전트 목록에만 남고, 그룹 소속은 유지됩니다)"
-                  aria-label={`${agent.name} 구성도에서 빼기`}
-                  onClick={() => setAgentPlaced(agent.id, false)}
+                  className={styles.nodeMenuButton}
+                  aria-label={`${agent.name} 메뉴`}
+                  aria-haspopup="menu"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setNodeMenu({ node, agent, rect: e.currentTarget.getBoundingClientRect() });
+                  }}
                 >
-                  빼기
+                  ⋮
                 </button>
               </div>
             );
@@ -343,6 +331,30 @@ export default function GroupCanvas({
           맞춤
         </button>
       </div>
+
+      {nodeMenu && (
+        <AgentNodeMenu
+          anchor={nodeMenu.rect}
+          inGroup={nodeMenu.node.groupId !== null}
+          isLeader={nodeMenu.node.isLeader}
+          onClose={() => setNodeMenu(null)}
+          onSetLeader={() => {
+            const { node } = nodeMenu;
+            setNodeMenu(null);
+            if (node.groupId !== null) setGroupLeader(node.groupId, node.agentId);
+          }}
+          onRemoveFromGroup={() => {
+            const { node } = nodeMenu;
+            setNodeMenu(null);
+            if (node.groupId !== null) removeGroupMember(node.groupId, node.agentId);
+          }}
+          onRemoveFromCanvas={() => {
+            const agentId = nodeMenu.agent.id;
+            setNodeMenu(null);
+            setAgentPlaced(agentId, false);
+          }}
+        />
+      )}
     </section>
   );
 }

@@ -1,5 +1,7 @@
+/* "⋮" 팝업 메뉴 공용(에이전트 목록 카드, 구성도 노드). body 에 포털로 그린다. */
+
 .menu {
-  composes: glassStrong from '../../styles/glass.module.css';
+  composes: glassStrong from './glass.module.css';
   position: fixed;
   top: var(--top);
   left: var(--left);

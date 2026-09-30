@@ -62,13 +62,6 @@
   box-shadow: 0 0 0 1px var(--color-primary);
 }
 
-.grip {
-  color: var(--color-muted);
-  letter-spacing: -3px;
-  cursor: grab;
-  user-select: none;
-}
-
 .text {
   flex: 1;
   min-width: 0;

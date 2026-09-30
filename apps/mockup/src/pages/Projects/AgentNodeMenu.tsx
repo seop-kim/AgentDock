@@ -1,0 +1,77 @@
+import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import menu from '../../styles/menu.module.css';
+
+const MENU_WIDTH = 168;
+
+/**
+ * 구성도 에이전트 노드의 "⋮" 메뉴. 노드 위에 버튼(리더 지정·그룹에서 제거·구성도에서 빼기)을 늘어놓지 않고
+ * 여기에 모아 둔다. 캔버스의 확대/축소·이동에 잘리지 않도록 body 에 포털로 그린다.
+ */
+export default function AgentNodeMenu({
+  anchor,
+  inGroup,
+  isLeader,
+  onClose,
+  onSetLeader,
+  onRemoveFromGroup,
+  onRemoveFromCanvas,
+}: {
+  /** "⋮" 버튼의 화면 좌표 */
+  anchor: DOMRect;
+  /** 그룹에 속해 있는지(속하지 않으면 그룹 관련 항목은 숨긴다) */
+  inGroup: boolean;
+  isLeader: boolean;
+  onClose: () => void;
+  onSetLeader: () => void;
+  onRemoveFromGroup: () => void;
+  onRemoveFromCanvas: () => void;
+}) {
+  useEffect(() => {
+    const onPointerDown = (e: PointerEvent) => {
+      if (!(e.target as HTMLElement).closest('[data-node-menu]')) onClose();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onClose, true);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onClose, true);
+    };
+  }, [onClose]);
+
+  const left = Math.max(8, Math.min(anchor.right - MENU_WIDTH, window.innerWidth - MENU_WIDTH - 8));
+
+  return createPortal(
+    <div
+      className={menu.menu}
+      data-node-menu
+      role="menu"
+      style={{ '--top': `${anchor.bottom + 4}px`, '--left': `${left}px` } as React.CSSProperties}
+    >
+      {inGroup && !isLeader && (
+        <button type="button" role="menuitem" className={menu.item} onClick={onSetLeader}>
+          리더로 지정
+        </button>
+      )}
+      {inGroup && (
+        <button type="button" role="menuitem" className={menu.item} onClick={onRemoveFromGroup}>
+          그룹에서 제거
+        </button>
+      )}
+      <button
+        type="button"
+        role="menuitem"
+        className={`${menu.item} ${menu.danger}`}
+        onClick={onRemoveFromCanvas}
+      >
+        구성도에서 빼기
+      </button>
+    </div>,
+    document.body,
+  );
+}

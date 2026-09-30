@@ -127,9 +127,6 @@ export default function AgentList({
               onMouseEnter={(e) => showHover(agent, e.currentTarget)}
               onMouseLeave={hideHover}
             >
-              <span className={styles.grip} aria-hidden="true">
-                ⋮⋮
-              </span>
               <div className={styles.text}>
                 <strong className={styles.name}>{agent.name}</strong>
                 <span className={styles.role}>{role?.name}</span>
@@ -149,7 +146,7 @@ export default function AgentList({
                   setMenu({ agent, rect: e.currentTarget.getBoundingClientRect() });
                 }}
               >
-                …
+                ⋮
               </button>
             </div>
           );
