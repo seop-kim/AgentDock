@@ -1,10 +1,10 @@
-/* 패널 한 벌: 상자 위 테두리에 붙는 탭 + 상자. 접으면 탭과 머리말만 남는다. */
+/* 패널 한 벌: 상자 위 테두리에 붙는 손잡이 + 상자. 접으면 손잡이와 머리말만 남는다. */
 .panel {
   display: flex;
   flex-direction: column;
   flex: 1 1 0;
-  /* 탭(22) + 머리말 + 상자 위아래 여백: 접었을 때 이만큼만 남는다 */
-  min-height: 88px;
+  /* 손잡이(18) + 머리말 + 상자 위아래 여백: 접었을 때 이만큼만 남는다 */
+  min-height: 84px;
   overflow: hidden;
   transition: flex-grow 0.22s ease;
 }
@@ -13,15 +13,13 @@
   flex-grow: 0;
 }
 
-/* 상자 위 테두리에 붙는 접기/펴기 탭(아래 테두리를 없애 상자와 이어 붙인다) */
+/* 상자 위 테두리에 붙는 접기/펴기 손잡이(가로 막대. 아래 테두리를 없애 상자와 이어 붙인다) */
 .tab {
-  align-self: flex-start;
-  display: inline-flex;
+  align-self: stretch;
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 22px;
-  margin-left: var(--spacing-md);
+  height: 18px;
   margin-bottom: -1px;
   padding: 0;
   border: 1px solid var(--glass-border);
@@ -35,6 +33,7 @@
 }
 
 .tab:hover {
+  background: var(--glass-bg-strong);
   color: var(--color-text);
 }
 
