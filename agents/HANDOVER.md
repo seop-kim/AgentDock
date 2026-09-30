@@ -29,6 +29,7 @@ npm run build --workspace=apps/mockup    # tsc --noEmit && vite build (커밋 �
 - **화면 검증 요령** (브라우저 도구):
   - `screenshot` 이 "Screenshot timed out" 으로 자주 실패한다. **한 번 더 호출하면 대개 성공**한다. 계속 실패하면 `javascript_tool` 로 DOM/계산 스타일을 확인한다.
   - 내장 브라우저 창이 좁다(약 517px). 데스크톱 배치를 보려면 `resize_window` 로 1200x700 정도를 준 뒤 **끝나면 `preset: desktop` 으로 되돌린다.** 다크/라이트는 `colorScheme` 로 바꾼다.
+  - **드래그앤드롭(HTML5 DnD) 검증**: CDP 로 DnD 를 합성할 때, `transform: scale()` 안에 있는 요소(구성도의 상자·노드)는 기본 합성 드래그로 **드롭이 조용히 안 먹는** 경우가 있다(같은 도구의 `--human` 옵션으로 하면 된다 — agent-browser 기준). 또 대상 요소의 **중앙이 다른 요소(노드 등)에 가려져 있으면 도구가 드롭을 거부**하니, 가려지지 않은 부분(예: 상자 제목)을 대상으로 잡는다.
   - 버튼/드래그 동작은 `javascript_tool` 로 이벤트를 쏴서 검증했다. 드래그 앤 드롭은 `new DataTransfer()` 를 만들어 `dragstart → dragover → drop → dragend` 를 순서대로 dispatch 한다(`lib/dnd.ts` 가 `dataTransfer` 의 커스텀 MIME 을 읽는다). React 입력은 네이티브 `value` setter 로 값을 넣고 `input`/`change` 이벤트를 dispatch 한다.
 - 스크린샷으로 **직접 확인하지 못한 것**(사용자가 눈으로 봐야 한다): 라이트 모드의 호버 정보 창·선택 강조·채팅 창, 900px 이하 좁은 화면의 프로젝트 상세 배치, 그룹이 많아 줄바꿈되는 캔버스 배치.
 
