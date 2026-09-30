@@ -50,6 +50,7 @@ npm run build --workspace=apps/mockup    # tsc --noEmit && vite build (커밋 �
 | 상세 › 구성도 캔버스 | **놓인(`placed`) 에이전트만** 그린다(빼 둔 에이전트는 목록에만). 그룹은 상자, 에이전트는 노드. 그룹 안에서 리더가 위, 멤버가 아래에 선으로 이어진다. **그룹에 속하지 않은 에이전트는 이름표·상자 없이 노드만** 놓인다. 배경 드래그로 이동, 휠로 확대/축소, 오른쪽 위 도구에서 −/+/맞춤/**위치 초기화**. **왼쪽 목록의 에이전트 카드를 캔버스로 끌어다 놓으면 그 자리에 배치된다**(미배치가 배치되고, 그룹에 있던 것은 그룹에서 빠진다). **노드를 끌어 자유 위치로 옮긴다**(그룹에 속하지 않은 노드만): 그룹 상자 위에 놓으면 그 그룹으로, 빈 곳에 놓으면 그룹에서 빠져 그 자리에 선다. **그룹 상자도 머리말을 끌어 통째로 옮긴다**(노드·선 포함). 그룹 상자 머리말의 **`⋮` 메뉴**(프롬프트 편집 / 삭제)로 상자를 지우거나 프롬프트를 고친다. 자유 위치는 `MockStore` 의 `nodePositions`·`groupPositions` 에 쌓이고 맞춤 크기에도 포함되며, 옮긴 것은 제자리를 차지한 채 좌표만 바뀌어 다른 것이 밀리지 않는다. 좌표는 음수도 될 수 있어 **캔버스 왼쪽·위까지 놓을 수 있고**, 맞춤은 경계 상자(`layout.minX`·`minY`)를 기준으로 한다. 왼쪽 목록의 카드·멤버 칩은 HTML5 DnD 로 그룹에 넣거나 뺀다. **노드에는 버튼을 늘어놓지 않고 `⋮` 메뉴 하나만** 둔다(`AgentNodeMenu`: 리더로 지정 / 그룹에서 제거 / 구성도에서 빼기). 리더는 노드에 **★** 로만 표시. 구성도에서 빼면 **그룹에서도 빠지고** 에이전트 목록에만 남는다(다시 놓으면 그룹 없이 노드만). |
 | 상세 › 채팅(명령) 창 | 구성도 **아래 가운데**에 떠 있다. **기본 대상은 마스터**(`Master (마스터)`)이고 그룹/에이전트도 고를 수 있다. 명령을 보내면 Task 가 생기고(총 Task 수 증가) 1.8초 뒤 **모의 응답**이 온다. **그룹에 보내면 리더가 받고, 마스터에게 보내면 마스터가 팀(그룹) 리더들에게 나눠 맡긴다.** 리더가 없거나 실행 불가면 시스템 메시지로 사유를 알린다. 기록은 접고 펼 수 있다. |
 | 상세 › 프로젝트 설정 창 | 이름 변경, **마스터 에이전트 지정 + 마스터 프롬프트**(미지정이면 경고), **워크스페이스 할당/해제/기본 지정**(할당은 여기서만), 프로젝트 삭제(에이전트·그룹·Task 도 함께 삭제). |
+| **현실성 점검** (`/reality-check`) | 실제 구현으로 갈 때 막히는 지점 9가지를 **흐름도**(사용자 → 마스터 → 그룹 리더 → 하위 에이전트) + **위험도 카드**(문제 / 지금 / 할 일)로 정리. 내용은 `pages/RealityCheck.tsx` 의 `RISKS` 배열(데이터). |
 | **설정 › 에이전트 연결 설정** | 런타임 카드(ON/OFF, 삭제, 추가 모달, 모델/모드/설치 계획 편집, CLI 확인 창에서 로그인·설치 가짜 로그). |
 | **설정 › 테마** | 시스템/라이트/다크 선택. localStorage 에 저장. |
 
@@ -70,6 +71,7 @@ pages/Projects/   Projects, ProjectDetail, AgentList, AgentCardMenu(카드 ⋮ �
                   AgentHoverCard, AgentFormModal(생성/수정 겸용, 창), GroupList, GroupCardMenu(그룹 ⋮ 메뉴),
                   GroupFormModal(새 그룹, 창), GroupPromptModal(그룹 프롬프트, 창), GroupCanvas, ChatPanel,
                   ProjectSettingsModal(마스터 지정·프롬프트 포함), ProjectWorkspaces (+ 각각의 *.module.css)
+pages/            Dashboard, RealityCheck(현실성 점검: 흐름도 + 위험 카드, 내용은 RISKS 배열)
 pages/Settings/   Settings(안쪽 왼쪽 메뉴), AgentConnectionSettings, ThemeSettings, RuntimeCard, AddRuntimeModal, CliPanel, CommandPanel
 ```
 
