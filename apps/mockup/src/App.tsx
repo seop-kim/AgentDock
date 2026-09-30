@@ -1,18 +1,13 @@
-import { Route, Routes, Link, Outlet } from 'react-router-dom';
+import { Route, Routes, Outlet } from 'react-router-dom';
 import styles from './layout.module.css';
-import ThemeToggle from './components/ThemeToggle';
+import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings/Settings';
 
 function Layout() {
   return (
-    <div>
-      <nav className={styles.nav}>
-        <Link to="/">Dashboard</Link>
-        <Link to="/settings">설정</Link>
-        <div className={styles.spacer} />
-        <ThemeToggle />
-      </nav>
+    <div className={styles.shell}>
+      <Sidebar />
       <main className={styles.main}>
         <Outlet />
       </main>
