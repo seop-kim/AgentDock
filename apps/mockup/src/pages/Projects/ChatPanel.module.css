@@ -163,14 +163,35 @@
   color: var(--color-muted);
 }
 
+/* 입력줄: 상자들과 같은 형태로 한 칸에 묶는다(둥근 테두리 + 반투명 배경, 여백은 위 3·좌우 10) */
 .form {
   display: flex;
-  gap: var(--spacing-sm);
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-input-bg);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+/* 칸 안이므로 입력 자체는 테두리·배경을 두지 않고, 포커스 표시는 칸 전체에 준다 */
+.form:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-code-bg);
 }
 
 .form input {
   flex: 1;
   min-width: 0;
+  padding: 7px 4px;
+  border: none;
+  background: transparent;
+}
+
+.form input:focus-visible {
+  border-color: transparent;
+  box-shadow: none;
 }
 
 /* 파일 첨부 버튼(입력줄 왼쪽) */
