@@ -13,8 +13,8 @@ const fromValue = (value: string): ChatTarget | null => {
 };
 
 /**
- * 구성도 아래에 떠 있는 채팅 창. 에이전트(또는 그룹의 리더)를 골라 명령을 보내면 Task 가 만들어지고
- * 에이전트의 응답이 이어진다. 응답은 타이머로 만든 모의 응답이다.
+ * 구성도 아래에 떠 있는 채팅 창. 기본 대상은 프로젝트 **마스터 에이전트**이고, 원하면 그룹(리더가 받음)이나
+ * 개별 에이전트를 직접 고를 수도 있다. 마스터에게 보내면 마스터가 팀 리더들에게 나눠 맡긴다(모의 응답).
  */
 export default function ChatPanel({
   project,
@@ -48,8 +48,12 @@ export default function ChatPanel({
     if (!target) return '명령을 받을 에이전트나 그룹을 고르세요.';
     if (target.kind === 'agent') {
       const agent = projectAgents.find((a) => a.id === target.id);
-      const reason = agent && unavailableReason(agent, providers, project);
-      return reason ? `${agent?.name}: ${reason}` : null;
+      if (!agent) return null;
+      const reason = unavailableReason(agent, providers, project);
+      if (reason) return `${agent.name}: ${reason}`;
+      return agent.id === project.masterAgentId
+        ? `${agent.name}(마스터)가 받아 팀(그룹) 리더들에게 나눠 맡깁니다.`
+        : null;
     }
     const group = projectGroups.find((g) => g.id === target.id);
     const leader = projectAgents.find((a) => a.id === group?.leaderAgentId);
@@ -82,6 +86,7 @@ export default function ChatPanel({
             {projectAgents.map((a) => (
               <option key={a.id} value={`agent:${a.id}`}>
                 {a.name}
+                {a.id === project.masterAgentId ? ' (마스터)' : ''}
               </option>
             ))}
           </optgroup>

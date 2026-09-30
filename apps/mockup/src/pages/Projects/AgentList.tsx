@@ -131,6 +131,7 @@ export default function AgentList({
                 <strong className={styles.name}>{agent.name}</strong>
                 <span className={styles.role}>{role?.name}</span>
               </div>
+              {project.masterAgentId === agent.id && <span className={styles.master}>마스터</span>}
               <span className={`${styles.status} ${statusClass}`} title={`상태: ${status.label}`}>
                 {status.label}
               </span>

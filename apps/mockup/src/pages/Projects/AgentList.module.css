@@ -85,6 +85,18 @@
   font-size: 11px;
 }
 
+/* 프로젝트 마스터 표시 */
+.master {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--color-code-bg);
+  color: var(--color-primary);
+  font-size: 10px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
 /* 상태 배지: 미배치 / 작업 중 / 작업 대기중 / 작업 없음 */
 .status {
   flex-shrink: 0;

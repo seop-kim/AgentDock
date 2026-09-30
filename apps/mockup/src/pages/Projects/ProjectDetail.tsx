@@ -36,13 +36,20 @@ export default function ProjectDetail() {
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
   const [focusSeq, setFocusSeq] = useState(0);
 
+  const project = projects.find((p) => String(p.id) === id);
+  const masterAgentId = project?.masterAgentId ?? null;
+
   useEffect(() => {
     if (notice === null) return;
     const timer = window.setTimeout(() => setNotice(null), NOTICE_MS);
     return () => window.clearTimeout(timer);
   }, [notice]);
 
-  const project = projects.find((p) => String(p.id) === id);
+  // 채팅 대상은 마스터가 기본이다(원하면 그룹/에이전트를 직접 고를 수 있다).
+  useEffect(() => {
+    if (masterAgentId === null) return;
+    setChatTarget((prev) => prev ?? { kind: 'agent', id: masterAgentId });
+  }, [masterAgentId]);
 
   if (!project) {
     return (

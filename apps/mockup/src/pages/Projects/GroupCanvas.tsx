@@ -264,7 +264,7 @@ export default function GroupCanvas({
             return (
               <div
                 key={node.key}
-                className={`${styles.node} ${node.isLeader ? styles.nodeLeader : ''} ${reason ? styles.nodeUnavailable : ''} ${isSelected ? styles.nodeSelected : ''}`}
+                className={`${styles.node} ${node.isLeader ? styles.nodeLeader : ''} ${agent.id === project.masterAgentId ? styles.nodeMaster : ''} ${reason ? styles.nodeUnavailable : ''} ${isSelected ? styles.nodeSelected : ''}`}
                 aria-current={isSelected ? 'true' : undefined}
                 onClick={() => onSelectAgent(node.agentId)}
                 style={vars({ '--x': `${node.x}px`, '--y': `${node.y}px` })}
@@ -285,6 +285,7 @@ export default function GroupCanvas({
                     {role?.name} · {agent.model || '기본 모델'}
                   </span>
                 </div>
+                {agent.id === project.masterAgentId && <span className={styles.masterTag}>마스터</span>}
                 {reason && <span className={styles.warnDot} aria-label={reason} />}
                 {isSelected && <span className={styles.selectedTag}>선택됨</span>}
                 <button

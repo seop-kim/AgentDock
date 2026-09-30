@@ -62,23 +62,17 @@
   font-size: 12px;
 }
 
+.master {
+  margin-left: auto;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--color-code-bg);
+  color: var(--color-primary);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .promptLabel {
   margin-bottom: 4px;
-  color: var(--color-muted);
-}
-
-.prompt {
-  margin: 0;
-  padding: 8px 10px;
-  max-height: 120px;
-  overflow: hidden;
-  border-radius: var(--radius);
-  background: var(--color-code-bg);
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.promptEmpty {
   color: var(--color-muted);
 }
