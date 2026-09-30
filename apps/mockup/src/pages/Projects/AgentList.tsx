@@ -26,12 +26,10 @@ export default function AgentList({
   project,
   selectedAgentId,
   onSelectAgent,
-  onCollapse,
 }: {
   project: Project;
   selectedAgentId: number | null;
   onSelectAgent: (agentId: number) => void;
-  onCollapse: () => void;
 }) {
   const { agents, groups, providers, removeGroupMember, deleteAgent } = useMockStore();
   const [creating, setCreating] = useState(false);
@@ -86,20 +84,15 @@ export default function AgentList({
         <h2 className={styles.title}>
           에이전트 <span className={shared.muted}>{projectAgents.length}</span>
         </h2>
-        <div className={styles.headerActions}>
-          <button
-            type="button"
-            className={shared.addButton}
-            onClick={() => setCreating(true)}
-            aria-label="새 에이전트"
-            title="새 에이전트"
-          >
-            <PlusIcon />
-          </button>
-          <button type="button" className={styles.collapse} onClick={onCollapse} aria-label="에이전트 패널 접기" title="접기">
-            ‹
-          </button>
-        </div>
+        <button
+          type="button"
+          className={shared.addButton}
+          onClick={() => setCreating(true)}
+          aria-label="새 에이전트"
+          title="새 에이전트"
+        >
+          <PlusIcon />
+        </button>
       </div>
 
       {projectAgents.length === 0 && <p className={shared.muted}>에이전트가 없습니다. + 버튼으로 만들어 보세요.</p>}

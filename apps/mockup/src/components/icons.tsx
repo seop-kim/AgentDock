@@ -52,3 +52,15 @@ export const PlusIcon = () => (
     <path d="M12 5v14M5 12h14" />
   </Icon>
 );
+
+export const ChevronUpIcon = () => (
+  <Icon>
+    <path d="M6 15l6-6 6 6" />
+  </Icon>
+);
+
+export const ChevronDownIcon = () => (
+  <Icon>
+    <path d="M6 9l6 6 6-6" />
+  </Icon>
+);

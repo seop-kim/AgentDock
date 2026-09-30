@@ -1,6 +1,6 @@
 import { CSSProperties, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { SettingsIcon } from '../../components/icons';
+import { ChevronDownIcon, ChevronUpIcon, SettingsIcon } from '../../components/icons';
 import { useMockStore } from '../../store/MockStore';
 import shared from '../../styles/shared.module.css';
 import type { ChatTarget } from '../../types';
@@ -100,6 +100,17 @@ export default function ProjectDetail() {
       />
 
       <div className={styles.leftColumn}>
+        <button
+          type="button"
+          className={styles.fold}
+          onClick={() => setAgentsOpen((prev) => !prev)}
+          aria-expanded={agentsOpen}
+          aria-label={agentsOpen ? '에이전트·그룹 패널 접기' : '에이전트·그룹 패널 펴기'}
+        >
+          {agentsOpen ? <ChevronUpIcon /> : <ChevronDownIcon />}
+          {agentsOpen ? '접기' : '펴기'}
+        </button>
+
         <header className={styles.header}>
           <Link to="/projects" className={styles.back}>
             ← 프로젝트 목록
@@ -135,13 +146,12 @@ export default function ProjectDetail() {
           </div>
         </header>
 
-        {agentsOpen ? (
+        {agentsOpen && (
           <>
             <AgentList
               project={project}
               selectedAgentId={activeAgentId}
               onSelectAgent={(agentId) => selectAgent(agentId, true)}
-              onCollapse={() => setAgentsOpen(false)}
             />
             <GroupList
               project={project}
@@ -153,10 +163,6 @@ export default function ProjectDetail() {
               onNotice={setNotice}
             />
           </>
-        ) : (
-          <button type="button" className={styles.openAgents} onClick={() => setAgentsOpen(true)}>
-            에이전트 {agentCount} · 그룹 {groupCount} ›
-          </button>
         )}
       </div>
 

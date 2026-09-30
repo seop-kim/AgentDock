@@ -24,26 +24,6 @@
   margin-bottom: var(--spacing-md);
 }
 
-.headerActions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.collapse {
-  padding: 4px 8px;
-  border-color: transparent;
-  background: transparent;
-  color: var(--color-muted);
-  font-size: 18px;
-  line-height: 1;
-}
-
-.collapse:hover {
-  background: var(--color-code-bg);
-  color: var(--color-text);
-}
-
 .title {
   margin: 0;
   font-size: 1rem;

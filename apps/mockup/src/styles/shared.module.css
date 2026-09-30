@@ -66,4 +66,12 @@
   width: 32px;
   height: 32px;
   padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-text);
+}
+
+.addButton:hover {
+  background: var(--color-code-bg);
+  filter: none;
 }
