@@ -37,6 +37,10 @@ export interface Project {
   id: number;
   name: string;
   workspaces: ProjectWorkspaceInfo[];
+  /** 프로젝트 마스터 에이전트(최상위 리더). 프로젝트에 반드시 하나 있어야 한다. */
+  masterAgentId: number | null;
+  /** 마스터 프롬프트. 프롬프트 계층(마스터 → 그룹 → 에이전트)의 맨 위. */
+  masterPrompt: string;
 }
 
 export interface AgentRole {
@@ -70,6 +74,8 @@ export interface AgentGroup {
   leaderAgentId: number | null;
   /** 한 에이전트는 여러 그룹에 속할 수 있다. */
   memberIds: number[];
+  /** 그룹 프롬프트. 마스터 프롬프트 아래, 에이전트 프롬프트 위. */
+  prompt: string;
 }
 
 export type TaskStatus = 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED';

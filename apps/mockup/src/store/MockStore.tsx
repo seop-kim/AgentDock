@@ -47,6 +47,8 @@ type Action =
   | { type: 'project/create'; name: string }
   | { type: 'project/rename'; id: number; name: string }
   | { type: 'project/delete'; id: number }
+  | { type: 'project/setMaster'; projectId: number; agentId: number }
+  | { type: 'project/setMasterPrompt'; projectId: number; prompt: string }
   | { type: 'project/assignWorkspace'; projectId: number; workspaceId: number; asDefault: boolean }
   | { type: 'project/removeWorkspace'; projectId: number; workspaceId: number }
   | { type: 'agent/create'; input: NewAgentInput }
@@ -58,9 +60,10 @@ type Action =
   | { type: 'group/addMember'; groupId: number; agentId: number }
   | { type: 'group/removeMember'; groupId: number; agentId: number }
   | { type: 'group/setLeader'; groupId: number; agentId: number | null }
+  | { type: 'group/setPrompt'; groupId: number; prompt: string }
   | { type: 'chat/system'; message: ChatMessage }
-  | { type: 'chat/send'; user: ChatMessage; pending: ChatMessage; task: Task }
-  | { type: 'chat/reply'; messageId: number; taskId: number; text: string };
+  | { type: 'chat/send'; user: ChatMessage; pending: ChatMessage; tasks: Task[] }
+  | { type: 'chat/reply'; messageId: number; taskIds: number[]; text: string };
 
 const initialState: MockState = {
   providers: SEED_PROVIDERS,
@@ -124,13 +127,26 @@ function reducer(state: MockState, action: Action): MockState {
         ),
       };
     case 'project/create':
+      // 새 프로젝트는 마스터 미지정으로 시작한다(설정에서 지정해야 한다).
       return {
         ...state,
-        projects: [...state.projects, { id: state.nextId, name: action.name, workspaces: [] }],
+        projects: [
+          ...state.projects,
+          { id: state.nextId, name: action.name, workspaces: [], masterAgentId: null, masterPrompt: '' },
+        ],
         nextId: state.nextId + 1,
       };
     case 'project/rename':
       return mapProject(state, action.id, (project) => ({ ...project, name: action.name }));
+    case 'project/setMaster':
+      // 마스터는 프로젝트 최상위 리더라 그룹에 속하지 않는다(지정하면 모든 그룹에서 뺀다).
+      return {
+        ...state,
+        projects: state.projects.map((p) => (p.id === action.projectId ? { ...p, masterAgentId: action.agentId } : p)),
+        groups: withoutMember(state.groups, action.agentId),
+      };
+    case 'project/setMasterPrompt':
+      return mapProject(state, action.projectId, (project) => ({ ...project, masterPrompt: action.prompt }));
     case 'project/delete':
       // 프로젝트에 속한 에이전트, 그룹, Task 도 함께 사라진다.
       return {
@@ -177,10 +193,12 @@ function reducer(state: MockState, action: Action): MockState {
       };
     case 'agent/delete':
       // 에이전트가 사라지면 모든 그룹에서도 빠지고, 리더였다면 남은 첫 멤버가 이어받는다. 이미 만든 Task 는 남긴다.
+      // 마스터를 지우면 그 프로젝트는 마스터 미지정이 된다(화면에서 다시 지정하라고 알린다).
       return {
         ...state,
         agents: state.agents.filter((a) => a.id !== action.id),
         groups: withoutMember(state.groups, action.id),
+        projects: state.projects.map((p) => (p.masterAgentId === action.id ? { ...p, masterAgentId: null } : p)),
       };
     case 'agent/setPlaced':
       // 구성도에서 빼면 그룹에서도 빠진다(다시 놓으면 그룹 없이 노드만 놓인다).
@@ -194,7 +212,14 @@ function reducer(state: MockState, action: Action): MockState {
         ...state,
         groups: [
           ...state.groups,
-          { id: state.nextId, projectId: action.projectId, name: action.name, leaderAgentId: null, memberIds: [] },
+          {
+            id: state.nextId,
+            projectId: action.projectId,
+            name: action.name,
+            leaderAgentId: null,
+            memberIds: [],
+            prompt: '',
+          },
         ],
         nextId: state.nextId + 1,
       };
@@ -220,22 +245,24 @@ function reducer(state: MockState, action: Action): MockState {
       });
     case 'group/setLeader':
       return mapGroup(state, action.groupId, (group) => ({ ...group, leaderAgentId: action.agentId }));
+    case 'group/setPrompt':
+      return mapGroup(state, action.groupId, (group) => ({ ...group, prompt: action.prompt }));
     case 'chat/system':
       return { ...state, chats: [...state.chats, action.message] };
     case 'chat/send':
       return {
         ...state,
         chats: [...state.chats, action.user, action.pending],
-        tasks: [...state.tasks, action.task],
+        tasks: [...state.tasks, ...action.tasks],
       };
     case 'chat/reply':
-      // 응답이 오면 대기 중이던 에이전트 메시지를 완료로 바꾸고 Task 도 끝낸다.
+      // 응답이 오면 대기 중이던 에이전트 메시지를 완료로 바꾸고, 이번 명령으로 만든 Task 를 모두 끝낸다.
       return {
         ...state,
         chats: state.chats.map((m) =>
           m.id === action.messageId ? { ...m, text: action.text, status: 'done' as const } : m,
         ),
-        tasks: state.tasks.map((t) => (t.id === action.taskId ? { ...t, status: 'DONE' as const } : t)),
+        tasks: state.tasks.map((t) => (action.taskIds.includes(t.id) ? { ...t, status: 'DONE' as const } : t)),
       };
   }
 }
@@ -256,6 +283,9 @@ interface MockStore {
   createProject: (name: string) => void;
   renameProject: (id: number, name: string) => void;
   deleteProject: (id: number) => void;
+  /** 프로젝트 마스터 에이전트 지정(변경). 지정하면 그 에이전트는 모든 그룹에서 빠진다. */
+  setProjectMaster: (projectId: number, agentId: number) => void;
+  setMasterPrompt: (projectId: number, prompt: string) => void;
   assignWorkspace: (projectId: number, workspaceId: number, asDefault: boolean) => void;
   removeWorkspace: (projectId: number, workspaceId: number) => void;
   createAgent: (input: NewAgentInput) => void;
@@ -268,8 +298,12 @@ interface MockStore {
   addGroupMember: (groupId: number, agentId: number) => void;
   removeGroupMember: (groupId: number, agentId: number) => void;
   setGroupLeader: (groupId: number, agentId: number | null) => void;
+  setGroupPrompt: (groupId: number, prompt: string) => void;
   chats: ChatMessage[];
-  /** 에이전트나 그룹(리더)에게 명령을 보낸다. 보낼 수 없으면 채팅에 사유가 시스템 메시지로 남는다. */
+  /**
+   * 에이전트나 그룹(리더)에게 명령을 보낸다. **마스터**에게 보내면 마스터가 팀(그룹) 리더들에게 나눠 맡긴다(모의).
+   * 보낼 수 없으면 채팅에 사유가 시스템 메시지로 남는다.
+   */
   sendCommand: (projectId: number, target: ChatTarget, text: string) => void;
 }
 
@@ -315,23 +349,40 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
 
     const userId = nextSeq();
     const agentMessageId = nextSeq();
-    const taskId = nextSeq();
     const targetLabel = target.kind === 'group' ? `${group?.name} → 리더 ${receiver.name}` : receiver.name;
     const title = text.length > 28 ? `${text.slice(0, 28)}…` : text;
+
+    // 마스터에게 보내면 마스터가 팀(그룹) 리더들에게 나눠 맡긴다(모의 응답).
+    const isMaster = project?.masterAgentId === receiver.id;
+    const delegated = isMaster
+      ? state.groups.filter((g) => g.projectId === projectId && g.leaderAgentId !== null)
+      : [];
+    const tasks: Task[] = [
+      { id: nextSeq(), projectId, title, status: 'RUNNING', agentId: receiver.id },
+      ...delegated.map((g) => ({
+        id: nextSeq(),
+        projectId,
+        title: `${g.name} 배분: ${title}`,
+        status: 'RUNNING' as const,
+        agentId: g.leaderAgentId,
+      })),
+    ];
 
     dispatch({
       type: 'chat/send',
       user: { id: userId, projectId, role: 'user', author: '나', text, targetLabel, status: 'done' },
       pending: { id: agentMessageId, projectId, role: 'agent', author: receiver.name, text: '', status: 'pending' },
-      task: { id: taskId, projectId, title, status: 'RUNNING', agentId: receiver.id },
+      tasks,
     });
 
     window.setTimeout(() => {
       dispatch({
         type: 'chat/reply',
         messageId: agentMessageId,
-        taskId,
-        text: `요청을 확인했습니다. "${title}" 작업을 진행했고 완료했습니다. (모의 응답)`,
+        taskIds: tasks.map((t) => t.id),
+        text: isMaster
+          ? `요청을 확인했습니다. 작업을 쪼개 ${delegated.length}개 팀에 나눠 맡기고 결과를 모았습니다. (모의 응답)`
+          : `요청을 확인했습니다. "${title}" 작업을 진행했고 완료했습니다. (모의 응답)`,
       });
     }, REPLY_DELAY_MS);
   };
@@ -354,6 +405,8 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       createProject: (name) => dispatch({ type: 'project/create', name }),
       renameProject: (id, name) => dispatch({ type: 'project/rename', id, name }),
       deleteProject: (id) => dispatch({ type: 'project/delete', id }),
+      setProjectMaster: (projectId, agentId) => dispatch({ type: 'project/setMaster', projectId, agentId }),
+      setMasterPrompt: (projectId, prompt) => dispatch({ type: 'project/setMasterPrompt', projectId, prompt }),
       assignWorkspace: (projectId, workspaceId, asDefault) =>
         dispatch({ type: 'project/assignWorkspace', projectId, workspaceId, asDefault }),
       removeWorkspace: (projectId, workspaceId) =>
@@ -367,6 +420,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       addGroupMember: (groupId, agentId) => dispatch({ type: 'group/addMember', groupId, agentId }),
       removeGroupMember: (groupId, agentId) => dispatch({ type: 'group/removeMember', groupId, agentId }),
       setGroupLeader: (groupId, agentId) => dispatch({ type: 'group/setLeader', groupId, agentId }),
+      setGroupPrompt: (groupId, prompt) => dispatch({ type: 'group/setPrompt', groupId, prompt }),
       chats: state.chats,
       sendCommand,
     }),

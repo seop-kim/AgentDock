@@ -4,8 +4,10 @@ import { useGroupDrop } from '../../lib/useGroupDrop';
 import { PlusIcon } from '../../components/icons';
 import { useMockStore } from '../../store/MockStore';
 import shared from '../../styles/shared.module.css';
-import type { ChatTarget, Project } from '../../types';
+import type { AgentGroup, ChatTarget, Project } from '../../types';
+import GroupCardMenu from './GroupCardMenu';
 import GroupFormModal from './GroupFormModal';
+import GroupPromptModal from './GroupPromptModal';
 import styles from './GroupList.module.css';
 
 /**
@@ -27,6 +29,8 @@ export default function GroupList({
   const dropOnGroup = useGroupDrop(onNotice);
   const [creating, setCreating] = useState(false);
   const [overId, setOverId] = useState<number | null>(null);
+  const [menu, setMenu] = useState<{ group: AgentGroup; rect: DOMRect } | null>(null);
+  const [promptGroup, setPromptGroup] = useState<AgentGroup | null>(null);
 
   const projectGroups = groups.filter((g) => g.projectId === project.id);
   const agentName = (id: number) => agents.find((a) => a.id === id)?.name ?? '?';
@@ -85,14 +89,15 @@ export default function GroupList({
                 <strong className={styles.name}>{group.name}</strong>
                 <button
                   type="button"
-                  className={styles.delete}
+                  className={styles.menuButton}
+                  aria-label={`${group.name} 메뉴`}
+                  aria-haspopup="menu"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onDelete(group.id, group.name);
+                    setMenu({ group, rect: e.currentTarget.getBoundingClientRect() });
                   }}
-                  aria-label={`${group.name} 그룹 삭제`}
                 >
-                  삭제
+                  ⋮
                 </button>
               </div>
               <div className={shared.muted}>
@@ -132,6 +137,23 @@ export default function GroupList({
       </div>
 
       {creating && <GroupFormModal project={project} onClose={() => setCreating(false)} />}
+
+      {menu && (
+        <GroupCardMenu
+          anchor={menu.rect}
+          onClose={() => setMenu(null)}
+          onEditPrompt={() => {
+            setPromptGroup(menu.group);
+            setMenu(null);
+          }}
+          onDelete={() => {
+            const target = menu.group;
+            setMenu(null);
+            onDelete(target.id, target.name);
+          }}
+        />
+      )}
+      {promptGroup && <GroupPromptModal group={promptGroup} onClose={() => setPromptGroup(null)} />}
     </aside>
   );
 }

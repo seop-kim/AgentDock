@@ -87,20 +87,6 @@ export const SEED_WORKSPACES: Workspace[] = [
   { id: 3, name: 'shop-api', path: 'C:\\Users\\mock\\Documents\\GitHub\\shop-api' },
 ];
 
-/** 프로젝트↔워크스페이스는 N:N 이고 프로젝트당 기본(★) 1개다. */
-export const SEED_PROJECTS: Project[] = [
-  { id: 1, name: 'test', workspaces: [{ workspaceId: 1, isDefault: true }] },
-  {
-    id: 2,
-    name: 'shop',
-    workspaces: [
-      { workspaceId: 2, isDefault: true },
-      { workspaceId: 3, isDefault: false },
-    ],
-  },
-  { id: 3, name: 'blog', workspaces: [] },
-];
-
 export const SEED_ROLES: AgentRole[] = [
   { id: 1, name: 'Backend Developer' },
   { id: 2, name: 'Frontend Developer' },
@@ -125,6 +111,15 @@ const SHOP_FIRST_AGENT_ID = 2;
 
 /** 그룹 5개. 이름 순서가 그룹 id(1~5)이고, 첫 멤버가 리더가 된다. */
 const SHOP_GROUP_NAMES = ['Backend Team', 'Frontend Team', 'QA Team', 'DevOps Team', 'Docs Team'];
+
+/** 그룹 프롬프트(마스터 프롬프트 아래, 에이전트 프롬프트 위). */
+const SHOP_GROUP_PROMPTS: Record<string, string> = {
+  'Backend Team': '서버 코드는 테스트를 먼저 쓰고, 작은 단위로 자주 커밋한다.',
+  'Frontend Team': '컴포넌트를 작게 유지하고, 접근성과 좁은 화면을 먼저 확인한다.',
+  'QA Team': '경계값과 회귀 위험을 먼저 보고, 재현 절차를 남긴다.',
+  'DevOps Team': '배포는 되돌릴 수 있게 하고, 변경은 로그로 남긴다.',
+  'Docs Team': '사용자 관점으로 짧게 쓰고, 예시를 함께 둔다.',
+};
 
 /** 모델/모드를 조금씩 다르게 넣어 구성도에 다양하게 보이게 한다(빈 값은 CLI 기본값). */
 const MODEL_CYCLE = ['opus', 'sonnet', ''];
@@ -163,13 +158,13 @@ const SHOP_AGENTS: ShopAgentSpec[] = [
   { name: 'DevOps C', roleId: 1, group: 'DevOps Team' },
   { name: 'Docs A', roleId: 4, group: 'Docs Team' },
   { name: 'Docs B', roleId: 4, group: 'Docs Team', task: 'PENDING' },
-  // 그룹 없이 구성도에만 배치 (6)
-  { name: 'Reviewer A', roleId: 3, task: 'RUNNING' },
+  // 그룹 없이 구성도에만 배치 (6). Master 는 프로젝트 최상위 리더라 그룹에 속하지 않는다.
+  { name: 'Master', roleId: 4, task: 'RUNNING' },
+  { name: 'Reviewer A', roleId: 3 },
   { name: 'Reviewer B', roleId: 3 },
   { name: 'Reviewer C', roleId: 3 },
   { name: 'Planner A', roleId: 4 },
   { name: 'Planner B', roleId: 4 },
-  { name: 'Planner C', roleId: 4 },
   // 구성도에 놓지 않음(미배치) (4)
   { name: 'Reviewer D', roleId: 3, unplaced: true },
   { name: 'Reviewer E', roleId: 3, unplaced: true },
@@ -201,8 +196,35 @@ const shopGroups: AgentGroup[] = SHOP_GROUP_NAMES.map((name, index) => {
     name,
     leaderAgentId: memberIds[0] ?? null,
     memberIds,
+    prompt: SHOP_GROUP_PROMPTS[name] ?? '',
   };
 });
+
+/** 'Master' 로 이름 붙인 에이전트가 shop 의 마스터다(프로젝트 설정에서 바꿀 수 있다). */
+const SHOP_MASTER_AGENT_ID = SHOP_FIRST_AGENT_ID + SHOP_AGENTS.findIndex((spec) => spec.name === 'Master');
+
+/** 프로젝트↔워크스페이스는 N:N 이고 프로젝트당 기본(★) 1개다. 프로젝트에는 마스터 에이전트가 반드시 하나 있어야 한다. */
+export const SEED_PROJECTS: Project[] = [
+  {
+    id: 1,
+    name: 'test',
+    workspaces: [{ workspaceId: 1, isDefault: true }],
+    masterAgentId: 1,
+    masterPrompt: '작은 확인 작업을 직접 처리하고, 결과를 한 줄로 보고한다.',
+  },
+  {
+    id: 2,
+    name: 'shop',
+    workspaces: [
+      { workspaceId: 2, isDefault: true },
+      { workspaceId: 3, isDefault: false },
+    ],
+    masterAgentId: SHOP_MASTER_AGENT_ID,
+    masterPrompt:
+      '요청을 받으면 먼저 작업을 쪼개고, 적합한 팀(그룹)에 나눠 맡긴 뒤 결과를 모아 보고한다. 직접 오래 붙잡지 않는다.',
+  },
+  { id: 3, name: 'blog', workspaces: [], masterAgentId: null, masterPrompt: '' },
+];
 
 let nextTaskId = 3;
 

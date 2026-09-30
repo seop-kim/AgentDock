@@ -105,10 +105,10 @@ export default function AgentFormModal({
         </div>
 
         <div className={modal.field}>
-          <label>프롬프트 (페르소나, 선택)</label>
+          <label>에이전트 프롬프트 (선택)</label>
           <textarea
             rows={4}
-            placeholder="성격/일하는 방식 — 이 에이전트의 시스템 프롬프트로 덧붙습니다"
+            placeholder="성격/일하는 방식 — 마스터 → 그룹 → 에이전트 순서로 겹쳐 적용됩니다"
             value={persona}
             onChange={(e) => setPersona(e.target.value)}
           />
