@@ -32,6 +32,9 @@ export default function ProjectDetail() {
   const [agentsOpen, setAgentsOpen] = useState(true);
   const [chatTarget, setChatTarget] = useState<ChatTarget | null>(null);
   const [chatExpanded, setChatExpanded] = useState(false);
+  // 선택된 에이전트: 왼쪽 카드와 구성도 노드가 함께 강조된다. focusSeq 가 오를 때마다 구성도가 그쪽으로 이동한다.
+  const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
+  const [focusSeq, setFocusSeq] = useState(0);
 
   useEffect(() => {
     if (notice === null) return;
@@ -51,6 +54,16 @@ export default function ProjectDetail() {
       </div>
     );
   }
+
+  // 삭제된 에이전트가 선택된 채로 남지 않게 실제로 있는 에이전트만 선택으로 인정한다.
+  const activeAgentId = agents.some((a) => a.id === selectedAgentId && a.projectId === project.id) ? selectedAgentId : null;
+
+  /** 에이전트를 선택하고 채팅 대상으로도 삼는다. 왼쪽 카드에서 누르면 구성도도 그쪽으로 이동한다. */
+  const selectAgent = (agentId: number, focus: boolean) => {
+    setSelectedAgentId(agentId);
+    setChatTarget({ kind: 'agent', id: agentId });
+    if (focus) setFocusSeq((prev) => prev + 1);
+  };
 
   const defaultWorkspace = project.workspaces.find((w) => w.isDefault);
   const workspaceName = workspaces.find((w) => w.id === defaultWorkspace?.workspaceId)?.name;
@@ -72,6 +85,9 @@ export default function ProjectDetail() {
         project={project}
         insetLeft={agentsOpen ? AGENT_PANEL_INSET : NO_PANEL_INSET}
         insetBottom={chatExpanded ? CHAT_EXPANDED_INSET : CHAT_COLLAPSED_INSET}
+        selectedAgentId={activeAgentId}
+        focusSeq={focusSeq}
+        onSelectAgent={(agentId) => selectAgent(agentId, false)}
         onNotice={setNotice}
       />
 
@@ -115,11 +131,19 @@ export default function ProjectDetail() {
           <>
             <AgentList
               project={project}
-              target={chatTarget}
-              onSelect={setChatTarget}
+              selectedAgentId={activeAgentId}
+              onSelectAgent={(agentId) => selectAgent(agentId, true)}
               onCollapse={() => setAgentsOpen(false)}
             />
-            <GroupList project={project} target={chatTarget} onSelect={setChatTarget} onNotice={setNotice} />
+            <GroupList
+              project={project}
+              target={chatTarget}
+              onSelect={(target) => {
+                setChatTarget(target);
+                setSelectedAgentId(null);
+              }}
+              onNotice={setNotice}
+            />
           </>
         ) : (
           <button type="button" className={styles.openAgents} onClick={() => setAgentsOpen(true)}>

@@ -52,72 +52,87 @@
 .cards {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: 6px;
 }
 
+/* 이름과 역할만 보이는 작은 카드 */
 .card {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 10px 12px;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 6px 6px 8px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   background: var(--color-surface);
   font-size: 14px;
-  cursor: grab;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
 }
 
 .card:hover {
   border-color: var(--color-border-strong);
+  background: var(--color-code-bg);
 }
 
-/* 채팅 대상으로 선택된 카드 */
+/* 선택된 에이전트: 구성도에서도 같은 에이전트가 강조된다 */
 .cardSelected,
 .cardSelected:hover {
   border-color: var(--color-primary);
-}
-
-.card:active {
-  cursor: grabbing;
-}
-
-.cardTop {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
+  background: var(--color-code-bg);
+  box-shadow: 0 0 0 1px var(--color-primary);
 }
 
 .grip {
   color: var(--color-muted);
   letter-spacing: -3px;
+  cursor: grab;
   user-select: none;
 }
 
-.name {
+.text {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 13px;
 }
 
-.groups {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 2px;
-}
-
-.groupChip {
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: var(--color-code-bg);
-  font-size: 12px;
-}
-
-.ungrouped {
+.role {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--color-muted);
-  font-size: 12px;
+  font-size: 11px;
+}
+
+.warnDot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-error);
+}
+
+.menuButton {
+  padding: 0 7px 3px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.menuButton:hover {
+  background: var(--color-code-bg);
+  color: var(--color-text);
+  filter: none;
 }
 
 .tip {

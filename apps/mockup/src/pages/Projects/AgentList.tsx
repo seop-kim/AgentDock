@@ -1,35 +1,65 @@
-import { DragEvent, useState } from 'react';
-import { isAgentDrag, readAgentDrag, startAgentDrag } from '../../lib/dnd';
+import { DragEvent, useEffect, useRef, useState } from 'react';
 import { unavailableReason } from '../../lib/agentAvailability';
-import { SEED_ROLES } from '../../store/seed';
+import { isAgentDrag, readAgentDrag, startAgentDrag } from '../../lib/dnd';
 import { useMockStore } from '../../store/MockStore';
+import { SEED_ROLES } from '../../store/seed';
 import shared from '../../styles/shared.module.css';
-import type { ChatTarget, Project } from '../../types';
+import type { Agent, Project } from '../../types';
+import AgentCardMenu from './AgentCardMenu';
+import AgentFormModal from './AgentFormModal';
+import AgentHoverCard from './AgentHoverCard';
 import styles from './AgentList.module.css';
-import NewAgentModal from './NewAgentModal';
+
+/** 마우스를 올린 뒤 정보 창이 뜨기까지의 지연(스쳐 지나갈 때 깜빡이지 않게) */
+const HOVER_DELAY_MS = 250;
 
 /**
- * 프로젝트 상세에서 구성도 위에 떠 있는 에이전트 패널. 카드를 구성도의 그룹으로 끌어 놓아 멤버로 넣는다(그룹은 필수가 아니다).
- * 캔버스의 멤버 노드를 이 목록으로 끌어 놓으면 그 그룹에서 빠진다.
+ * 프로젝트 상세에서 구성도 위에 떠 있는 에이전트 패널. 카드는 이름과 역할만 보이는 작은 카드다.
+ *  - 마우스를 올리면 이름/역할/연결된 에이전트/프롬프트 정보 창이 뜬다.
+ *  - 누르면 선택되고 구성도가 그 에이전트로 이동한다.
+ *  - "…" 메뉴에서 상세 설정과 삭제를 한다.
+ *  - 카드를 구성도/그룹 카드의 그룹으로 끌어 놓으면 멤버가 되고(그룹은 필수가 아니다),
+ *    그룹 멤버 칩을 이 패널로 끌어 놓으면 그 그룹에서 빠진다.
  */
 export default function AgentList({
   project,
-  target,
-  onSelect,
+  selectedAgentId,
+  onSelectAgent,
   onCollapse,
 }: {
   project: Project;
-  /** 채팅 명령의 현재 대상(카드를 누르면 바뀐다) */
-  target: ChatTarget | null;
-  onSelect: (target: ChatTarget) => void;
+  selectedAgentId: number | null;
+  onSelectAgent: (agentId: number) => void;
   onCollapse: () => void;
 }) {
-  const { agents, groups, providers, removeGroupMember } = useMockStore();
+  const { agents, groups, providers, removeGroupMember, deleteAgent } = useMockStore();
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<Agent | null>(null);
   const [dropActive, setDropActive] = useState(false);
+  const [hover, setHover] = useState<{ agent: Agent; rect: DOMRect } | null>(null);
+  const [menu, setMenu] = useState<{ agent: Agent; rect: DOMRect } | null>(null);
+  const hoverTimer = useRef<number | undefined>(undefined);
 
   const projectAgents = agents.filter((a) => a.projectId === project.id);
-  const projectGroups = groups.filter((g) => g.projectId === project.id);
+
+  useEffect(() => () => window.clearTimeout(hoverTimer.current), []);
+
+  const showHover = (agent: Agent, el: HTMLElement) => {
+    window.clearTimeout(hoverTimer.current);
+    hoverTimer.current = window.setTimeout(() => setHover({ agent, rect: el.getBoundingClientRect() }), HOVER_DELAY_MS);
+  };
+
+  const hideHover = () => {
+    window.clearTimeout(hoverTimer.current);
+    setHover(null);
+  };
+
+  const onDelete = (agent: Agent) => {
+    const memberOf = groups.filter((g) => g.memberIds.includes(agent.id)).length;
+    const extra = memberOf > 0 ? `\n${memberOf}개 그룹에서도 빠집니다.` : '';
+    if (!window.confirm(`"${agent.name}" 에이전트를 삭제할까요?${extra}`)) return;
+    deleteAgent(agent.id);
+  };
 
   const onDragOver = (e: DragEvent) => {
     if (!isAgentDrag(e)) return;
@@ -63,59 +93,78 @@ export default function AgentList({
         </div>
       </div>
 
-      {projectAgents.length === 0 && (
-        <p className={shared.muted}>에이전트가 없습니다. "새 에이전트"로 만들어 보세요.</p>
-      )}
+      {projectAgents.length === 0 && <p className={shared.muted}>에이전트가 없습니다. "새 에이전트"로 만들어 보세요.</p>}
 
       <div className={styles.cards}>
         {projectAgents.map((agent) => {
-          const provider = providers.find((p) => p.id === agent.providerId);
           const role = SEED_ROLES.find((r) => r.id === agent.roleId);
-          const memberOf = projectGroups.filter((g) => g.memberIds.includes(agent.id));
           const reason = unavailableReason(agent, providers, project);
+          const selected = selectedAgentId === agent.id;
           return (
             <div
               key={agent.id}
-              className={`${styles.card} ${target?.kind === 'agent' && target.id === agent.id ? styles.cardSelected : ''}`}
+              className={`${styles.card} ${selected ? styles.cardSelected : ''}`}
               draggable
-              onDragStart={(e) => startAgentDrag(e, { agentId: agent.id })}
-              onClick={() => onSelect({ kind: 'agent', id: agent.id })}
-              title="누르면 채팅 대상으로 선택됩니다"
+              aria-pressed={selected}
+              onDragStart={(e) => {
+                hideHover();
+                startAgentDrag(e, { agentId: agent.id });
+              }}
+              onClick={() => {
+                hideHover();
+                onSelectAgent(agent.id);
+              }}
+              onMouseEnter={(e) => showHover(agent, e.currentTarget)}
+              onMouseLeave={hideHover}
             >
-              <div className={styles.cardTop}>
-                <span className={styles.grip} aria-hidden="true">
-                  ⋮⋮
-                </span>
+              <span className={styles.grip} aria-hidden="true">
+                ⋮⋮
+              </span>
+              <div className={styles.text}>
                 <strong className={styles.name}>{agent.name}</strong>
-                {reason && <span className={`${shared.badge} ${shared.badgeError}`}>{reason}</span>}
+                <span className={styles.role}>{role?.name}</span>
               </div>
-              <div className={shared.muted}>
-                {role?.name} · {provider?.name ?? '삭제된 런타임'}
-              </div>
-              <div className={shared.muted}>
-                {agent.model || 'CLI 기본 모델'} / {agent.mode || 'CLI 기본 모드'}
-              </div>
-              <div className={styles.groups}>
-                {memberOf.length === 0 ? (
-                  <span className={styles.ungrouped}>그룹 없음</span>
-                ) : (
-                  memberOf.map((g) => (
-                    <span key={g.id} className={styles.groupChip}>
-                      {g.name}
-                    </span>
-                  ))
-                )}
-              </div>
+              {reason && <span className={styles.warnDot} aria-label={reason} />}
+              <button
+                type="button"
+                className={styles.menuButton}
+                aria-label={`${agent.name} 메뉴`}
+                aria-haspopup="menu"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  hideHover();
+                  setMenu({ agent, rect: e.currentTarget.getBoundingClientRect() });
+                }}
+              >
+                …
+              </button>
             </div>
           );
         })}
       </div>
 
       {projectAgents.length > 0 && (
-        <p className={styles.tip}>카드를 그룹으로 끌어 놓으면 멤버가 됩니다. 그룹에 속하지 않아도 괜찮습니다. 카드를 누르면 채팅 대상이 됩니다.</p>
+        <p className={styles.tip}>카드를 누르면 구성도가 그 에이전트로 이동합니다. 그룹으로 끌어 놓으면 멤버가 됩니다.</p>
       )}
 
-      {creating && <NewAgentModal projectId={project.id} onClose={() => setCreating(false)} />}
+      {hover && <AgentHoverCard agent={hover.agent} project={project} anchor={hover.rect} />}
+      {menu && (
+        <AgentCardMenu
+          anchor={menu.rect}
+          onClose={() => setMenu(null)}
+          onEdit={() => {
+            setEditing(menu.agent);
+            setMenu(null);
+          }}
+          onDelete={() => {
+            const target = menu.agent;
+            setMenu(null);
+            onDelete(target);
+          }}
+        />
+      )}
+      {creating && <AgentFormModal project={project} onClose={() => setCreating(false)} />}
+      {editing && <AgentFormModal project={project} agent={editing} onClose={() => setEditing(null)} />}
     </aside>
   );
 }

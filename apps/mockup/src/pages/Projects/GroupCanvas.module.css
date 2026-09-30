@@ -57,6 +57,10 @@
   transform: translate(var(--vx), var(--vy)) scale(var(--vs));
 }
 
+.worldSmooth {
+  transition: transform 0.45s cubic-bezier(0.22, 0.8, 0.3, 1);
+}
+
 .box {
   position: absolute;
   left: var(--x);
@@ -166,6 +170,28 @@
 .nodeLeader {
   border-color: var(--color-primary);
   box-shadow: 0 4px 18px var(--color-shadow), 0 0 0 1px var(--color-primary), var(--glass-highlight);
+}
+
+/* 선택된 에이전트: 강한 테두리 + 바깥 고리 + "선택됨" 이름표로 어디 있는지 바로 알아본다 */
+.nodeSelected,
+.nodeSelected:hover {
+  border-color: var(--color-primary);
+  border-width: 2px;
+  box-shadow: 0 0 0 4px var(--color-code-bg), 0 0 0 5px var(--color-primary), 0 6px 22px var(--color-shadow);
+  z-index: 2;
+}
+
+.selectedTag {
+  position: absolute;
+  top: -10px;
+  right: 10px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.5;
 }
 
 .nodeUnavailable {

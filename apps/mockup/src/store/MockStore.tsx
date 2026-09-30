@@ -35,6 +35,8 @@ interface MockState {
 }
 
 export type NewAgentInput = Omit<Agent, 'id'>;
+/** 에이전트 수정 입력: 소속 프로젝트는 바꾸지 않는다. */
+export type AgentUpdateInput = Omit<Agent, 'id' | 'projectId'>;
 
 type Action =
   | { type: 'provider/toggle'; id: number }
@@ -47,6 +49,8 @@ type Action =
   | { type: 'project/assignWorkspace'; projectId: number; workspaceId: number; asDefault: boolean }
   | { type: 'project/removeWorkspace'; projectId: number; workspaceId: number }
   | { type: 'agent/create'; input: NewAgentInput }
+  | { type: 'agent/update'; id: number; input: AgentUpdateInput }
+  | { type: 'agent/delete'; id: number }
   | { type: 'group/create'; projectId: number; name: string }
   | { type: 'group/delete'; id: number }
   | { type: 'group/addMember'; groupId: number; agentId: number }
@@ -154,6 +158,23 @@ function reducer(state: MockState, action: Action): MockState {
         agents: [...state.agents, { ...action.input, id: state.nextId }],
         nextId: state.nextId + 1,
       };
+    case 'agent/update':
+      return {
+        ...state,
+        agents: state.agents.map((a) => (a.id === action.id ? { ...a, ...action.input } : a)),
+      };
+    case 'agent/delete':
+      // 에이전트가 사라지면 모든 그룹에서도 빠지고, 리더였다면 남은 첫 멤버가 이어받는다. 이미 만든 Task 는 남긴다.
+      return {
+        ...state,
+        agents: state.agents.filter((a) => a.id !== action.id),
+        groups: state.groups.map((g) => {
+          if (!g.memberIds.includes(action.id)) return g;
+          const memberIds = g.memberIds.filter((id) => id !== action.id);
+          const leaderAgentId = g.leaderAgentId === action.id ? (memberIds[0] ?? null) : g.leaderAgentId;
+          return { ...g, memberIds, leaderAgentId };
+        }),
+      };
     case 'group/create':
       return {
         ...state,
@@ -224,6 +245,8 @@ interface MockStore {
   assignWorkspace: (projectId: number, workspaceId: number, asDefault: boolean) => void;
   removeWorkspace: (projectId: number, workspaceId: number) => void;
   createAgent: (input: NewAgentInput) => void;
+  updateAgent: (id: number, input: AgentUpdateInput) => void;
+  deleteAgent: (id: number) => void;
   createGroup: (projectId: number, name: string) => void;
   deleteGroup: (id: number) => void;
   addGroupMember: (groupId: number, agentId: number) => void;
@@ -320,6 +343,8 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       removeWorkspace: (projectId, workspaceId) =>
         dispatch({ type: 'project/removeWorkspace', projectId, workspaceId }),
       createAgent: (input) => dispatch({ type: 'agent/create', input }),
+      updateAgent: (id, input) => dispatch({ type: 'agent/update', id, input }),
+      deleteAgent: (id) => dispatch({ type: 'agent/delete', id }),
       createGroup: (projectId, name) => dispatch({ type: 'group/create', projectId, name }),
       deleteGroup: (id) => dispatch({ type: 'group/delete', id }),
       addGroupMember: (groupId, agentId) => dispatch({ type: 'group/addMember', groupId, agentId }),

@@ -10,7 +10,7 @@ import {
   useState,
 } from 'react';
 import { unavailableReason } from '../../lib/agentAvailability';
-import { layoutCanvas } from '../../lib/canvasLayout';
+import { layoutCanvas, NODE_H, NODE_W } from '../../lib/canvasLayout';
 import { isAgentDrag, startAgentDrag } from '../../lib/dnd';
 import { useGroupDrop } from '../../lib/useGroupDrop';
 import { useMockStore } from '../../store/MockStore';
@@ -32,6 +32,8 @@ const FIT_MARGIN = 24;
 const INSET_TOP = 72;
 const INSET_RIGHT = 24;
 const ZOOM_STEP = 1.2;
+const FOCUS_MIN_SCALE = 0.85;
+const SMOOTH_MS = 450;
 
 const clampScale = (scale: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
 
@@ -47,9 +49,17 @@ export default function GroupCanvas({
   project,
   insetLeft,
   insetBottom,
+  selectedAgentId,
+  focusSeq,
+  onSelectAgent,
   onNotice,
 }: {
   project: Project;
+  /** 선택된 에이전트. 구성도의 해당 노드가 강조된다 */
+  selectedAgentId: number | null;
+  /** 값이 바뀔 때마다 선택된 에이전트 쪽으로 화면을 옮긴다(같은 에이전트를 다시 눌러도 이동) */
+  focusSeq: number;
+  onSelectAgent: (agentId: number) => void;
   /** 왼쪽에 떠 있는 에이전트/그룹 패널이 가리는 너비(px) */
   insetLeft: number;
   /** 아래에 떠 있는 채팅 창이 가리는 높이(px) */
@@ -64,6 +74,9 @@ export default function GroupCanvas({
 
   const [view, setView] = useState<View>({ x: 0, y: 0, scale: 1 });
   const [overKey, setOverKey] = useState<string | null>(null);
+  // 선택한 에이전트로 옮길 때만 부드럽게 움직이고, 드래그/휠은 즉시 따라간다.
+  const [smooth, setSmooth] = useState(false);
+  const smoothTimer = useRef<number | undefined>(undefined);
   const viewportRef = useRef<HTMLDivElement>(null);
   const panRef = useRef<{ px: number; py: number; vx: number; vy: number } | null>(null);
   // 사용자가 직접 이동/확대하기 전까지는 내용이 바뀔 때마다 화면에 맞춘다.
@@ -90,6 +103,35 @@ export default function GroupCanvas({
   useLayoutEffect(() => {
     if (!touchedRef.current) fit();
   }, [fit]);
+
+  // 카드를 눌렀을 때: 선택한 에이전트의 노드가 보이는 영역(패널/채팅을 뺀 곳) 가운데 오도록 옮긴다.
+  useEffect(() => {
+    if (focusSeq === 0 || selectedAgentId === null) return;
+    const node =
+      layout.nodes.find((n) => n.agentId === selectedAgentId && n.groupId === null) ??
+      layout.nodes.find((n) => n.agentId === selectedAgentId);
+    const el = viewportRef.current;
+    if (!node || !el) return;
+    const { width, height } = el.getBoundingClientRect();
+    const centerX = insetLeft + (width - insetLeft - INSET_RIGHT) / 2;
+    const centerY = INSET_TOP + (height - INSET_TOP - insetBottom) / 2;
+    touchedRef.current = true;
+    setSmooth(true);
+    window.clearTimeout(smoothTimer.current);
+    smoothTimer.current = window.setTimeout(() => setSmooth(false), SMOOTH_MS);
+    setView((prev) => {
+      // 너무 멀리 축소된 상태면 식별할 수 있는 크기까지만 확대한다
+      const scale = clampScale(Math.max(prev.scale, FOCUS_MIN_SCALE));
+      return {
+        scale,
+        x: centerX - (node.x + NODE_W / 2) * scale,
+        y: centerY - (node.y + NODE_H / 2) * scale,
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusSeq]);
+
+  useEffect(() => () => window.clearTimeout(smoothTimer.current), []);
 
   // 휠은 페이지 스크롤이 아니라 캔버스 확대/축소로 쓴다(preventDefault 가 필요해 passive 로 등록하지 않는다).
   useEffect(() => {
@@ -172,7 +214,7 @@ export default function GroupCanvas({
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
       >
-        <div className={styles.world}>
+        <div className={`${styles.world} ${smooth ? styles.worldSmooth : ''}`}>
           {layout.boxes.map((box) => {
             return (
               <div
@@ -214,10 +256,13 @@ export default function GroupCanvas({
             const role = SEED_ROLES.find((r) => r.id === agent.roleId);
             const reason = unavailableReason(agent, providers, project);
             const inGroup = node.groupId !== null;
+            const isSelected = node.agentId === selectedAgentId;
             return (
               <div
                 key={node.key}
-                className={`${styles.node} ${node.isLeader ? styles.nodeLeader : ''} ${reason ? styles.nodeUnavailable : ''}`}
+                className={`${styles.node} ${node.isLeader ? styles.nodeLeader : ''} ${reason ? styles.nodeUnavailable : ''} ${isSelected ? styles.nodeSelected : ''}`}
+                aria-current={isSelected ? 'true' : undefined}
+                onClick={() => onSelectAgent(node.agentId)}
                 style={vars({ '--x': `${node.x}px`, '--y': `${node.y}px` })}
                 draggable
                 onDragStart={(e) =>
@@ -243,6 +288,7 @@ export default function GroupCanvas({
                   </span>
                 </div>
                 {reason && <span className={styles.warnDot} aria-label={reason} />}
+                {isSelected && <span className={styles.selectedTag}>선택됨</span>}
                 {inGroup && (
                   <button
                     type="button"
