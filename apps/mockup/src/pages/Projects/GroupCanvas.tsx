@@ -139,10 +139,11 @@ export default function GroupCanvas({
     const scale = Math.min(1, (availW - FIT_MARGIN * 2) / layout.width, (availH - FIT_MARGIN * 2) / layout.height);
     setView({
       scale,
-      x: insetLeft + (availW - layout.width * scale) / 2,
-      y: INSET_TOP + (availH - layout.height * scale) / 2,
+      // 손으로 왼쪽·위로 옮긴 것까지 담도록 경계 상자의 왼쪽 위를 기준으로 맞춘다.
+      x: insetLeft + (availW - layout.width * scale) / 2 - layout.minX * scale,
+      y: INSET_TOP + (availH - layout.height * scale) / 2 - layout.minY * scale,
     });
-  }, [layout.width, layout.height, insetLeft, insetBottom]);
+  }, [layout.width, layout.height, layout.minX, layout.minY, insetLeft, insetBottom]);
 
   useLayoutEffect(() => {
     if (!touchedRef.current) fit();
@@ -300,7 +301,7 @@ export default function GroupCanvas({
       if (!d) return;
       const world = worldOf(d, e.clientX, e.clientY);
       d.moved = true;
-      const next = { x: Math.max(0, world.x - d.offsetX), y: Math.max(0, world.y - d.offsetY) };
+      const next = { x: world.x - d.offsetX, y: world.y - d.offsetY };
       setDragPos(next);
       // 그룹은 바로 반영해 상자·노드·선이 함께 따라오게 한다.
       if (d.target.kind === 'group') setGroupPosition(d.target.groupId, next.x, next.y);
@@ -332,7 +333,7 @@ export default function GroupCanvas({
       }
       // 빈 곳에 놓으면 그룹에서 빠지고 그 자리에 선다.
       groups.filter((g) => g.memberIds.includes(agentId)).forEach((g) => removeGroupMember(g.id, agentId));
-      setAgentPosition(agentId, Math.max(0, world.x - d.offsetX), Math.max(0, world.y - d.offsetY));
+      setAgentPosition(agentId, world.x - d.offsetX, world.y - d.offsetY);
     };
 
     window.addEventListener('pointermove', onMove);
@@ -371,8 +372,8 @@ export default function GroupCanvas({
           {layout.boxes.map((box) => {
             const manual = groupPositions[box.groupId];
             const draggingBox = dragTarget?.kind === 'group' && dragTarget.groupId === box.groupId;
-            const boxX = draggingBox && dragPos ? dragPos.x : manual ? Math.max(0, manual.x) : box.x;
-            const boxY = draggingBox && dragPos ? dragPos.y : manual ? Math.max(0, manual.y) : box.y;
+            const boxX = draggingBox && dragPos ? dragPos.x : manual ? manual.x : box.x;
+            const boxY = draggingBox && dragPos ? dragPos.y : manual ? manual.y : box.y;
             return (
               <div
                 key={box.key}
@@ -426,8 +427,8 @@ export default function GroupCanvas({
             // 끌고 있는 동안에는 포인터를 따라간다.
             const manual = nodePositions[node.agentId];
             const dragging = dragTarget?.kind === 'node' && dragTarget.agentId === node.agentId;
-            const nodeX = dragging && dragPos ? dragPos.x : manual ? Math.max(0, manual.x) : node.x;
-            const nodeY = dragging && dragPos ? dragPos.y : manual ? Math.max(0, manual.y) : node.y;
+            const nodeX = dragging && dragPos ? dragPos.x : manual ? manual.x : node.x;
+            const nodeY = dragging && dragPos ? dragPos.y : manual ? manual.y : node.y;
             return (
               <div
                 key={node.key}

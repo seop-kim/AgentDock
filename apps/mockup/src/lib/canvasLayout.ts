@@ -44,6 +44,9 @@ export interface CanvasLayout {
   boxes: CanvasBox[];
   nodes: CanvasNode[];
   edges: CanvasEdge[];
+  /** 손으로 옮긴 것이 있으면 좌표가 음수가 될 수 있다. 맞춤은 이 왼쪽 위 모서리를 기준으로 한다. */
+  minX: number;
+  minY: number;
   width: number;
   height: number;
 }
@@ -212,14 +215,7 @@ export function layoutCanvas(
     }
     // 손으로 옮긴 그룹은 제자리를 차지한 채(다른 그룹이 밀리지 않게) 그 좌표에 그린다.
     const manualBox = local.box ? groupPositions[local.box.groupId] : undefined;
-    placeLocal(
-      local,
-      manualBox ? Math.max(0, manualBox.x) : x,
-      manualBox ? Math.max(0, manualBox.y) : y,
-      boxes,
-      nodes,
-      edges,
-    );
+    placeLocal(local, manualBox ? manualBox.x : x, manualBox ? manualBox.y : y, boxes, nodes, edges);
     x += local.w + GROUP_GAP;
     rowH = Math.max(rowH, local.h);
     width = Math.max(width, x - GROUP_GAP);
@@ -229,21 +225,29 @@ export function layoutCanvas(
   nodes.forEach((node) => {
     const manual = positions[node.agentId];
     if (manual) {
-      node.x = Math.max(0, manual.x);
-      node.y = Math.max(0, manual.y);
+      node.x = manual.x;
+      node.y = manual.y;
     }
   });
 
-  // 맞춤이 손으로 옮긴 위치까지 담도록 상자·노드 전체로 크기를 다시 계산한다.
-  let height = y + rowH;
+  // 맞춤은 손으로 옮긴 위치까지 담아야 하므로, 상자·노드 전체의 경계 상자를 다시 구한다.
+  // (왼쪽/위로 옮기면 좌표가 음수가 될 수 있어 minX·minY 도 함께 돌려준다.)
+  let minX = 0;
+  let minY = 0;
+  let maxX = 0;
+  let maxY = 0;
   boxes.forEach((box) => {
-    width = Math.max(width, box.x + box.w);
-    height = Math.max(height, box.y + box.h);
+    minX = Math.min(minX, box.x);
+    minY = Math.min(minY, box.y);
+    maxX = Math.max(maxX, box.x + box.w);
+    maxY = Math.max(maxY, box.y + box.h);
   });
   nodes.forEach((node) => {
-    width = Math.max(width, node.x + NODE_W);
-    height = Math.max(height, node.y + NODE_H);
+    minX = Math.min(minX, node.x);
+    minY = Math.min(minY, node.y);
+    maxX = Math.max(maxX, node.x + NODE_W);
+    maxY = Math.max(maxY, node.y + NODE_H);
   });
 
-  return { boxes, nodes, edges, width, height };
+  return { boxes, nodes, edges, minX, minY, width: maxX - minX, height: maxY - minY };
 }
