@@ -46,9 +46,8 @@
   font-size: 12px;
 }
 
-/* 패널 접기/펴기(왼쪽 패널의 접기 버튼과 같은 모양) */
+/* 패널 접기/펴기·크게 보기 버튼(머리말 왼쪽에 모아 둔다) */
 .fold {
-  margin-left: auto;
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;

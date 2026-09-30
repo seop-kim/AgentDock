@@ -86,18 +86,24 @@ export default function AgentList({
       onDragLeave={() => setDropActive(false)}
       onDrop={onDrop}
     >
-      <div className={styles.header}>
+      <div
+        className={styles.header}
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        aria-label={open ? '에이전트 패널 접기' : '에이전트 패널 펴기'}
+        title={open ? '에이전트 패널 접기' : '에이전트 패널 펴기'}
+        onClick={onToggle}
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter' && e.key !== ' ') return;
+          e.preventDefault();
+          onToggle();
+        }}
+      >
         <div className={styles.titleGroup}>
-          <button
-            type="button"
-            className={styles.fold}
-            onClick={onToggle}
-            aria-expanded={open}
-            aria-label={open ? '에이전트 패널 접기' : '에이전트 패널 펴기'}
-            title={open ? '에이전트 패널 접기' : '에이전트 패널 펴기'}
-          >
+          <span className={styles.fold} aria-hidden="true">
             {open ? <ChevronUpIcon /> : <ChevronDownIcon />}
-          </button>
+          </span>
           <h2 className={styles.title}>
             에이전트 <span className={shared.muted}>{projectAgents.length}</span>
           </h2>
@@ -105,7 +111,10 @@ export default function AgentList({
         <button
           type="button"
           className={shared.addButton}
-          onClick={() => setCreating(true)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setCreating(true);
+          }}
           aria-label="새 에이전트"
           title="새 에이전트"
         >
@@ -113,12 +122,11 @@ export default function AgentList({
         </button>
       </div>
 
-      {open && projectAgents.length === 0 && (
-        <p className={shared.muted}>에이전트가 없습니다. + 버튼으로 만들어 보세요.</p>
-      )}
-
-      {open && (
+      <div className={styles.body}>
         <div className={styles.cards}>
+          {projectAgents.length === 0 && (
+            <p className={shared.muted}>에이전트가 없습니다. + 버튼으로 만들어 보세요.</p>
+          )}
           {projectAgents.map((agent) => {
             const role = SEED_ROLES.find((r) => r.id === agent.roleId);
             const reason = unavailableReason(agent, providers, project);
@@ -173,7 +181,7 @@ export default function AgentList({
             );
           })}
         </div>
-      )}
+      </div>
 
       {hover && <AgentHoverCard agent={hover.agent} project={project} anchor={hover.rect} />}
       {menu && (

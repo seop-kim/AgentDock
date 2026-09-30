@@ -58,18 +58,24 @@ export default function GroupList({
 
   return (
     <aside className={`${styles.list} ${open ? '' : styles.listCollapsed}`}>
-      <div className={styles.header}>
+      <div
+        className={styles.header}
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        aria-label={open ? '그룹 패널 접기' : '그룹 패널 펴기'}
+        title={open ? '그룹 패널 접기' : '그룹 패널 펴기'}
+        onClick={onToggle}
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter' && e.key !== ' ') return;
+          e.preventDefault();
+          onToggle();
+        }}
+      >
         <div className={styles.titleGroup}>
-          <button
-            type="button"
-            className={styles.fold}
-            onClick={onToggle}
-            aria-expanded={open}
-            aria-label={open ? '그룹 패널 접기' : '그룹 패널 펴기'}
-            title={open ? '그룹 패널 접기' : '그룹 패널 펴기'}
-          >
+          <span className={styles.fold} aria-hidden="true">
             {open ? <ChevronUpIcon /> : <ChevronDownIcon />}
-          </button>
+          </span>
           <h2 className={styles.title}>
             그룹 <span className={shared.muted}>{projectGroups.length}</span>
           </h2>
@@ -77,7 +83,10 @@ export default function GroupList({
         <button
           type="button"
           className={shared.addButton}
-          onClick={() => setCreating(true)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setCreating(true);
+          }}
           aria-label="새 그룹"
           title="새 그룹"
         >
@@ -85,12 +94,11 @@ export default function GroupList({
         </button>
       </div>
 
-      {open && projectGroups.length === 0 && (
-        <p className={shared.muted}>그룹이 없습니다. 에이전트는 그룹 없이도 쓸 수 있습니다.</p>
-      )}
-
-      {open && (
+      <div className={styles.body}>
         <div className={styles.cards}>
+          {projectGroups.length === 0 && (
+            <p className={shared.muted}>그룹이 없습니다. 에이전트는 그룹 없이도 쓸 수 있습니다.</p>
+          )}
           {projectGroups.map((group) => {
             const selected = target?.kind === 'group' && target.id === group.id;
             return (
@@ -155,7 +163,7 @@ export default function GroupList({
             );
           })}
         </div>
-      )}
+      </div>
 
       {creating && <GroupFormModal project={project} onClose={() => setCreating(false)} />}
 

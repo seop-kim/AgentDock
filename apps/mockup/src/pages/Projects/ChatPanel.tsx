@@ -137,8 +137,6 @@ export default function ChatPanel({
       onDrop={onDrop}
     >
       <div className={styles.header}>
-        <h2 className={styles.title}>명령</h2>
-        {!open && messages.length > 0 && <span className={styles.count}>기록 {messages.length}</span>}
         {open && (
           <button
             type="button"
@@ -160,6 +158,8 @@ export default function ChatPanel({
         >
           <ChevronDownIcon />
         </button>
+        <h2 className={styles.title}>명령</h2>
+        {!open && messages.length > 0 && <span className={styles.count}>기록 {messages.length}</span>}
       </div>
 
       {open && (
