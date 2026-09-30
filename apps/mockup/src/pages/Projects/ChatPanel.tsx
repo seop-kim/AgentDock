@@ -1,5 +1,5 @@
 import { DragEvent, FormEvent, useEffect, useRef, useState } from 'react';
-import { ClipIcon, FileIcon } from '../../components/icons';
+import { ChevronDownIcon, ClipIcon, FileIcon } from '../../components/icons';
 import { unavailableReason } from '../../lib/agentAvailability';
 import { ATTACHMENT_FOLDER, attachmentPath, hasAttachment, storedName } from '../../lib/attachments';
 import { useMockStore } from '../../store/MockStore';
@@ -25,18 +25,16 @@ export default function ChatPanel({
   project,
   target,
   onTargetChange,
-  expanded,
+  open,
   onToggle,
-  onSent,
   onOpenExecutions,
 }: {
   project: Project;
   target: ChatTarget | null;
   onTargetChange: (target: ChatTarget | null) => void;
-  /** 메시지 기록을 펼쳐서 보이는지 */
-  expanded: boolean;
+  /** 패널을 펼쳐 두었는지(접으면 머리말만 남는다). */
+  open: boolean;
   onToggle: () => void;
-  onSent: () => void;
   /** 응답에 딸린 실행 트리를 연다. */
   onOpenExecutions: (rootExecutionId: number) => void;
 }) {
@@ -56,7 +54,7 @@ export default function ChatPanel({
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
-  }, [messages.length, messages.filter((m) => m.status === 'pending').length, expanded]);
+  }, [messages.length, messages.filter((m) => m.status === 'pending').length, open]);
 
   const receiverHint = (() => {
     if (!target) return '명령을 받을 에이전트나 그룹을 고르세요.';
@@ -121,12 +119,11 @@ export default function ChatPanel({
     sendCommand(project.id, target, trimmed === '' ? '첨부한 파일을 확인해줘' : trimmed, attachments);
     setText('');
     setAttachments([]);
-    onSent();
   };
 
   return (
     <section
-      className={`${styles.chat} ${dragging ? styles.dropTarget : ''}`}
+      className={`${styles.chat} ${dragging ? styles.dropTarget : ''} ${open ? '' : styles.collapsed}`}
       aria-label="에이전트 명령"
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
@@ -134,6 +131,21 @@ export default function ChatPanel({
     >
       <div className={styles.header}>
         <h2 className={styles.title}>명령</h2>
+        {!open && messages.length > 0 && <span className={styles.count}>기록 {messages.length}</span>}
+        <button
+          type="button"
+          className={styles.fold}
+          onClick={onToggle}
+          aria-expanded={open}
+          aria-label={open ? '명령 패널 접기' : '명령 패널 펴기'}
+          title={open ? '명령 패널 접기' : '명령 패널 펴기'}
+        >
+          <ChevronDownIcon />
+        </button>
+      </div>
+
+      {open && (
+        <>
         <select
           className={styles.target}
           value={toValue(target)}
@@ -158,12 +170,7 @@ export default function ChatPanel({
           </optgroup>
         </select>
         {receiverHint && <span className={styles.hint}>{receiverHint}</span>}
-        <button type="button" className={styles.toggle} onClick={onToggle} aria-expanded={expanded}>
-          {expanded ? '기록 접기 ⌄' : `기록 ${messages.length} ⌃`}
-        </button>
-      </div>
 
-      {expanded && (
         <div ref={logRef} className={styles.log}>
           {messages.length === 0 && <p className={shared.muted}>아직 보낸 명령이 없습니다.</p>}
           {messages.map((m) => {
@@ -198,7 +205,6 @@ export default function ChatPanel({
             );
           })}
         </div>
-      )}
 
       {attachments.length > 0 && (
         <ul className={attach.chips}>
@@ -255,7 +261,9 @@ export default function ChatPanel({
         <button type="submit" disabled={!target || (text.trim() === '' && attachments.length === 0)}>
           보내기
         </button>
-      </form>
+        </form>
+        </>
+      )}
 
       {pickerOpen && (
         <AttachFilesModal

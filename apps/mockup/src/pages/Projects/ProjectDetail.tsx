@@ -1,4 +1,4 @@
-import { CSSProperties, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { SettingsIcon } from '../../components/icons';
 import { useMockStore } from '../../store/MockStore';
@@ -13,12 +13,13 @@ import styles from './ProjectDetail.module.css';
 import ProjectSettingsModal from './ProjectSettingsModal';
 
 const NOTICE_MS = 2500;
-/** 에이전트 패널 너비(320) + 좌우 여백(16 + 16). 구성도 맞춤이 이만큼을 비켜 간다. */
+/** 에이전트 패널 너비(320) + 왼쪽 여백(16) + 호흡(16). 구성도 맞춤이 이만큼을 비켜 간다. */
 const AGENT_PANEL_INSET = 352;
+/** 명령 패널 너비(360) + 오른쪽 여백(16) + 호흡(16). */
+const CHAT_PANEL_INSET = 392;
 const NO_PANEL_INSET = 24;
-/** 채팅 창이 구성도를 가리는 높이: 입력줄만 있을 때 / 기록을 펼쳤을 때 */
-const CHAT_COLLAPSED_INSET = 120;
-const CHAT_EXPANDED_INSET = 380;
+/** 아래쪽 호흡 */
+const BOTTOM_INSET = 24;
 
 /**
  * 프로젝트 상세. 구성도가 화면 전체를 채우고, 헤더/에이전트 패널/설정 버튼/도구 막대가 그 위에 떠 있다.
@@ -35,7 +36,8 @@ export default function ProjectDetail() {
   const [agentsOpen, setAgentsOpen] = useState(true);
   const [groupsOpen, setGroupsOpen] = useState(true);
   const [chatTarget, setChatTarget] = useState<ChatTarget | null>(null);
-  const [chatExpanded, setChatExpanded] = useState(false);
+  /** 오른쪽 명령 패널을 펼쳐 두었는지(기본 열림). 접으면 머리말만 남는다. */
+  const [chatOpen, setChatOpen] = useState(true);
   // 선택된 에이전트: 왼쪽 카드와 구성도 노드가 함께 강조된다. focusSeq 가 오를 때마다 구성도가 그쪽으로 이동한다.
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
   const [focusSeq, setFocusSeq] = useState(0);
@@ -97,13 +99,15 @@ export default function ProjectDetail() {
 
   // 둘 다 접으면 왼쪽 패널이 차지하는 폭이 없어져 구성도가 화면 전체를 쓴다.
   const panelInset = agentsOpen || groupsOpen ? AGENT_PANEL_INSET : NO_PANEL_INSET;
+  const chatInset = chatOpen ? CHAT_PANEL_INSET : NO_PANEL_INSET;
 
   return (
-    <div className={styles.stage} style={{ '--inset': `${panelInset}px` } as CSSProperties}>
+    <div className={styles.stage}>
       <GroupCanvas
         project={project}
         insetLeft={panelInset}
-        insetBottom={chatExpanded ? CHAT_EXPANDED_INSET : CHAT_COLLAPSED_INSET}
+        insetRight={chatInset}
+        insetBottom={BOTTOM_INSET}
         selectedAgentId={activeAgentId}
         focusSeq={focusSeq}
         onSelectAgent={(agentId) => selectAgent(agentId, false)}
@@ -170,9 +174,8 @@ export default function ProjectDetail() {
         project={project}
         target={chatTarget}
         onTargetChange={setChatTarget}
-        expanded={chatExpanded}
-        onToggle={() => setChatExpanded((prev) => !prev)}
-        onSent={() => setChatExpanded(true)}
+        open={chatOpen}
+        onToggle={() => setChatOpen((prev) => !prev)}
         onOpenExecutions={setExecutionTreeRoot}
       />
 

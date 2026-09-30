@@ -4,12 +4,13 @@
   overflow: hidden;
 }
 
-/* 오른쪽 위에 떠 있는 확대/축소 도구 */
+/* 아래 가운데에 떠 있는 확대/축소 도구. 왼쪽/오른쪽 패널을 뺀 빈 곳의 가운데에 온다. */
 .zoom {
   composes: glass from '../../styles/glass.module.css';
   position: absolute;
-  top: var(--spacing-md);
-  right: var(--spacing-md);
+  bottom: var(--spacing-md);
+  left: calc((100% + var(--inset-left, 0px) - var(--inset-right, 0px)) / 2);
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 4px;

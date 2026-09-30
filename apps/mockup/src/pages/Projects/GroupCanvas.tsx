@@ -31,9 +31,8 @@ interface View {
 const MIN_SCALE = 0.3;
 const MAX_SCALE = 2;
 const FIT_MARGIN = 24;
-// 화면 위에 떠 있는 요소(헤더 카드, 채팅 창, 확대/축소 도구)가 가리는 영역. 맞춤은 이 바깥의 빈 곳에 맞춘다.
+// 화면 위에 떠 있는 요소(헤더 카드, 명령 패널, 확대/축소 도구)가 가리는 영역. 맞춤은 이 바깥의 빈 곳에 맞춘다.
 const INSET_TOP = 72;
-const INSET_RIGHT = 24;
 const ZOOM_STEP = 1.2;
 const FOCUS_MIN_SCALE = 0.85;
 const SMOOTH_MS = 450;
@@ -51,6 +50,7 @@ const vars = (values: Record<string, string | number>) => values as unknown as C
 export default function GroupCanvas({
   project,
   insetLeft,
+  insetRight,
   insetBottom,
   selectedAgentId,
   focusSeq,
@@ -65,7 +65,9 @@ export default function GroupCanvas({
   onSelectAgent: (agentId: number) => void;
   /** 왼쪽에 떠 있는 에이전트/그룹 패널이 가리는 너비(px) */
   insetLeft: number;
-  /** 아래에 떠 있는 채팅 창이 가리는 높이(px) */
+  /** 오른쪽에 떠 있는 명령 패널이 가리는 너비(px) */
+  insetRight: number;
+  /** 아래쪽 여백(px) */
   insetBottom: number;
   onNotice: (message: string) => void;
 }) {
@@ -134,7 +136,7 @@ export default function GroupCanvas({
       setView({ x: 0, y: 0, scale: 1 });
       return;
     }
-    const availW = width - insetLeft - INSET_RIGHT;
+    const availW = width - insetLeft - insetRight;
     const availH = height - INSET_TOP - insetBottom;
     const scale = Math.min(1, (availW - FIT_MARGIN * 2) / layout.width, (availH - FIT_MARGIN * 2) / layout.height);
     setView({
@@ -143,7 +145,7 @@ export default function GroupCanvas({
       x: insetLeft + (availW - layout.width * scale) / 2 - layout.minX * scale,
       y: INSET_TOP + (availH - layout.height * scale) / 2 - layout.minY * scale,
     });
-  }, [layout.width, layout.height, layout.minX, layout.minY, insetLeft, insetBottom]);
+  }, [layout.width, layout.height, layout.minX, layout.minY, insetLeft, insetRight, insetBottom]);
 
   useLayoutEffect(() => {
     if (!touchedRef.current) fit();
@@ -158,7 +160,7 @@ export default function GroupCanvas({
     const el = viewportRef.current;
     if (!node || !el) return;
     const { width, height } = el.getBoundingClientRect();
-    const centerX = insetLeft + (width - insetLeft - INSET_RIGHT) / 2;
+    const centerX = insetLeft + (width - insetLeft - insetRight) / 2;
     const centerY = INSET_TOP + (height - INSET_TOP - insetBottom) / 2;
     touchedRef.current = true;
     setSmooth(true);
@@ -516,8 +518,11 @@ export default function GroupCanvas({
         )}
       </div>
 
-      {/* 오른쪽 위에 떠 있는 확대/축소 도구 */}
-      <div className={styles.zoom}>
+      {/* 아래 가운데(패널 사이의 빈 곳 가운데)에 떠 있는 확대/축소 도구 */}
+      <div
+        className={styles.zoom}
+        style={vars({ '--inset-left': `${insetLeft}px`, '--inset-right': `${insetRight}px` })}
+      >
         <button type="button" onClick={() => zoomBy(1 / ZOOM_STEP)} aria-label="축소">
           −
         </button>
