@@ -1,14 +1,13 @@
 import { FormEvent, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useMockStore } from '../../store/MockStore';
 import shared from '../../styles/shared.module.css';
 import styles from './Projects.module.css';
 
 export default function Projects() {
-  const { projects, workspaces, createProject, assignWorkspace, removeWorkspace } = useMockStore();
+  const navigate = useNavigate();
+  const { projects, workspaces, agents, tasks, createProject } = useMockStore();
   const [name, setName] = useState('');
-  const [assignTarget, setAssignTarget] = useState<number | null>(null);
-  const [assignWorkspaceId, setAssignWorkspaceId] = useState('');
-  const [assignAsDefault, setAssignAsDefault] = useState(false);
 
   const onCreate = (e: FormEvent) => {
     e.preventDefault();
@@ -16,101 +15,67 @@ export default function Projects() {
     setName('');
   };
 
-  const closeAssign = () => {
-    setAssignTarget(null);
-    setAssignWorkspaceId('');
-    setAssignAsDefault(false);
-  };
-
-  const onAssign = (projectId: number) => {
-    if (!assignWorkspaceId) return;
-    assignWorkspace(projectId, Number(assignWorkspaceId), assignAsDefault);
-    closeAssign();
-  };
-
-  const workspaceById = (id: number) => workspaces.find((w) => w.id === id);
+  const workspaceName = (id: number) => workspaces.find((w) => w.id === id)?.name ?? '?';
 
   return (
     <div>
-      <h1>Projects</h1>
-      <p>
-        프로젝트에는 워크스페이스(폴더)를 여러 개 할당할 수 있고, 그중 하나가 기본 작업 디렉터리가 됩니다. 에이전트도
-        프로젝트 안에서 만듭니다.
-      </p>
+      <div className={styles.header}>
+        <div>
+          <h1 className={styles.title}>프로젝트</h1>
+          <p className={shared.hint}>프로젝트를 열면 워크스페이스, 에이전트, 그룹을 관리할 수 있습니다.</p>
+        </div>
+        <form onSubmit={onCreate} className={styles.createForm}>
+          <input placeholder="새 프로젝트 이름" value={name} onChange={(e) => setName(e.target.value)} required />
+          <button type="submit">+ 프로젝트 등록</button>
+        </form>
+      </div>
 
-      <form onSubmit={onCreate} className={styles.formRow}>
-        <input placeholder="프로젝트 이름" value={name} onChange={(e) => setName(e.target.value)} required />
-        <button type="submit">등록</button>
-      </form>
-
-      <table className={styles.table}>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Workspaces</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {projects.map((project) => {
-            const assignable = workspaces.filter(
-              (w) => !project.workspaces.some((pw) => pw.workspaceId === w.id),
-            );
-            return (
-              <tr key={project.id}>
-                <td>{project.name}</td>
-                <td>
-                  {project.workspaces.length === 0 && <span className={shared.muted}>할당된 워크스페이스 없음</span>}
-                  {project.workspaces.map((pw) => {
-                    const workspace = workspaceById(pw.workspaceId);
-                    return (
-                      <div key={pw.workspaceId} className={styles.workspaceRow}>
-                        <span>
-                          {pw.isDefault ? '★ ' : ''}
-                          {workspace?.name} — {workspace?.path}
-                        </span>
-                        <button onClick={() => removeWorkspace(project.id, pw.workspaceId)}>해제</button>
-                      </div>
-                    );
-                  })}
-                </td>
-                <td>
-                  {assignTarget === project.id ? (
-                    <div className={styles.formRow}>
-                      <select value={assignWorkspaceId} onChange={(e) => setAssignWorkspaceId(e.target.value)}>
-                        <option value="">워크스페이스 선택</option>
-                        {assignable.map((w) => (
-                          <option key={w.id} value={w.id}>
-                            {w.name} — {w.path}
-                          </option>
-                        ))}
-                      </select>
-                      <label className={styles.checkLabel}>
-                        <input
-                          type="checkbox"
-                          checked={assignAsDefault}
-                          onChange={(e) => setAssignAsDefault(e.target.checked)}
-                        />
-                        기본으로
-                      </label>
-                      <button onClick={() => onAssign(project.id)} disabled={!assignWorkspaceId}>
-                        할당
-                      </button>
-                      <button type="button" onClick={closeAssign}>
-                        취소
-                      </button>
-                    </div>
-                  ) : (
-                    <button onClick={() => setAssignTarget(project.id)} disabled={assignable.length === 0}>
-                      워크스페이스 할당
-                    </button>
-                  )}
+      <div className={styles.tableWrap}>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>이름</th>
+              <th>워크스페이스</th>
+              <th className={styles.num}>에이전트</th>
+              <th className={styles.num}>총 Task</th>
+            </tr>
+          </thead>
+          <tbody>
+            {projects.map((project) => {
+              const defaultWorkspace = project.workspaces.find((w) => w.isDefault);
+              const extra = project.workspaces.length - 1;
+              return (
+                <tr key={project.id} className={styles.row} onClick={() => navigate(`/projects/${project.id}`)}>
+                  <td>
+                    <Link to={`/projects/${project.id}`} className={styles.name} onClick={(e) => e.stopPropagation()}>
+                      {project.name}
+                    </Link>
+                  </td>
+                  <td>
+                    {defaultWorkspace ? (
+                      <span>
+                        ★ {workspaceName(defaultWorkspace.workspaceId)}
+                        {extra > 0 && <span className={shared.muted}> 외 {extra}개</span>}
+                      </span>
+                    ) : (
+                      <span className={shared.muted}>할당 없음</span>
+                    )}
+                  </td>
+                  <td className={styles.num}>{agents.filter((a) => a.projectId === project.id).length}</td>
+                  <td className={styles.num}>{tasks.filter((t) => t.projectId === project.id).length}</td>
+                </tr>
+              );
+            })}
+            {projects.length === 0 && (
+              <tr>
+                <td colSpan={4} className={styles.empty}>
+                  등록된 프로젝트가 없습니다.
                 </td>
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

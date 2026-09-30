@@ -1,4 +1,15 @@
-import type { AiProvider, Capabilities, CliStatus, Project, Workspace } from '../types';
+import type {
+  Agent,
+  AgentGroup,
+  AgentRole,
+  AiProvider,
+  Capabilities,
+  CliStatus,
+  PermissionProfile,
+  Project,
+  Task,
+  Workspace,
+} from '../types';
 
 /** 등록 가능한 런타임 종류와 기본 표시 이름. 삭제한 런타임은 다시 등록할 수 있다. */
 export const DEFAULT_PROVIDER_NAMES: Record<string, string> = {
@@ -87,4 +98,69 @@ export const SEED_PROJECTS: Project[] = [
     ],
   },
   { id: 3, name: 'blog', workspaces: [] },
+];
+
+export const SEED_ROLES: AgentRole[] = [
+  { id: 1, name: 'Backend Developer' },
+  { id: 2, name: 'Frontend Developer' },
+  { id: 3, name: 'Reviewer' },
+  { id: 4, name: 'Planner' },
+];
+
+export const SEED_PERMISSION_PROFILES: PermissionProfile[] = [
+  { id: 1, name: 'Developer Default (읽기·쓰기·터미널)' },
+  { id: 2, name: 'Read Only (읽기만)' },
+];
+
+export const SEED_AGENTS: Agent[] = [
+  { id: 1, projectId: 1, name: 'test', roleId: 1, permissionProfileId: 1, providerId: 12, persona: '', model: '', mode: '' },
+  {
+    id: 2,
+    projectId: 2,
+    name: 'Backend Dev A',
+    roleId: 1,
+    permissionProfileId: 1,
+    providerId: 12,
+    persona: '테스트를 먼저 작성하고 작은 단위로 커밋한다.',
+    model: 'opus',
+    mode: 'acceptEdits',
+  },
+  {
+    id: 3,
+    projectId: 2,
+    name: 'Frontend Dev A',
+    roleId: 2,
+    permissionProfileId: 1,
+    providerId: 12,
+    persona: '',
+    model: 'sonnet',
+    mode: 'plan',
+  },
+  {
+    id: 4,
+    projectId: 2,
+    name: 'Reviewer',
+    roleId: 3,
+    permissionProfileId: 2,
+    providerId: 13,
+    persona: '변경 범위와 회귀 위험을 먼저 본다.',
+    model: '',
+    mode: '',
+  },
+  { id: 5, projectId: 2, name: 'Planner', roleId: 4, permissionProfileId: 2, providerId: 12, persona: '', model: 'sonnet', mode: 'plan' },
+];
+
+export const SEED_GROUPS: AgentGroup[] = [
+  { id: 1, projectId: 2, name: 'Backend Team', leaderAgentId: 2, memberIds: [2, 4] },
+  { id: 2, projectId: 2, name: 'Frontend Team', leaderAgentId: 3, memberIds: [3] },
+];
+
+export const SEED_TASKS: Task[] = [
+  { id: 1, projectId: 1, title: '연결 확인', status: 'DONE' },
+  { id: 2, projectId: 1, title: 'README 정리', status: 'PENDING' },
+  { id: 3, projectId: 2, title: '주문 API 추가', status: 'RUNNING' },
+  { id: 4, projectId: 2, title: '장바구니 화면', status: 'PENDING' },
+  { id: 5, projectId: 2, title: '결제 오류 수정', status: 'FAILED' },
+  { id: 6, projectId: 2, title: '상품 목록 페이징', status: 'DONE' },
+  { id: 7, projectId: 2, title: '코드 리뷰', status: 'DONE' },
 ];

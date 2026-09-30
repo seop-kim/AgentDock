@@ -1,3 +1,5 @@
+/* 모달 공용. 오버레이 + 상자 + 폼 필드 + 하단 버튼. */
+
 .overlay {
   position: fixed;
   inset: 0;
@@ -16,13 +18,31 @@
   padding: var(--spacing-lg);
   width: 420px;
   max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
 }
 
+.wide {
+  width: 520px;
+}
+
 .modal h2 {
   margin: 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field label {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .actions {

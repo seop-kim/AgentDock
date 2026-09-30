@@ -1,0 +1,104 @@
+.board {
+  min-width: 0;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.createForm {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--spacing-md);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  min-height: 140px;
+  padding: var(--spacing-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+/* 에이전트를 끌어 왔을 때 놓을 수 있음을 알린다 */
+.groupOver {
+  border-color: var(--color-primary);
+  background: var(--color-code-bg);
+}
+
+.groupHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+}
+
+.members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+  align-content: flex-start;
+}
+
+.emptyDrop {
+  width: 100%;
+  padding: var(--spacing-md);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius);
+  color: var(--color-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.member {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px 2px 2px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  background: var(--color-surface);
+  font-size: 13px;
+  cursor: grab;
+}
+
+.member:active {
+  cursor: grabbing;
+}
+
+.iconButton {
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  line-height: 1.4;
+}
+
+.iconButton:hover {
+  background: transparent;
+  color: var(--color-text);
+}
+
+.leader,
+.leader:hover {
+  color: var(--color-primary);
+}

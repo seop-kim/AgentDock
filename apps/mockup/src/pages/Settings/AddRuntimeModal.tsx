@@ -2,7 +2,7 @@ import { FormEvent, useState } from 'react';
 import { useMockStore } from '../../store/MockStore';
 import { DEFAULT_PROVIDER_NAMES } from '../../store/seed';
 import shared from '../../styles/shared.module.css';
-import styles from './AddRuntimeModal.module.css';
+import modal from '../../styles/modal.module.css';
 
 export default function AddRuntimeModal({ onClose }: { onClose: () => void }) {
   const { availableProviderKeys, addProvider } = useMockStore();
@@ -21,8 +21,8 @@ export default function AddRuntimeModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <form className={styles.modal} onClick={(e) => e.stopPropagation()} onSubmit={onSubmit}>
+    <div className={modal.overlay} onClick={onClose}>
+      <form className={modal.modal} onClick={(e) => e.stopPropagation()} onSubmit={onSubmit}>
         <h2>런타임 추가</h2>
         {availableProviderKeys.length === 0 ? (
           <p className={shared.hint}>모든 런타임이 이미 등록되어 있습니다. 삭제한 런타임은 다시 등록할 수 있습니다.</p>
@@ -39,7 +39,7 @@ export default function AddRuntimeModal({ onClose }: { onClose: () => void }) {
             <input placeholder="표시 이름" value={name} onChange={(e) => setName(e.target.value)} required />
           </>
         )}
-        <div className={styles.actions}>
+        <div className={modal.actions}>
           <button type="button" onClick={onClose}>
             취소
           </button>
