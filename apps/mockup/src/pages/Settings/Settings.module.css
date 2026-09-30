@@ -1,7 +1,42 @@
-.header {
+.sectionHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.themeOptions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+}
+
+.themeOption {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.themeOption:hover {
+  border-color: var(--color-border-strong);
+}
+
+.themeOptionActive,
+.themeOptionActive:hover {
+  border-color: var(--color-primary);
+}
+
+.themeOption input {
+  padding: 0;
+}
+
+.themeLabel {
+  min-width: 56px;
+  font-weight: 600;
 }
 
 .card {

@@ -5,14 +5,14 @@ import AddRuntimeModal from './AddRuntimeModal';
 import RuntimeCard from './RuntimeCard';
 import styles from './Settings.module.css';
 
-export default function Settings() {
+export default function AgentConnectionSettings() {
   const { providers } = useMockStore();
   const [adding, setAdding] = useState(false);
 
   return (
     <div>
-      <div className={styles.header}>
-        <h1>에이전트 설정</h1>
+      <div className={styles.sectionHeader}>
+        <h1>에이전트 연결 설정</h1>
         <button onClick={() => setAdding(true)}>+ 런타임 추가</button>
       </div>
       <p className={shared.hint}>

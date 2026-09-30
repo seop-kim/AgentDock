@@ -1,8 +1,9 @@
-import { Route, Routes, Outlet } from 'react-router-dom';
+import { Navigate, Route, Routes, Outlet } from 'react-router-dom';
 import styles from './layout.module.css';
 import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
-import Settings from './pages/Settings/Settings';
+import AgentConnectionSettings from './pages/Settings/AgentConnectionSettings';
+import ThemeSettings from './pages/Settings/ThemeSettings';
 
 function Layout() {
   return (
@@ -20,7 +21,11 @@ export default function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<Dashboard />} />
-        <Route path="/settings" element={<Settings />} />
+        <Route path="/settings">
+          <Route index element={<Navigate to="agents" replace />} />
+          <Route path="agents" element={<AgentConnectionSettings />} />
+          <Route path="theme" element={<ThemeSettings />} />
+        </Route>
       </Route>
     </Routes>
   );

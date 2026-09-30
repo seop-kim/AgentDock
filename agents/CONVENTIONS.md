@@ -58,8 +58,9 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
 - 백엔드/DB 없음. 테스트 데이터는 `src/store/seed.ts`, 상태는 `src/store/MockStore.tsx`(메모리, 새로고침하면 초기화). `localStorage` 도 쓰지 않는다.
 - **CSS 는 전부 파일로 분리**한다(인라인 `style` 금지). 색은 `src/styles/tokens.css` 의 토큰(`var(--color-...)`)만 쓴다. 화면 고유 스타일은 `*.module.css`, 공용 조각은 `styles/shared.module.css`.
 - **다크모드 지원**: `tokens.css` 가 라이트/다크 값을 정의한다. `html[data-theme]` 명시값 > 시스템 설정 > 라이트. 새 색이 필요하면 토큰을 라이트·다크 양쪽(그리고 `prefers-color-scheme` 블록)에 함께 추가한다.
-- **메뉴는 왼쪽 사이드바**(`components/Sidebar.tsx`)에 모은다. 기본은 아이콘만 보이고, 위의 메뉴 버튼을 누르면 이름까지 펼쳐지며 다시 누르면 접힌다. 메뉴를 추가하려면 `Sidebar.tsx` 의 `MENUS` 에 항목을, `components/icons.tsx` 에 아이콘을 추가한다. 테마 전환 버튼도 사이드바 하단에 있다.
-- 현재 화면: Dashboard, 설정(에이전트 설정). 나머지 화면은 순서대로 추가한다.
+- **메뉴는 왼쪽 사이드바**(`components/Sidebar.tsx`)에 모은다. 기본은 아이콘만 보이고, 위의 메뉴 버튼을 누르면 이름까지 펼쳐지며 다시 누르면 접힌다. 메뉴를 추가하려면 `Sidebar.tsx` 의 `MENUS` 에 항목을, `components/icons.tsx` 에 아이콘을 추가한다.
+- **설정 메뉴**(`/settings`)는 사이드바의 하위 메뉴로 구성한다(탭 아님): **에이전트 연결 설정**(`/settings/agents`, 런타임 카드), **테마**(`/settings/theme`, 시스템/라이트/다크. `store/ThemeContext.tsx`). 하위 메뉴는 펼쳤을 때, 또는 접힌 상태여도 설정 화면에 있을 때 아이콘으로 보인다. 추가하려면 `Sidebar.tsx` 의 `MENUS[].children`, `icons.tsx`, `App.tsx` 의 중첩 라우트에 추가한다.
+- 현재 화면: Dashboard, 설정. 나머지 화면은 순서대로 추가한다.
 
 ## Backend 모듈 (`apps/backend/src/main/java/com/agent/dock`)
 
