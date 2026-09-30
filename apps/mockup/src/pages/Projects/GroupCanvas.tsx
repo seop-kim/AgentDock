@@ -1,7 +1,6 @@
 import {
   CSSProperties,
   DragEvent,
-  FormEvent,
   PointerEvent,
   useCallback,
   useEffect,
@@ -12,7 +11,8 @@ import {
 } from 'react';
 import { unavailableReason } from '../../lib/agentAvailability';
 import { layoutCanvas } from '../../lib/canvasLayout';
-import { isAgentDrag, readAgentDrag, startAgentDrag } from '../../lib/dnd';
+import { isAgentDrag, startAgentDrag } from '../../lib/dnd';
+import { useGroupDrop } from '../../lib/useGroupDrop';
 import { useMockStore } from '../../store/MockStore';
 import { SEED_ROLES } from '../../store/seed';
 import shared from '../../styles/shared.module.css';
@@ -28,9 +28,8 @@ interface View {
 const MIN_SCALE = 0.3;
 const MAX_SCALE = 2;
 const FIT_MARGIN = 24;
-// 화면 위에 떠 있는 요소(헤더/설정 버튼, 도구 막대)가 가리는 영역. 맞춤은 이 바깥의 빈 곳에 맞춘다.
-const INSET_TOP = 72;
-const INSET_BOTTOM = 96;
+// 화면 위에 떠 있는 요소(헤더 카드, 채팅 창, 확대/축소 도구)가 가리는 영역. 맞춤은 이 바깥의 빈 곳에 맞춘다.
+const INSET_TOP = 24;
 const INSET_RIGHT = 24;
 const ZOOM_STEP = 1.2;
 
@@ -47,20 +46,22 @@ const vars = (values: Record<string, string | number>) => values as unknown as C
 export default function GroupCanvas({
   project,
   insetLeft,
+  insetBottom,
   onNotice,
 }: {
   project: Project;
-  /** 왼쪽에 떠 있는 에이전트 패널이 가리는 너비(px) */
+  /** 왼쪽에 떠 있는 에이전트/그룹 패널이 가리는 너비(px) */
   insetLeft: number;
+  /** 아래에 떠 있는 채팅 창이 가리는 높이(px) */
+  insetBottom: number;
   onNotice: (message: string) => void;
 }) {
-  const { agents, groups, providers, createGroup, deleteGroup, addGroupMember, removeGroupMember, setGroupLeader } =
-    useMockStore();
+  const { agents, groups, providers, deleteGroup, removeGroupMember, setGroupLeader } = useMockStore();
+  const dropOnGroup = useGroupDrop(onNotice);
   const projectAgents = useMemo(() => agents.filter((a) => a.projectId === project.id), [agents, project.id]);
   const projectGroups = useMemo(() => groups.filter((g) => g.projectId === project.id), [groups, project.id]);
   const layout = useMemo(() => layoutCanvas(projectAgents, projectGroups), [projectAgents, projectGroups]);
 
-  const [name, setName] = useState('');
   const [view, setView] = useState<View>({ x: 0, y: 0, scale: 1 });
   const [overKey, setOverKey] = useState<string | null>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -77,14 +78,14 @@ export default function GroupCanvas({
       return;
     }
     const availW = width - insetLeft - INSET_RIGHT;
-    const availH = height - INSET_TOP - INSET_BOTTOM;
+    const availH = height - INSET_TOP - insetBottom;
     const scale = Math.min(1, (availW - FIT_MARGIN * 2) / layout.width, (availH - FIT_MARGIN * 2) / layout.height);
     setView({
       scale,
       x: insetLeft + (availW - layout.width * scale) / 2,
       y: INSET_TOP + (availH - layout.height * scale) / 2,
     });
-  }, [layout.width, layout.height, insetLeft]);
+  }, [layout.width, layout.height, insetLeft, insetBottom]);
 
   useLayoutEffect(() => {
     if (!touchedRef.current) fit();
@@ -140,12 +141,6 @@ export default function GroupCanvas({
     panRef.current = null;
   };
 
-  const onCreateGroup = (e: FormEvent) => {
-    e.preventDefault();
-    createGroup(project.id, name.trim());
-    setName('');
-  };
-
   const agentById = (id: number) => projectAgents.find((a) => a.id === id);
 
   const onDragOver = (e: DragEvent, key: string) => {
@@ -155,20 +150,8 @@ export default function GroupCanvas({
   };
 
   const onDropOnGroup = (e: DragEvent, groupId: number) => {
-    e.preventDefault();
     setOverKey(null);
-    const payload = readAgentDrag(e);
-    const group = projectGroups.find((g) => g.id === groupId);
-    if (!payload || !group) return;
-    if (group.memberIds.includes(payload.agentId)) {
-      onNotice(`${agentById(payload.agentId)?.name} 은(는) 이미 ${group.name} 의 멤버입니다.`);
-      return;
-    }
-    addGroupMember(groupId, payload.agentId);
-    // 다른 그룹의 노드를 끌어 온 경우는 "옮기기"이므로 원래 그룹에서는 뺀다.
-    if (payload.fromGroupId !== undefined && payload.fromGroupId !== groupId) {
-      removeGroupMember(payload.fromGroupId, payload.agentId);
-    }
+    dropOnGroup(e, groupId);
   };
 
   const onDeleteGroup = (id: number, groupName: string) => {
@@ -179,7 +162,7 @@ export default function GroupCanvas({
   const isEmpty = projectAgents.length === 0 && projectGroups.length === 0;
 
   return (
-    <section className={styles.canvas} style={vars({ '--inset': `${insetLeft}px` })}>
+    <section className={styles.canvas}>
       <div
         ref={viewportRef}
         className={styles.viewport}
@@ -284,36 +267,24 @@ export default function GroupCanvas({
         )}
       </div>
 
-      {/* 화면 아래에 떠 있는 도구 막대: 그룹 추가 + 확대/축소 */}
-      <div className={styles.toolbar}>
-        <form onSubmit={onCreateGroup} className={styles.groupForm}>
-          <input placeholder="새 그룹 이름 (예: Backend Team)" value={name} onChange={(e) => setName(e.target.value)} required />
-          <button type="submit">+ 그룹 추가</button>
-        </form>
-        <div className={styles.zoom}>
-          <button type="button" onClick={() => zoomBy(1 / ZOOM_STEP)} aria-label="축소">
-            −
-          </button>
-          <span className={styles.zoomValue}>{Math.round(view.scale * 100)}%</span>
-          <button type="button" onClick={() => zoomBy(ZOOM_STEP)} aria-label="확대">
-            +
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              touchedRef.current = false;
-              fit();
-            }}
-          >
-            맞춤
-          </button>
-        </div>
-      </div>
-
-      <div className={styles.legend}>
-        <span>★ 리더</span>
-        <span>노드를 그룹으로 끌어 놓기</span>
-        <span>배경 드래그로 이동 · 휠로 확대/축소</span>
+      {/* 오른쪽 아래에 떠 있는 확대/축소 도구 */}
+      <div className={styles.zoom}>
+        <button type="button" onClick={() => zoomBy(1 / ZOOM_STEP)} aria-label="축소">
+          −
+        </button>
+        <span className={styles.zoomValue}>{Math.round(view.scale * 100)}%</span>
+        <button type="button" onClick={() => zoomBy(ZOOM_STEP)} aria-label="확대">
+          +
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            touchedRef.current = false;
+            fit();
+          }}
+        >
+          맞춤
+        </button>
       </div>
     </section>
   );

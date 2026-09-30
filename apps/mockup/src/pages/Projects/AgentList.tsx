@@ -4,7 +4,7 @@ import { unavailableReason } from '../../lib/agentAvailability';
 import { SEED_ROLES } from '../../store/seed';
 import { useMockStore } from '../../store/MockStore';
 import shared from '../../styles/shared.module.css';
-import type { Project } from '../../types';
+import type { ChatTarget, Project } from '../../types';
 import styles from './AgentList.module.css';
 import NewAgentModal from './NewAgentModal';
 
@@ -12,7 +12,18 @@ import NewAgentModal from './NewAgentModal';
  * 프로젝트 상세에서 구성도 위에 떠 있는 에이전트 패널. 카드를 구성도의 그룹으로 끌어 놓아 멤버로 넣는다(그룹은 필수가 아니다).
  * 캔버스의 멤버 노드를 이 목록으로 끌어 놓으면 그 그룹에서 빠진다.
  */
-export default function AgentList({ project, onCollapse }: { project: Project; onCollapse: () => void }) {
+export default function AgentList({
+  project,
+  target,
+  onSelect,
+  onCollapse,
+}: {
+  project: Project;
+  /** 채팅 명령의 현재 대상(카드를 누르면 바뀐다) */
+  target: ChatTarget | null;
+  onSelect: (target: ChatTarget) => void;
+  onCollapse: () => void;
+}) {
   const { agents, groups, providers, removeGroupMember } = useMockStore();
   const [creating, setCreating] = useState(false);
   const [dropActive, setDropActive] = useState(false);
@@ -65,9 +76,11 @@ export default function AgentList({ project, onCollapse }: { project: Project; o
           return (
             <div
               key={agent.id}
-              className={styles.card}
+              className={`${styles.card} ${target?.kind === 'agent' && target.id === agent.id ? styles.cardSelected : ''}`}
               draggable
               onDragStart={(e) => startAgentDrag(e, { agentId: agent.id })}
+              onClick={() => onSelect({ kind: 'agent', id: agent.id })}
+              title="누르면 채팅 대상으로 선택됩니다"
             >
               <div className={styles.cardTop}>
                 <span className={styles.grip} aria-hidden="true">
@@ -99,7 +112,7 @@ export default function AgentList({ project, onCollapse }: { project: Project; o
       </div>
 
       {projectAgents.length > 0 && (
-        <p className={styles.tip}>카드를 구성도의 그룹으로 끌어 놓으면 멤버가 됩니다. 그룹에 속하지 않아도 괜찮습니다.</p>
+        <p className={styles.tip}>카드를 그룹으로 끌어 놓으면 멤버가 됩니다. 그룹에 속하지 않아도 괜찮습니다. 카드를 누르면 채팅 대상이 됩니다.</p>
       )}
 
       {creating && <NewAgentModal projectId={project.id} onClose={() => setCreating(false)} />}

@@ -1,0 +1,119 @@
+/* 구성도 아래 가운데(왼쪽 패널을 뺀 영역의 가운데)에 떠 있는 채팅 창 */
+.chat {
+  position: absolute;
+  bottom: var(--spacing-md);
+  left: calc((100% + var(--inset)) / 2);
+  transform: translateX(-50%);
+  width: min(720px, calc(100% - var(--inset) - 240px));
+  min-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  box-shadow: 0 4px 16px var(--color-shadow);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.title {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.target {
+  max-width: 200px;
+}
+
+.hint {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.toggle {
+  margin-left: auto;
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.toggle:hover {
+  background: var(--color-code-bg);
+  color: var(--color-text);
+}
+
+.log {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  max-height: 240px;
+  overflow-y: auto;
+  padding: var(--spacing-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  font-size: 13px;
+}
+
+.message {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 88%;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--color-code-bg);
+}
+
+/* 내가 보낸 메시지는 오른쪽, 에이전트/시스템은 왼쪽 */
+.user {
+  align-self: flex-end;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.user .meta {
+  color: inherit;
+  opacity: 0.75;
+}
+
+.agent,
+.system {
+  align-self: flex-start;
+}
+
+.meta {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.error {
+  color: var(--color-error);
+}
+
+.pending {
+  color: var(--color-muted);
+}
+
+.form {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.form input {
+  flex: 1;
+  min-width: 0;
+}

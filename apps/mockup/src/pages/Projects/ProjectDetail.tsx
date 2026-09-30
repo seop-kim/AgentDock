@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react';
+import { CSSProperties, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { SettingsIcon } from '../../components/icons';
 import { useMockStore } from '../../store/MockStore';
 import shared from '../../styles/shared.module.css';
+import type { ChatTarget } from '../../types';
 import AgentList from './AgentList';
+import ChatPanel from './ChatPanel';
 import GroupCanvas from './GroupCanvas';
+import GroupList from './GroupList';
 import styles from './ProjectDetail.module.css';
 import ProjectSettingsModal from './ProjectSettingsModal';
 
@@ -12,6 +15,9 @@ const NOTICE_MS = 2500;
 /** 에이전트 패널 너비(320) + 좌우 여백(16 + 16). 구성도 맞춤이 이만큼을 비켜 간다. */
 const AGENT_PANEL_INSET = 352;
 const NO_PANEL_INSET = 24;
+/** 채팅 창이 구성도를 가리는 높이: 입력줄만 있을 때 / 기록을 펼쳤을 때 */
+const CHAT_COLLAPSED_INSET = 120;
+const CHAT_EXPANDED_INSET = 380;
 
 /**
  * 프로젝트 상세. 구성도가 화면 전체를 채우고, 헤더/에이전트 패널/설정 버튼/도구 막대가 그 위에 떠 있다.
@@ -24,6 +30,8 @@ export default function ProjectDetail() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   // 에이전트 패널은 기본으로 열려 있고, 필요할 때만 접는다.
   const [agentsOpen, setAgentsOpen] = useState(true);
+  const [chatTarget, setChatTarget] = useState<ChatTarget | null>(null);
+  const [chatExpanded, setChatExpanded] = useState(false);
 
   useEffect(() => {
     if (notice === null) return;
@@ -48,17 +56,22 @@ export default function ProjectDetail() {
   const workspaceName = workspaces.find((w) => w.id === defaultWorkspace?.workspaceId)?.name;
   const extra = project.workspaces.length - 1;
   const agentCount = agents.filter((a) => a.projectId === project.id).length;
+  const groupCount = groups.filter((g) => g.projectId === project.id).length;
   const stats = [
     { label: '에이전트', value: agentCount },
-    { label: '그룹', value: groups.filter((g) => g.projectId === project.id).length },
+    { label: '그룹', value: groupCount },
     { label: '총 Task', value: tasks.filter((t) => t.projectId === project.id).length },
   ];
 
   return (
-    <div className={styles.stage}>
+    <div
+      className={styles.stage}
+      style={{ '--inset': `${agentsOpen ? AGENT_PANEL_INSET : NO_PANEL_INSET}px` } as CSSProperties}
+    >
       <GroupCanvas
         project={project}
         insetLeft={agentsOpen ? AGENT_PANEL_INSET : NO_PANEL_INSET}
+        insetBottom={chatExpanded ? CHAT_EXPANDED_INSET : CHAT_COLLAPSED_INSET}
         onNotice={setNotice}
       />
 
@@ -99,13 +112,30 @@ export default function ProjectDetail() {
         </header>
 
         {agentsOpen ? (
-          <AgentList project={project} onCollapse={() => setAgentsOpen(false)} />
+          <>
+            <AgentList
+              project={project}
+              target={chatTarget}
+              onSelect={setChatTarget}
+              onCollapse={() => setAgentsOpen(false)}
+            />
+            <GroupList project={project} target={chatTarget} onSelect={setChatTarget} onNotice={setNotice} />
+          </>
         ) : (
           <button type="button" className={styles.openAgents} onClick={() => setAgentsOpen(true)}>
-            에이전트 {agentCount} ›
+            에이전트 {agentCount} · 그룹 {groupCount} ›
           </button>
         )}
       </div>
+
+      <ChatPanel
+        project={project}
+        target={chatTarget}
+        onTargetChange={setChatTarget}
+        expanded={chatExpanded}
+        onToggle={() => setChatExpanded((prev) => !prev)}
+        onSent={() => setChatExpanded(true)}
+      />
 
       {notice && <p className={`errorText ${styles.notice}`}>{notice}</p>}
 

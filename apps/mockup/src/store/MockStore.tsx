@@ -1,5 +1,16 @@
-import { createContext, ReactNode, useContext, useMemo, useReducer } from 'react';
-import type { Agent, AgentGroup, AiProvider, Capabilities, Project, Task, Workspace } from '../types';
+import { createContext, ReactNode, useContext, useMemo, useReducer, useRef } from 'react';
+import { unavailableReason } from '../lib/agentAvailability';
+import type {
+  Agent,
+  AgentGroup,
+  AiProvider,
+  Capabilities,
+  ChatMessage,
+  ChatTarget,
+  Project,
+  Task,
+  Workspace,
+} from '../types';
 import {
   DEFAULT_CAPABILITIES,
   DEFAULT_PROVIDER_NAMES,
@@ -19,6 +30,7 @@ interface MockState {
   agents: Agent[];
   groups: AgentGroup[];
   tasks: Task[];
+  chats: ChatMessage[];
   nextId: number;
 }
 
@@ -39,7 +51,10 @@ type Action =
   | { type: 'group/delete'; id: number }
   | { type: 'group/addMember'; groupId: number; agentId: number }
   | { type: 'group/removeMember'; groupId: number; agentId: number }
-  | { type: 'group/setLeader'; groupId: number; agentId: number | null };
+  | { type: 'group/setLeader'; groupId: number; agentId: number | null }
+  | { type: 'chat/system'; message: ChatMessage }
+  | { type: 'chat/send'; user: ChatMessage; pending: ChatMessage; task: Task }
+  | { type: 'chat/reply'; messageId: number; taskId: number; text: string };
 
 const initialState: MockState = {
   providers: SEED_PROVIDERS,
@@ -48,6 +63,7 @@ const initialState: MockState = {
   agents: SEED_AGENTS,
   groups: SEED_GROUPS,
   tasks: SEED_TASKS,
+  chats: [],
   nextId: 100,
 };
 
@@ -169,6 +185,23 @@ function reducer(state: MockState, action: Action): MockState {
       });
     case 'group/setLeader':
       return mapGroup(state, action.groupId, (group) => ({ ...group, leaderAgentId: action.agentId }));
+    case 'chat/system':
+      return { ...state, chats: [...state.chats, action.message] };
+    case 'chat/send':
+      return {
+        ...state,
+        chats: [...state.chats, action.user, action.pending],
+        tasks: [...state.tasks, action.task],
+      };
+    case 'chat/reply':
+      // 응답이 오면 대기 중이던 에이전트 메시지를 완료로 바꾸고 Task 도 끝낸다.
+      return {
+        ...state,
+        chats: state.chats.map((m) =>
+          m.id === action.messageId ? { ...m, text: action.text, status: 'done' as const } : m,
+        ),
+        tasks: state.tasks.map((t) => (t.id === action.taskId ? { ...t, status: 'DONE' as const } : t)),
+      };
   }
 }
 
@@ -196,12 +229,73 @@ interface MockStore {
   addGroupMember: (groupId: number, agentId: number) => void;
   removeGroupMember: (groupId: number, agentId: number) => void;
   setGroupLeader: (groupId: number, agentId: number | null) => void;
+  chats: ChatMessage[];
+  /** 에이전트나 그룹(리더)에게 명령을 보낸다. 보낼 수 없으면 채팅에 사유가 시스템 메시지로 남는다. */
+  sendCommand: (projectId: number, target: ChatTarget, text: string) => void;
 }
+
+const REPLY_DELAY_MS = 1800;
 
 const MockStoreContext = createContext<MockStore | null>(null);
 
 export function MockStoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
+  // 채팅 메시지/Task id. 응답 타이머가 나중에 같은 id 를 찾아야 하므로 렌더와 무관하게 증가시킨다.
+  const seq = useRef(1000);
+  const nextSeq = () => {
+    seq.current += 1;
+    return seq.current;
+  };
+
+  const sendCommand = (projectId: number, target: ChatTarget, text: string) => {
+    const project = state.projects.find((p) => p.id === projectId);
+    const group = target.kind === 'group' ? state.groups.find((g) => g.id === target.id) : undefined;
+    const receiverId = target.kind === 'agent' ? target.id : group?.leaderAgentId;
+    const receiver = state.agents.find((a) => a.id === receiverId);
+    const targetName = target.kind === 'agent' ? receiver?.name : group?.name;
+
+    const system = (message: string) =>
+      dispatch({
+        type: 'chat/system',
+        message: { id: nextSeq(), projectId, role: 'system', author: '시스템', text: message, status: 'error' },
+      });
+
+    if (target.kind === 'group' && !receiver) {
+      system(`${targetName ?? '그룹'} 에는 리더가 없어 명령을 보낼 수 없습니다. 멤버를 넣거나 리더를 지정하세요.`);
+      return;
+    }
+    if (!receiver) {
+      system('받는 에이전트를 찾을 수 없습니다.');
+      return;
+    }
+    const reason = unavailableReason(receiver, state.providers, project);
+    if (reason) {
+      system(`${receiver.name} 은(는) 지금 실행할 수 없습니다: ${reason}`);
+      return;
+    }
+
+    const userId = nextSeq();
+    const agentMessageId = nextSeq();
+    const taskId = nextSeq();
+    const targetLabel = target.kind === 'group' ? `${group?.name} → 리더 ${receiver.name}` : receiver.name;
+    const title = text.length > 28 ? `${text.slice(0, 28)}…` : text;
+
+    dispatch({
+      type: 'chat/send',
+      user: { id: userId, projectId, role: 'user', author: '나', text, targetLabel, status: 'done' },
+      pending: { id: agentMessageId, projectId, role: 'agent', author: receiver.name, text: '', status: 'pending' },
+      task: { id: taskId, projectId, title, status: 'RUNNING' },
+    });
+
+    window.setTimeout(() => {
+      dispatch({
+        type: 'chat/reply',
+        messageId: agentMessageId,
+        taskId,
+        text: `요청을 확인했습니다. "${title}" 작업을 진행했고 완료했습니다. (모의 응답)`,
+      });
+    }, REPLY_DELAY_MS);
+  };
 
   const store = useMemo<MockStore>(
     () => ({
@@ -231,6 +325,8 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       addGroupMember: (groupId, agentId) => dispatch({ type: 'group/addMember', groupId, agentId }),
       removeGroupMember: (groupId, agentId) => dispatch({ type: 'group/removeMember', groupId, agentId }),
       setGroupLeader: (groupId, agentId) => dispatch({ type: 'group/setLeader', groupId, agentId }),
+      chats: state.chats,
+      sendCommand,
     }),
     [state],
   );

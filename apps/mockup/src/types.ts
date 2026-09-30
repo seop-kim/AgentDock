@@ -78,3 +78,19 @@ export interface Task {
   title: string;
   status: TaskStatus;
 }
+
+/** 채팅 명령의 대상. 그룹에 보내면 그 그룹의 리더가 받는다. */
+export type ChatTarget = { kind: 'agent'; id: number } | { kind: 'group'; id: number };
+
+export interface ChatMessage {
+  id: number;
+  projectId: number;
+  role: 'user' | 'agent' | 'system';
+  /** 보낸 사람 표시: 나 / 에이전트 이름 / 시스템 */
+  author: string;
+  text: string;
+  /** 사용자 메시지의 받는 쪽 표시(예: "Backend Team → 리더 Backend Dev A") */
+  targetLabel?: string;
+  /** 에이전트 응답이 아직 오는 중이면 pending */
+  status: 'pending' | 'done' | 'error';
+}

@@ -1,7 +1,8 @@
 .list {
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  flex: 1 1 0;
+  min-height: 120px;
   padding: var(--spacing-md);
   border: 1px solid var(--color-border);
   border-radius: 10px;
@@ -70,6 +71,12 @@
 
 .card:hover {
   border-color: var(--color-border-strong);
+}
+
+/* 채팅 대상으로 선택된 카드 */
+.cardSelected,
+.cardSelected:hover {
+  border-color: var(--color-primary);
 }
 
 .card:active {
