@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { readStorage, STORAGE_KEYS, writeStorage } from '../lib/storage';
-import { DashboardIcon, MenuIcon, SettingsIcon } from './icons';
+import { DashboardIcon, FolderIcon, MenuIcon, SettingsIcon } from './icons';
 import styles from './Sidebar.module.css';
 
 const MENUS = [
   { to: '/', label: 'Dashboard', Icon: DashboardIcon },
+  { to: '/projects', label: '프로젝트', Icon: FolderIcon },
   { to: '/settings', label: '설정', Icon: SettingsIcon },
 ];
 

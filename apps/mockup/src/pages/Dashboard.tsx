@@ -11,7 +11,9 @@ export default function Dashboard() {
           <Link to="/settings">AI 런타임 설정</Link>
         </li>
         <li className={styles.pending}>Workspace 등록 (준비 중)</li>
-        <li className={styles.pending}>Project 생성 (준비 중)</li>
+        <li>
+          <Link to="/projects">Project 생성 (워크스페이스 지정)</Link>
+        </li>
         <li className={styles.pending}>Agent 생성 (준비 중)</li>
         <li className={styles.pending}>Group 구성 (준비 중)</li>
         <li className={styles.pending}>Task 생성 및 실행 (준비 중)</li>

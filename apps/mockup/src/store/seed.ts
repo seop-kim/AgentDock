@@ -1,4 +1,4 @@
-import type { AiProvider, Capabilities, CliStatus } from '../types';
+import type { AiProvider, Capabilities, CliStatus, Project, Workspace } from '../types';
 
 /** 등록 가능한 런타임 종류와 기본 표시 이름. 삭제한 런타임은 다시 등록할 수 있다. */
 export const DEFAULT_PROVIDER_NAMES: Record<string, string> = {
@@ -68,3 +68,23 @@ export const CLI_STATUS_UNKNOWN: CliStatus = {
   version: null,
   detail: 'CLI 정보를 확인할 수 없습니다',
 };
+
+export const SEED_WORKSPACES: Workspace[] = [
+  { id: 1, name: 'agentDock', path: 'C:\\Users\\mock\\Documents\\GitHub\\AgentDock' },
+  { id: 2, name: 'shop-web', path: 'C:\\Users\\mock\\Documents\\GitHub\\shop-web' },
+  { id: 3, name: 'shop-api', path: 'C:\\Users\\mock\\Documents\\GitHub\\shop-api' },
+];
+
+/** 프로젝트↔워크스페이스는 N:N 이고 프로젝트당 기본(★) 1개다. */
+export const SEED_PROJECTS: Project[] = [
+  { id: 1, name: 'test', workspaces: [{ workspaceId: 1, isDefault: true }] },
+  {
+    id: 2,
+    name: 'shop',
+    workspaces: [
+      { workspaceId: 2, isDefault: true },
+      { workspaceId: 3, isDefault: false },
+    ],
+  },
+  { id: 3, name: 'blog', workspaces: [] },
+];
