@@ -27,7 +27,11 @@ interface View {
 
 const MIN_SCALE = 0.3;
 const MAX_SCALE = 2;
-const FIT_MARGIN = 48;
+const FIT_MARGIN = 24;
+// 화면 위에 떠 있는 요소(헤더/설정 버튼, 도구 막대)가 가리는 영역. 맞춤은 이 바깥의 빈 곳에 맞춘다.
+const INSET_TOP = 72;
+const INSET_BOTTOM = 96;
+const INSET_RIGHT = 24;
 const ZOOM_STEP = 1.2;
 
 const clampScale = (scale: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
@@ -40,7 +44,16 @@ const vars = (values: Record<string, string | number>) => values as unknown as C
  * 그룹에 속하지 않은 에이전트는 상자 없이 노드만 놓인다. 배경을 끌어 이동하고 휠로 확대/축소한다.
  * 에이전트 노드를 그룹 상자로 끌어 놓으면 멤버가 되고, 왼쪽 목록으로 끌면 그룹에서 빠진다.
  */
-export default function GroupCanvas({ project, onNotice }: { project: Project; onNotice: (message: string) => void }) {
+export default function GroupCanvas({
+  project,
+  insetLeft,
+  onNotice,
+}: {
+  project: Project;
+  /** 왼쪽에 떠 있는 에이전트 패널이 가리는 너비(px) */
+  insetLeft: number;
+  onNotice: (message: string) => void;
+}) {
   const { agents, groups, providers, createGroup, deleteGroup, addGroupMember, removeGroupMember, setGroupLeader } =
     useMockStore();
   const projectAgents = useMemo(() => agents.filter((a) => a.projectId === project.id), [agents, project.id]);
@@ -63,13 +76,15 @@ export default function GroupCanvas({ project, onNotice }: { project: Project; o
       setView({ x: 0, y: 0, scale: 1 });
       return;
     }
-    const scale = Math.min(1, (width - FIT_MARGIN * 2) / layout.width, (height - FIT_MARGIN * 2) / layout.height);
+    const availW = width - insetLeft - INSET_RIGHT;
+    const availH = height - INSET_TOP - INSET_BOTTOM;
+    const scale = Math.min(1, (availW - FIT_MARGIN * 2) / layout.width, (availH - FIT_MARGIN * 2) / layout.height);
     setView({
       scale,
-      x: (width - layout.width * scale) / 2,
-      y: Math.max(FIT_MARGIN, (height - layout.height * scale) / 2),
+      x: insetLeft + (availW - layout.width * scale) / 2,
+      y: INSET_TOP + (availH - layout.height * scale) / 2,
     });
-  }, [layout.width, layout.height]);
+  }, [layout.width, layout.height, insetLeft]);
 
   useLayoutEffect(() => {
     if (!touchedRef.current) fit();
@@ -164,33 +179,7 @@ export default function GroupCanvas({ project, onNotice }: { project: Project; o
   const isEmpty = projectAgents.length === 0 && projectGroups.length === 0;
 
   return (
-    <section className={styles.canvas}>
-      <div className={styles.toolbar}>
-        <h2 className={styles.title}>구성도</h2>
-        <form onSubmit={onCreateGroup} className={styles.groupForm}>
-          <input placeholder="새 그룹 이름 (예: Backend Team)" value={name} onChange={(e) => setName(e.target.value)} required />
-          <button type="submit">+ 그룹 추가</button>
-        </form>
-        <div className={styles.zoom}>
-          <button type="button" onClick={() => zoomBy(1 / ZOOM_STEP)} aria-label="축소">
-            −
-          </button>
-          <span className={styles.zoomValue}>{Math.round(view.scale * 100)}%</span>
-          <button type="button" onClick={() => zoomBy(ZOOM_STEP)} aria-label="확대">
-            +
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              touchedRef.current = false;
-              fit();
-            }}
-          >
-            맞춤
-          </button>
-        </div>
-      </div>
-
+    <section className={styles.canvas} style={vars({ '--inset': `${insetLeft}px` })}>
       <div
         ref={viewportRef}
         className={styles.viewport}
@@ -295,11 +284,36 @@ export default function GroupCanvas({ project, onNotice }: { project: Project; o
         )}
       </div>
 
+      {/* 화면 아래에 떠 있는 도구 막대: 그룹 추가 + 확대/축소 */}
+      <div className={styles.toolbar}>
+        <form onSubmit={onCreateGroup} className={styles.groupForm}>
+          <input placeholder="새 그룹 이름 (예: Backend Team)" value={name} onChange={(e) => setName(e.target.value)} required />
+          <button type="submit">+ 그룹 추가</button>
+        </form>
+        <div className={styles.zoom}>
+          <button type="button" onClick={() => zoomBy(1 / ZOOM_STEP)} aria-label="축소">
+            −
+          </button>
+          <span className={styles.zoomValue}>{Math.round(view.scale * 100)}%</span>
+          <button type="button" onClick={() => zoomBy(ZOOM_STEP)} aria-label="확대">
+            +
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              touchedRef.current = false;
+              fit();
+            }}
+          >
+            맞춤
+          </button>
+        </div>
+      </div>
+
       <div className={styles.legend}>
         <span>★ 리더</span>
         <span>노드를 그룹으로 끌어 놓기</span>
         <span>배경 드래그로 이동 · 휠로 확대/축소</span>
-        <span>그룹에 속하지 않아도 됩니다</span>
       </div>
     </section>
   );

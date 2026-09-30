@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, Route, Routes, useMatch } from 'react-router-dom';
 import styles from './layout.module.css';
 import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
@@ -9,10 +9,12 @@ import Settings from './pages/Settings/Settings';
 import ThemeSettings from './pages/Settings/ThemeSettings';
 
 function Layout() {
+  // 프로젝트 상세는 구성도가 화면 전체를 차지하므로 여백 없이 쓴다.
+  const fullBleed = useMatch('/projects/:id') !== null;
   return (
     <div className={styles.shell}>
       <Sidebar />
-      <main className={styles.main}>
+      <main className={`${styles.main} ${fullBleed ? styles.mainFull : ''}`}>
         <Outlet />
       </main>
     </div>

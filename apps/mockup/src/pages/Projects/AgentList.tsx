@@ -9,10 +9,10 @@ import styles from './AgentList.module.css';
 import NewAgentModal from './NewAgentModal';
 
 /**
- * 프로젝트 상세 왼쪽의 에이전트 목록. 카드를 캔버스의 그룹으로 끌어 놓아 멤버로 넣는다(그룹은 필수가 아니다).
+ * 프로젝트 상세에서 구성도 위에 떠 있는 에이전트 패널. 카드를 구성도의 그룹으로 끌어 놓아 멤버로 넣는다(그룹은 필수가 아니다).
  * 캔버스의 멤버 노드를 이 목록으로 끌어 놓으면 그 그룹에서 빠진다.
  */
-export default function AgentList({ project }: { project: Project }) {
+export default function AgentList({ project, onCollapse }: { project: Project; onCollapse: () => void }) {
   const { agents, groups, providers, removeGroupMember } = useMockStore();
   const [creating, setCreating] = useState(false);
   const [dropActive, setDropActive] = useState(false);
@@ -44,7 +44,12 @@ export default function AgentList({ project }: { project: Project }) {
         <h2 className={styles.title}>
           에이전트 <span className={shared.muted}>{projectAgents.length}</span>
         </h2>
-        <button onClick={() => setCreating(true)}>+ 새 에이전트</button>
+        <div className={styles.headerActions}>
+          <button onClick={() => setCreating(true)}>+ 새 에이전트</button>
+          <button type="button" className={styles.collapse} onClick={onCollapse} aria-label="에이전트 패널 접기" title="접기">
+            ‹
+          </button>
+        </div>
       </div>
 
       {projectAgents.length === 0 && (
@@ -94,7 +99,7 @@ export default function AgentList({ project }: { project: Project }) {
       </div>
 
       {projectAgents.length > 0 && (
-        <p className={styles.tip}>카드를 캔버스의 그룹으로 끌어 놓으면 멤버가 됩니다. 그룹에 속하지 않아도 괜찮습니다.</p>
+        <p className={styles.tip}>카드를 구성도의 그룹으로 끌어 놓으면 멤버가 됩니다. 그룹에 속하지 않아도 괜찮습니다.</p>
       )}
 
       {creating && <NewAgentModal projectId={project.id} onClose={() => setCreating(false)} />}

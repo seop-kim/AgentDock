@@ -1,31 +1,35 @@
 .canvas {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
+  position: absolute;
+  inset: 0;
   overflow: hidden;
-  background: var(--color-surface);
+  background: var(--color-bg);
 }
 
+/* 화면 아래 가운데(왼쪽 패널을 뺀 영역의 가운데)에 떠 있는 도구 막대 */
 .toolbar {
+  position: absolute;
+  bottom: var(--spacing-md);
+  left: calc((100% + var(--inset)) / 2);
+  transform: translateX(-50%);
+  width: max-content;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: var(--spacing-md);
-  padding: 10px var(--spacing-md);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.title {
-  margin: 0;
-  font-size: 1rem;
+  max-width: calc(100% - var(--inset) - var(--spacing-md) * 2);
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  box-shadow: 0 4px 16px var(--color-shadow);
 }
 
 .groupForm {
   display: flex;
   gap: var(--spacing-sm);
-  margin-right: auto;
+}
+
+.toolbar button {
+  white-space: nowrap;
 }
 
 .zoom {
@@ -43,8 +47,8 @@
 }
 
 .viewport {
-  position: relative;
-  height: clamp(460px, 68vh, 760px);
+  position: absolute;
+  inset: 0;
   overflow: hidden;
   cursor: grab;
   touch-action: none;
@@ -242,11 +246,20 @@
 }
 
 .legend {
+  position: absolute;
+  right: var(--spacing-md);
+  bottom: var(--spacing-md);
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px var(--spacing-md);
-  padding: 8px var(--spacing-md);
-  border-top: 1px solid var(--color-border);
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
   color: var(--color-muted);
   font-size: 12px;
+  pointer-events: none;
+}
+
+@media (max-width: 1200px) {
+  .legend {
+    display: none;
+  }
 }
