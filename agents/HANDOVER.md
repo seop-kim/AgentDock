@@ -4,11 +4,8 @@
 
 ## 0. 지금 바로 이어서 할 일 (가장 먼저 볼 것)
 
-1. **CLI 확인 창 만들기 (사용자 요청, 미착수)**
-   사용자 요청 원문: "저런 cli 를 사용하는 곳은 전부 cli 를 확인할 수 있도록 창도 만들어".
-   즉 런타임 CLI 를 쓰는 모든 자리(에이전트 설정 카드, 워크스페이스의 런타임 행, 에이전트 목록)에서 **CLI 상태를 확인할 수 있는 패널**을 열 수 있게 한다. 담을 것: 실행 파일 경로/버전(`Executables.resolve` + `<cmd> --version`), 이 폴더에서 확인(probe) 결과, 로그인, 설치, 출력 스트리밍.
-   구현 힌트: `GET /ai-providers/{id}/cli` 같은 endpoint 로 `{resolvedPath, version, runnable}` 를 내려주고, 프론트는 기존 `CommandPanel` 을 확장해 머리말에 그 정보를 표시 + `이 폴더에서 확인`/`로그인`/`CLI 설치` 버튼을 모은다.
-2. 그다음 Stage 2~4 (아래 §3).
+1. **Stage 2 — 화면 재배치** (아래 §3). 사용자가 바로 요청했던 **CLI 확인 창은 완료**했다(§2 (C)).
+2. 그다음 Stage 3~4 (아래 §3).
 
 ## 1. 먼저 읽을 문서 (순서대로)
 
@@ -49,14 +46,20 @@
 - 화면: 에이전트 설정 카드에 ON/OFF + **CLI 설치** + 로그인 + 설치 계획 편집(모델/모드/설치 단계/필수 도구), 워크스페이스 런타임 행에 **CLI 설치(또는 설치/재설치)** 버튼과 출력 패널(성공 시 자동 재확인). `LoginPanel` → **`CommandPanel`**(로그인/설치 공용)로 일반화.
 - E2E 검증: `npm view @openai/codex version` → `0.159.0` exit 0(셸 경유로 npm 실행됨), 필수 도구가 없을 때 `prerequisite-ran` → `install-step-ran` 순서로 실행되고 exit 0. JUnit 54건, 프론트 tsc+build 통과.
 
+**(C) CLI 확인 창** (이번 커밋들)
+
+- **CLI 상태 API**: `GET /ai-providers/{id}/cli` → `{resolvedPath, version, runnable, detail}`. `Executables.locate`(PATH/PATHEXT 로 실제 파일 경로, 없으면 null)로 찾고, 있으면 `<실행 파일> --version` 을 10초 제한으로 실행해 첫 줄을 읽는다(`CliStatusService`, 셸 미경유, 저장 안 함). 런타임별 `AiRuntimeCli`/`CliRegistry` 구현이 등록된 런타임만 경로/버전을 보여 준다(현재 Claude 만; 나머지는 "CLI 정보를 확인할 수 없습니다").
+- **CLI 확인 창**(`CliPanel.tsx`): CLI 를 쓰는 모든 자리(에이전트 설정 카드 · 워크스페이스 런타임 행 · 에이전트 목록)에서 `CLI 확인` 버튼 **하나**로 연다. 창에서 경로/버전/실행 가능 여부 + 이 폴더에서 확인(probe) + 로그인 + 설치를 모두 하고, 출력은 기존 `CommandPanel`(SSE)을 재사용한다. 각 자리에 흩어져 있던 인라인 버튼(로그인/CLI 설치/이 폴더에서 확인)은 창 안으로 모았다.
+- E2E 검증: `GET /ai-providers/12/cli` → `C:\Users\chey.kim\.local\bin\claude.exe`, `2.1.227 (Claude Code)`, `runnable=true`. COMMAND_CODE → "CLI 정보를 확인할 수 없습니다", 없는 id → 404. 화면 3곳에서 창이 열리고, 창의 "이 폴더에서 확인"이 표(상태 CONNECTED, 마지막 확인 갱신)를 다시 읽는다. JUnit 59건, 프론트 tsc+build 통과.
+  - **미실행(의도)**: 로그인/설치 버튼의 실제 실행은 인증 상태·전역 설치를 건드려 이번 검증에서 누르지 않았다. `CommandPanel` 자체는 변경하지 않았고(부모만 교체), 직전 커밋에서 검증된 코드다.
+
 ## 3. 다음에 할 일 (우선순위)
 
-1. **CLI 확인 창**(§0) — 사용자가 바로 요청한 것.
-2. **Stage 2 — 화면 재배치**: "에이전트 설정" 라우트/파일 정리, Agents 는 읽기 목록 중심 + 생성은 프로젝트 상세로 이동, 그리고 **모델/권한을 CLI 목록에서 고르는 UI**(`~/.claude.json` 의 `additionalModelOptionsCache` = `/model` 이 보여주는 라벨·설명·disabled, `claude --help` 의 `--permission-mode` 6종) 를 흡수. 사용자가 "텍스트로 주면 쓰이는지 알 수 없다"고 한 지적의 해결책.
-3. **Stage 3 — 프로젝트 상세 채팅(자동 라우팅)**: 채팅 입력 → 그룹 리더/에이전트로 라우팅 → Task/Execution + SSE. 에이전트가 여러 개일 때 규칙 확정. 필요하면 `task.workspace_id` 추가.
-4. **Stage 4 — Tasks 통합 화면**: 전 프로젝트 진행/종료 작업 + 필터.
-5. **다른 런타임(CODEX/GEMINI/COMMAND_CODE) probe/Runtime/로그인 명령** — CLI 미설치로 실검증 불가. 설치 흐름으로 설치한 뒤 문서 확인해서 구현(플래그 추측 금지).
-6. 메뉴형 CLI 가 필요해지면 `LoginProcess` PTY 구현, (선택) OS Credential Store.
+1. **Stage 2 — 화면 재배치**: "에이전트 설정" 라우트/파일 정리, Agents 는 읽기 목록 중심 + 생성은 프로젝트 상세로 이동, 그리고 **모델/권한을 CLI 목록에서 고르는 UI**(`~/.claude.json` 의 `additionalModelOptionsCache` = `/model` 이 보여주는 라벨·설명·disabled, `claude --help` 의 `--permission-mode` 6종) 를 흡수. 사용자가 "텍스트로 주면 쓰이는지 알 수 없다"고 한 지적의 해결책.
+2. **Stage 3 — 프로젝트 상세 채팅(자동 라우팅)**: 채팅 입력 → 그룹 리더/에이전트로 라우팅 → Task/Execution + SSE. 에이전트가 여러 개일 때 규칙 확정. 필요하면 `task.workspace_id` 추가.
+3. **Stage 4 — Tasks 통합 화면**: 전 프로젝트 진행/종료 작업 + 필터.
+4. **다른 런타임(CODEX/GEMINI/COMMAND_CODE) probe/Runtime/로그인 명령** — CLI 미설치로 실검증 불가. 설치 흐름으로 설치한 뒤 문서 확인해서 구현(플래그 추측 금지). CLI 상태 조회도 `AiRuntimeCli` 구현을 추가하면 자동으로 잡힌다.
+5. 메뉴형 CLI 가 필요해지면 `LoginProcess` PTY 구현, (선택) OS Credential Store.
 
 ## 4. 이 환경에서 작업할 때 (실측값)
 
@@ -67,7 +70,7 @@
 - 이 머신의 CLI: `claude` = `C:\Users\chey.kim\.local\bin\claude.exe`, `node` = `C:\nvm4w\nodejs\node.exe`, `npm` = `C:\nvm4w\nodejs\npm.cmd`(+`npm.ps1`), `nvm` 1.2.2(있음), `cmdc`/`codex`/`gemini` 없음, **`winget` 없음**.
 - `agent-browser`(0.38.1 + Chrome) 있음. `open`/`eval`/`snapshot` 이 자주 멈추니 **스크린샷 + 이미지 확인** 위주로.
 - `gh` CLI 없음 → PR 생성/병합은 GitHub 웹.
-- 현재 DB: Flyway **v1~v9**, `ai_provider` 4종(CLAUDE_CODE 만 enabled=true; CODEX/GEMINI 는 사용자가 논리 삭제), 나머지 테이블 비어 있음.
+- 현재 DB: Flyway **v1~v9**, `ai_provider` 4종(CLAUDE_CODE·COMMAND_CODE enabled=true, CODEX/GEMINI 는 논리 삭제). 테스트용으로 workspace(`agentDock`)·project(`test`, 기본 워크스페이스 1개)·agent(`test`, CLAUDE_CODE) 1건이 있다.
 - 검증 정리 SQL(순서 중요): `execution_log → task → execution → agent_group_member → agent_group → agent → project_workspace → project → workspace → permission_profile → agent_role`.
 
 ## 5. 반복해서 밟은 함정 (중요)

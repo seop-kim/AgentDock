@@ -53,7 +53,7 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
 ## Backend 모듈 (`apps/backend/src/main/java/com/agent/dock`)
 
 - `common/` — `GlobalExceptionHandler`(400/403/404/409), `BadRequestException`/`NotFoundException`/`ForbiddenException`/`ConflictException`, `WebConfig`(CORS), `QueryDslConfig`
-- `provider/` — AiProvider(**논리 삭제** `deleted_at`, **on/off** `enabled`, 부분 유니크 인덱스 `ai_provider_key_active`). `PUT /ai-providers/{id}/enabled` 토글, `capabilities` 편집(`PUT /ai-providers/{id}/capabilities`). 런타임별 probe(`AiRuntimeProbe`/`ProbeRegistry`/`ClaudeCodeProbe`)와 로그인 세션(`provider/login`: `AiLoginCommand`/`LoginCommandRegistry`/`LoginProcess`/`LoginSessionService`) — 로그인은 **런타임 전역**
+- `provider/` — AiProvider(**논리 삭제** `deleted_at`, **on/off** `enabled`, 부분 유니크 인덱스 `ai_provider_key_active`). `PUT /ai-providers/{id}/enabled` 토글, `capabilities` 편집(`PUT /ai-providers/{id}/capabilities`). 런타임 CLI 실행 파일 조회(`AiRuntimeCli`/`CliRegistry`/`CliStatusService`, `GET /ai-providers/{id}/cli`)와 런타임별 probe(`AiRuntimeProbe`/`ProbeRegistry`/`ClaudeCodeProbe`), 로그인 세션(`provider/login`: `AiLoginCommand`/`LoginCommandRegistry`/`LoginProcess`/`LoginSessionService`) — 로그인은 **런타임 전역**
 - `agent/` — Agent CRUD(프로젝트 소속, 페르소나) + `AgentAvailability`(사용 가능 여부 파생 판정). 목록 조회는 QueryDSL fetch join(`AgentRepositoryImpl`)
 - `role/`, `permission/` — Role, PermissionProfile. `PermissionService.isAllowed(profile, action)` 가 enforcement primitive
 - `workspace/` — Workspace CRUD, 폴더 브라우징(`GET /workspaces/browse`), UNC 차단(`WorkspaceFs`), 드라이브 루트 워밍, **폴더별 런타임 상태**(`WorkspaceRuntimeStatus`): `GET /workspaces/{id}/runtimes`, `POST /workspaces/{id}/runtimes/{providerId}/check`(cwd = 그 폴더)
@@ -88,10 +88,12 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
 
 ### CLI 설치와 실행 파일 해석
 
-- **실행 파일 해석**(`process/Executables`): Java 는 `npm` 처럼 확장자 없이 쓰는 이름을 `npm.cmd` 로 찾지 못한다(`CreateProcess error=2`). PATH/PATHEXT 를 훑어 실제 파일을 찾아 실행한다. `ProcessService`(에이전트 실행)와 probe 에 적용하며 **셸을 경유하지 않는다**(프롬프트가 셸로 해석되지 않게).
+- **실행 파일 해석**(`process/Executables`): Java 는 `npm` 처럼 확장자 없이 쓰는 이름을 `npm.cmd` 로 찾지 못한다(`CreateProcess error=2`). PATH/PATHEXT 를 훑어 실제 파일을 찾아 실행한다. `ProcessService`(에이전트 실행)와 probe 에 적용하며 **셸을 경유하지 않는다**(프롬프트가 셸로 해석되지 않게). `resolve` 는 찾으면 경로·없으면 입력 그대로, `locate` 는 찾으면 경로·없으면 null(설치 여부 판단용).
+- **CLI 상태 조회**(`GET /ai-providers/{id}/cli` → `{resolvedPath, version, runnable, detail}`): `Executables.locate` 로 경로를 찾고, 있으면 `<실행 파일> --version` 을 10초 제한으로 실행해 첫 줄을 읽는다(`CliStatusService`, **셸 미경유**, 저장 안 함). 런타임별 `AiRuntimeCli` 구현이 등록된 런타임만 경로/버전을 보여 주고 나머지는 "CLI 정보를 확인할 수 없습니다"가 된다.
+- **CLI 확인 창**(`CliPanel`): CLI 를 쓰는 모든 자리(에이전트 설정 카드 / 워크스페이스 런타임 행 / 에이전트 목록)에서 `CLI 확인` 버튼 하나로 연다. 창에서 위 상태와 "이 폴더에서 확인"(probe, `workspaceId` 있을 때만)·로그인·설치를 함께 실행하고, 출력 스트리밍은 `CommandPanel`(SSE)을 재사용한다.
 - **설치 계획(데이터)**: `capabilities` 에 `installRequire`(먼저 있어야 하는 실행 파일, 예: `npm`), `installPrerequisite`(없을 때 먼저 실행할 단계, 예: `nvm install lts`), `install`(본 설치 단계) 을 둔다. V9 가 4종 런타임에 시드하며 화면에서 편집한다(추측 금지, npm 패키지는 실존 확인 후 기재).
 - **설치 세션**: `POST /ai-providers/{id}/install` → 단계를 순서대로 실행하고 출력을 같은 SSE 로 스트리밍한다. 필수 도구가 없으면 선행 단계를 먼저 실행한다. 설치 단계만 `CommandShell`(`cmd.exe /c`, Unix `sh -c`)로 감싼다 — `.cmd`/`.ps1`/`&&` 를 쓰기 위함이며, **에이전트 실행 경로는 셸을 쓰지 않는다**.
-- **CLI 없음 감지**: probe 가 실행 파일을 못 찾으면 `cliMissing` 으로 표시하고(저장: `workspace_runtime_status.cli_missing`) 화면은 설치 버튼을 띄운다.
+- **CLI 없음 감지**: probe 가 실행 파일을 못 찾으면 `cliMissing` 으로 표시하고(저장: `workspace_runtime_status.cli_missing`) CLI 확인 창이 설치 버튼을 띄운다.
 
 ### 모델과 모드 (`capabilities`)
 
