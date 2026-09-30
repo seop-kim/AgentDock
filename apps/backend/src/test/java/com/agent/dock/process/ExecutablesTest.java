@@ -35,4 +35,18 @@ class ExecutablesTest {
         assertThat(Executables.resolve("  ")).isEqualTo("  ");
         assertThat(Executables.resolve(null)).isNull();
     }
+
+    @Test
+    void locateFindsKnownExecutableAndReturnsNullForUnknownName() {
+        assertThat(Executables.locate(Executables.isWindows() ? "cmd" : "sh")).isNotNull();
+        assertThat(Executables.locate("definitely-not-installed-xyz")).isNull();
+    }
+
+    @Test
+    void locateReturnsNullWhenTheFileDoesNotExist() {
+        String missing = Executables.isWindows() ? "C:\\definitely\\missing\\xyz.exe" : "/definitely/missing/xyz";
+
+        assertThat(Executables.locate(missing)).isNull();
+        assertThat(Executables.locate("  ")).isNull();
+    }
 }

@@ -12,11 +12,18 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AiProviderController {
     private final AiProviderService service;
+    private final CliStatusService cliStatusService;
 
     /** 등록된 런타임 목록. 연결 상태는 워크스페이스별(`/workspaces/{id}/runtimes`)이다. */
     @GetMapping
     public List<AiProviderResponse> findAll() {
         return service.findAll();
+    }
+
+    /** 이 런타임 CLI 의 실행 파일 경로/버전/실행 가능 여부. 폴더와 무관한 런타임 전역 정보다. */
+    @GetMapping("/{id}/cli")
+    public CliStatusResponse cli(@PathVariable Long id) {
+        return cliStatusService.check(id);
     }
 
     @PostMapping

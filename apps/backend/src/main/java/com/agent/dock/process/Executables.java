@@ -18,15 +18,24 @@ public final class Executables {
 
     /** 실행 가능한 실제 경로를 찾으면 그것을, 못 찾으면 원래 이름을 그대로 돌려준다. */
     public static String resolve(String command) {
+        String located = locate(command);
+        return located != null ? located : command;
+    }
+
+    /**
+     * PATH/PATHEXT 에서 실행 파일의 실제 경로를 찾는다. 못 찾으면 null 을 돌려주므로 설치 여부 판단에 쓸 수 있다.
+     * 경로 구분자가 포함된 입력은 그 파일이 실제로 존재할 때만 그대로 돌려준다.
+     */
+    public static String locate(String command) {
         if (command == null || command.isBlank()) {
-            return command;
+            return null;
         }
         if (command.contains("/") || command.contains("\\")) {
-            return command;
+            return Files.isRegularFile(Path.of(command)) ? command : null;
         }
         String pathEnv = System.getenv("PATH");
         if (pathEnv == null || pathEnv.isBlank()) {
-            return command;
+            return null;
         }
         for (String dir : pathEnv.split(File.pathSeparator)) {
             if (dir.isBlank()) {
@@ -39,7 +48,7 @@ public final class Executables {
                 }
             }
         }
-        return command;
+        return null;
     }
 
     private static List<String> candidateNames(String command) {
