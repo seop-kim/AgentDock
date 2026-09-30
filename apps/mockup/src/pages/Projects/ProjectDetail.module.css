@@ -73,27 +73,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.fold {
-  composes: glass from '../../styles/glass.module.css';
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 12px 3px 6px;
-  border-radius: 999px;
-  color: var(--color-text);
-  font-size: 12px;
-}
-
-.fold:hover {
-  filter: brightness(1.06);
-}
-
-.fold svg {
-  width: 16px;
-  height: 16px;
-}
-
 /* 프로젝트 이름 줄: 이름은 왼쪽, 설정 버튼은 그 줄 오른쪽 끝 */
 .titleRow {
   display: flex;

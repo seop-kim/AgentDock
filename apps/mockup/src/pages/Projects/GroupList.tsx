@@ -1,7 +1,7 @@
 import { DragEvent, useState } from 'react';
 import { isAgentDrag, startAgentDrag } from '../../lib/dnd';
 import { useGroupDrop } from '../../lib/useGroupDrop';
-import { PlusIcon } from '../../components/icons';
+import { ChevronDownIcon, ChevronUpIcon, PlusIcon } from '../../components/icons';
 import { useMockStore } from '../../store/MockStore';
 import shared from '../../styles/shared.module.css';
 import type { AgentGroup, ChatTarget, Project } from '../../types';
@@ -19,11 +19,16 @@ export default function GroupList({
   target,
   onSelect,
   onNotice,
+  open,
+  onToggle,
 }: {
   project: Project;
   target: ChatTarget | null;
   onSelect: (target: ChatTarget) => void;
   onNotice: (message: string) => void;
+  /** 패널을 펼쳐 둘지(접으면 머리말만 남는다) */
+  open: boolean;
+  onToggle: () => void;
 }) {
   const { agents, groups, deleteGroup, removeGroupMember } = useMockStore();
   const dropOnGroup = useGroupDrop(onNotice);
@@ -52,11 +57,23 @@ export default function GroupList({
   };
 
   return (
-    <aside className={styles.list}>
+    <aside className={`${styles.list} ${open ? '' : styles.listCollapsed}`}>
       <div className={styles.header}>
-        <h2 className={styles.title}>
-          그룹 <span className={shared.muted}>{projectGroups.length}</span>
-        </h2>
+        <div className={styles.titleGroup}>
+          <button
+            type="button"
+            className={styles.fold}
+            onClick={onToggle}
+            aria-expanded={open}
+            aria-label={open ? '그룹 패널 접기' : '그룹 패널 펴기'}
+            title={open ? '그룹 패널 접기' : '그룹 패널 펴기'}
+          >
+            {open ? <ChevronUpIcon /> : <ChevronDownIcon />}
+          </button>
+          <h2 className={styles.title}>
+            그룹 <span className={shared.muted}>{projectGroups.length}</span>
+          </h2>
+        </div>
         <button
           type="button"
           className={shared.addButton}
@@ -68,73 +85,77 @@ export default function GroupList({
         </button>
       </div>
 
-      {projectGroups.length === 0 && (
+      {open && projectGroups.length === 0 && (
         <p className={shared.muted}>그룹이 없습니다. 에이전트는 그룹 없이도 쓸 수 있습니다.</p>
       )}
 
-      <div className={styles.cards}>
-        {projectGroups.map((group) => {
-          const selected = target?.kind === 'group' && target.id === group.id;
-          return (
-            <div
-              key={group.id}
-              className={`${styles.card} ${selected ? styles.cardSelected : ''} ${overId === group.id ? styles.cardOver : ''}`}
-              onClick={() => onSelect({ kind: 'group', id: group.id })}
-              onDragOver={(e) => onDragOver(e, group.id)}
-              onDragLeave={() => setOverId(null)}
-              onDrop={(e) => onDrop(e, group.id)}
-              title="누르면 채팅 대상으로 선택됩니다"
-            >
-              <div className={styles.cardTop}>
-                <strong className={styles.name}>{group.name}</strong>
-                <button
-                  type="button"
-                  className={styles.menuButton}
-                  aria-label={`${group.name} 메뉴`}
-                  aria-haspopup="menu"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setMenu({ group, rect: e.currentTarget.getBoundingClientRect() });
-                  }}
-                >
-                  ⋮
-                </button>
-              </div>
-              <div className={shared.muted}>
-                멤버 {group.memberIds.length} · 리더{' '}
-                {group.leaderAgentId !== null ? agentName(group.leaderAgentId) : '없음'}
-              </div>
-              <div className={styles.members}>
-                {group.memberIds.length === 0 && <span className={styles.emptyDrop}>에이전트를 여기로 끌어 놓으세요</span>}
-                {group.memberIds.map((agentId) => (
-                  <span
-                    key={agentId}
-                    className={styles.member}
-                    draggable
-                    onDragStart={(e) => startAgentDrag(e, { agentId, fromGroupId: group.id })}
-                    onClick={(e) => e.stopPropagation()}
+      {open && (
+        <div className={styles.cards}>
+          {projectGroups.map((group) => {
+            const selected = target?.kind === 'group' && target.id === group.id;
+            return (
+              <div
+                key={group.id}
+                className={`${styles.card} ${selected ? styles.cardSelected : ''} ${overId === group.id ? styles.cardOver : ''}`}
+                onClick={() => onSelect({ kind: 'group', id: group.id })}
+                onDragOver={(e) => onDragOver(e, group.id)}
+                onDragLeave={() => setOverId(null)}
+                onDrop={(e) => onDrop(e, group.id)}
+                title="누르면 채팅 대상으로 선택됩니다"
+              >
+                <div className={styles.cardTop}>
+                  <strong className={styles.name}>{group.name}</strong>
+                  <button
+                    type="button"
+                    className={styles.menuButton}
+                    aria-label={`${group.name} 메뉴`}
+                    aria-haspopup="menu"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenu({ group, rect: e.currentTarget.getBoundingClientRect() });
+                    }}
                   >
-                    {group.leaderAgentId === agentId && <span className={styles.leader}>★</span>}
-                    {agentName(agentId)}
-                    <button
-                      type="button"
-                      className={styles.remove}
-                      title="그룹에서 제거"
-                      aria-label={`${agentName(agentId)} 그룹에서 제거`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeGroupMember(group.id, agentId);
-                      }}
+                    ⋮
+                  </button>
+                </div>
+                <div className={shared.muted}>
+                  멤버 {group.memberIds.length} · 리더{' '}
+                  {group.leaderAgentId !== null ? agentName(group.leaderAgentId) : '없음'}
+                </div>
+                <div className={styles.members}>
+                  {group.memberIds.length === 0 && (
+                    <span className={styles.emptyDrop}>에이전트를 여기로 끌어 놓으세요</span>
+                  )}
+                  {group.memberIds.map((agentId) => (
+                    <span
+                      key={agentId}
+                      className={styles.member}
+                      draggable
+                      onDragStart={(e) => startAgentDrag(e, { agentId, fromGroupId: group.id })}
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      ×
-                    </button>
-                  </span>
-                ))}
+                      {group.leaderAgentId === agentId && <span className={styles.leader}>★</span>}
+                      {agentName(agentId)}
+                      <button
+                        type="button"
+                        className={styles.remove}
+                        title="그룹에서 제거"
+                        aria-label={`${agentName(agentId)} 그룹에서 제거`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeGroupMember(group.id, agentId);
+                        }}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       {creating && <GroupFormModal project={project} onClose={() => setCreating(false)} />}
 

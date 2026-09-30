@@ -1,6 +1,6 @@
 import { CSSProperties, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ChevronDownIcon, ChevronUpIcon, SettingsIcon } from '../../components/icons';
+import { SettingsIcon } from '../../components/icons';
 import { useMockStore } from '../../store/MockStore';
 import shared from '../../styles/shared.module.css';
 import type { ChatTarget } from '../../types';
@@ -28,8 +28,9 @@ export default function ProjectDetail() {
   const { projects, workspaces, agents, groups, tasks } = useMockStore();
   const [notice, setNotice] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  // 에이전트 패널은 기본으로 열려 있고, 필요할 때만 접는다.
+  // 에이전트 패널과 그룹 패널은 따로 접고 펼 수 있다(기본은 둘 다 열림).
   const [agentsOpen, setAgentsOpen] = useState(true);
+  const [groupsOpen, setGroupsOpen] = useState(true);
   const [chatTarget, setChatTarget] = useState<ChatTarget | null>(null);
   const [chatExpanded, setChatExpanded] = useState(false);
   // 선택된 에이전트: 왼쪽 카드와 구성도 노드가 함께 강조된다. focusSeq 가 오를 때마다 구성도가 그쪽으로 이동한다.
@@ -91,14 +92,14 @@ export default function ProjectDetail() {
     { label: '총 Task', value: tasks.filter((t) => t.projectId === project.id).length },
   ];
 
+  // 둘 다 접으면 왼쪽 패널이 차지하는 폭이 없어져 구성도가 화면 전체를 쓴다.
+  const panelInset = agentsOpen || groupsOpen ? AGENT_PANEL_INSET : NO_PANEL_INSET;
+
   return (
-    <div
-      className={styles.stage}
-      style={{ '--inset': `${agentsOpen ? AGENT_PANEL_INSET : NO_PANEL_INSET}px` } as CSSProperties}
-    >
+    <div className={styles.stage} style={{ '--inset': `${panelInset}px` } as CSSProperties}>
       <GroupCanvas
         project={project}
-        insetLeft={agentsOpen ? AGENT_PANEL_INSET : NO_PANEL_INSET}
+        insetLeft={panelInset}
         insetBottom={chatExpanded ? CHAT_EXPANDED_INSET : CHAT_COLLAPSED_INSET}
         selectedAgentId={activeAgentId}
         focusSeq={focusSeq}
@@ -107,17 +108,6 @@ export default function ProjectDetail() {
       />
 
       <div className={styles.leftColumn}>
-        <button
-          type="button"
-          className={styles.fold}
-          onClick={() => setAgentsOpen((prev) => !prev)}
-          aria-expanded={agentsOpen}
-          aria-label={agentsOpen ? '에이전트·그룹 패널 접기' : '에이전트·그룹 패널 펴기'}
-        >
-          {agentsOpen ? <ChevronUpIcon /> : <ChevronDownIcon />}
-          {agentsOpen ? '접기' : '펴기'}
-        </button>
-
         <header className={styles.header}>
           <Link to="/projects" className={styles.back}>
             ← 프로젝트 목록
@@ -153,24 +143,24 @@ export default function ProjectDetail() {
           </div>
         </header>
 
-        {agentsOpen && (
-          <>
-            <AgentList
-              project={project}
-              selectedAgentId={activeAgentId}
-              onSelectAgent={(agentId) => selectAgent(agentId, true)}
-            />
-            <GroupList
-              project={project}
-              target={chatTarget}
-              onSelect={(target) => {
-                setChatTarget(target);
-                setSelectedAgentId(null);
-              }}
-              onNotice={setNotice}
-            />
-          </>
-        )}
+        <AgentList
+          project={project}
+          selectedAgentId={activeAgentId}
+          onSelectAgent={(agentId) => selectAgent(agentId, true)}
+          open={agentsOpen}
+          onToggle={() => setAgentsOpen((prev) => !prev)}
+        />
+        <GroupList
+          project={project}
+          target={chatTarget}
+          onSelect={(target) => {
+            setChatTarget(target);
+            setSelectedAgentId(null);
+          }}
+          onNotice={setNotice}
+          open={groupsOpen}
+          onToggle={() => setGroupsOpen((prev) => !prev)}
+        />
       </div>
 
       <ChatPanel

@@ -2,7 +2,7 @@ import { DragEvent, useEffect, useRef, useState } from 'react';
 import { unavailableReason } from '../../lib/agentAvailability';
 import { agentStatus } from '../../lib/agentStatus';
 import { isAgentDrag, readAgentDrag, startAgentDrag } from '../../lib/dnd';
-import { PlusIcon } from '../../components/icons';
+import { ChevronDownIcon, ChevronUpIcon, PlusIcon } from '../../components/icons';
 import { useMockStore } from '../../store/MockStore';
 import { SEED_ROLES } from '../../store/seed';
 import shared from '../../styles/shared.module.css';
@@ -27,10 +27,15 @@ export default function AgentList({
   project,
   selectedAgentId,
   onSelectAgent,
+  open,
+  onToggle,
 }: {
   project: Project;
   selectedAgentId: number | null;
   onSelectAgent: (agentId: number) => void;
+  /** 패널을 펼쳐 둘지(접으면 머리말만 남는다) */
+  open: boolean;
+  onToggle: () => void;
 }) {
   const { agents, groups, providers, tasks, removeGroupMember, deleteAgent, setAgentPlaced } = useMockStore();
   const [creating, setCreating] = useState(false);
@@ -76,15 +81,27 @@ export default function AgentList({
 
   return (
     <aside
-      className={`${styles.list} ${dropActive ? styles.dropActive : ''}`}
+      className={`${styles.list} ${open ? '' : styles.listCollapsed} ${dropActive ? styles.dropActive : ''}`}
       onDragOver={onDragOver}
       onDragLeave={() => setDropActive(false)}
       onDrop={onDrop}
     >
       <div className={styles.header}>
-        <h2 className={styles.title}>
-          에이전트 <span className={shared.muted}>{projectAgents.length}</span>
-        </h2>
+        <div className={styles.titleGroup}>
+          <button
+            type="button"
+            className={styles.fold}
+            onClick={onToggle}
+            aria-expanded={open}
+            aria-label={open ? '에이전트 패널 접기' : '에이전트 패널 펴기'}
+            title={open ? '에이전트 패널 접기' : '에이전트 패널 펴기'}
+          >
+            {open ? <ChevronUpIcon /> : <ChevronDownIcon />}
+          </button>
+          <h2 className={styles.title}>
+            에이전트 <span className={shared.muted}>{projectAgents.length}</span>
+          </h2>
+        </div>
         <button
           type="button"
           className={shared.addButton}
@@ -96,63 +113,67 @@ export default function AgentList({
         </button>
       </div>
 
-      {projectAgents.length === 0 && <p className={shared.muted}>에이전트가 없습니다. + 버튼으로 만들어 보세요.</p>}
+      {open && projectAgents.length === 0 && (
+        <p className={shared.muted}>에이전트가 없습니다. + 버튼으로 만들어 보세요.</p>
+      )}
 
-      <div className={styles.cards}>
-        {projectAgents.map((agent) => {
-          const role = SEED_ROLES.find((r) => r.id === agent.roleId);
-          const reason = unavailableReason(agent, providers, project);
-          const status = agentStatus(agent, tasks);
-          const statusClass = {
-            UNPLACED: styles.statusUnplaced,
-            WORKING: styles.statusWorking,
-            WAITING: styles.statusWaiting,
-            IDLE: styles.statusIdle,
-          }[status.kind];
-          const selected = selectedAgentId === agent.id;
-          return (
-            <div
-              key={agent.id}
-              className={`${styles.card} ${selected ? styles.cardSelected : ''}`}
-              draggable
-              aria-pressed={selected}
-              onDragStart={(e) => {
-                hideHover();
-                startAgentDrag(e, { agentId: agent.id });
-              }}
-              onClick={() => {
-                hideHover();
-                onSelectAgent(agent.id);
-              }}
-              onMouseEnter={(e) => showHover(agent, e.currentTarget)}
-              onMouseLeave={hideHover}
-            >
-              <div className={styles.text}>
-                <strong className={styles.name}>{agent.name}</strong>
-                <span className={styles.role}>{role?.name}</span>
-              </div>
-              {project.masterAgentId === agent.id && <span className={styles.master}>마스터</span>}
-              <span className={`${styles.status} ${statusClass}`} title={`상태: ${status.label}`}>
-                {status.label}
-              </span>
-              {reason && <span className={styles.warnDot} aria-label={reason} />}
-              <button
-                type="button"
-                className={styles.menuButton}
-                aria-label={`${agent.name} 메뉴`}
-                aria-haspopup="menu"
-                onClick={(e) => {
-                  e.stopPropagation();
+      {open && (
+        <div className={styles.cards}>
+          {projectAgents.map((agent) => {
+            const role = SEED_ROLES.find((r) => r.id === agent.roleId);
+            const reason = unavailableReason(agent, providers, project);
+            const status = agentStatus(agent, tasks);
+            const statusClass = {
+              UNPLACED: styles.statusUnplaced,
+              WORKING: styles.statusWorking,
+              WAITING: styles.statusWaiting,
+              IDLE: styles.statusIdle,
+            }[status.kind];
+            const selected = selectedAgentId === agent.id;
+            return (
+              <div
+                key={agent.id}
+                className={`${styles.card} ${selected ? styles.cardSelected : ''}`}
+                draggable
+                aria-pressed={selected}
+                onDragStart={(e) => {
                   hideHover();
-                  setMenu({ agent, rect: e.currentTarget.getBoundingClientRect() });
+                  startAgentDrag(e, { agentId: agent.id });
                 }}
+                onClick={() => {
+                  hideHover();
+                  onSelectAgent(agent.id);
+                }}
+                onMouseEnter={(e) => showHover(agent, e.currentTarget)}
+                onMouseLeave={hideHover}
               >
-                ⋮
-              </button>
-            </div>
-          );
-        })}
-      </div>
+                <div className={styles.text}>
+                  <strong className={styles.name}>{agent.name}</strong>
+                  <span className={styles.role}>{role?.name}</span>
+                </div>
+                {project.masterAgentId === agent.id && <span className={styles.master}>마스터</span>}
+                <span className={`${styles.status} ${statusClass}`} title={`상태: ${status.label}`}>
+                  {status.label}
+                </span>
+                {reason && <span className={styles.warnDot} aria-label={reason} />}
+                <button
+                  type="button"
+                  className={styles.menuButton}
+                  aria-label={`${agent.name} 메뉴`}
+                  aria-haspopup="menu"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    hideHover();
+                    setMenu({ agent, rect: e.currentTarget.getBoundingClientRect() });
+                  }}
+                >
+                  ⋮
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {hover && <AgentHoverCard agent={hover.agent} project={project} anchor={hover.rect} />}
       {menu && (

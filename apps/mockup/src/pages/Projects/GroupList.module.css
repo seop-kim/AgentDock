@@ -9,12 +9,46 @@
   overflow-y: auto;
 }
 
+/* 접었을 때: 머리말만 남기고 늘어나지 않는다 */
+.listCollapsed {
+  flex: 0 0 auto;
+}
+
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: var(--spacing-sm);
   margin-bottom: var(--spacing-md);
+}
+
+.titleGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* 패널 자체 접기/펴기 버튼 */
+.fold {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 2px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-muted);
+}
+
+.fold:hover {
+  background: var(--color-code-bg);
+  color: var(--color-text);
+  filter: none;
+}
+
+.fold svg {
+  width: 16px;
+  height: 16px;
 }
 
 .title {
