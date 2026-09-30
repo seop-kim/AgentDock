@@ -46,20 +46,20 @@
   font-size: 12px;
 }
 
-/* 왼쪽 가장자리 가운데에 살짝 튀어나온 크게 보기 버튼 */
+/* 왼쪽 가장자리 가운데에 살짝 튀어나온 넓히기 버튼(상자 손잡이와 같은 얇은 화살표) */
 .wideButton {
   position: absolute;
-  left: -14px;
+  left: -11px;
   top: 50%;
   transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 56px;
+  width: 22px;
+  height: 48px;
   padding: 0;
   border: 1px solid var(--glass-border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--glass-bg);
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
@@ -70,6 +70,11 @@
 
 .wideButton:hover {
   color: var(--color-text);
+}
+
+.wideButton svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* 패널 접기/펴기 버튼(머리말 왼쪽) */

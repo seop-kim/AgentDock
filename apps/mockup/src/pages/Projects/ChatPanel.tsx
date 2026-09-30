@@ -1,5 +1,5 @@
 import { DragEvent, FormEvent, useEffect, useRef, useState } from 'react';
-import { ChevronDownIcon, ClipIcon, CollapseIcon, ExpandIcon, FileIcon } from '../../components/icons';
+import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ClipIcon, FileIcon } from '../../components/icons';
 import { unavailableReason } from '../../lib/agentAvailability';
 import { ATTACHMENT_FOLDER, attachmentPath, hasAttachment, storedName } from '../../lib/attachments';
 import { useMockStore } from '../../store/MockStore';
@@ -145,7 +145,7 @@ export default function ChatPanel({
           aria-label={wide ? '원래 크기로' : '크게 보기'}
           title={wide ? '원래 크기로' : '크게 보기'}
         >
-          {wide ? <CollapseIcon size={16} /> : <ExpandIcon size={16} />}
+          {wide ? <ChevronRightIcon size={16} /> : <ChevronLeftIcon size={16} />}
         </button>
       )}
 
