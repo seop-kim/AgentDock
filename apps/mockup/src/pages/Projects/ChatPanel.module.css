@@ -10,7 +10,8 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
-  padding: 10px 12px;
+  /* 왼쪽 패널 상자와 같은 여백: 위는 화살표 손잡이가 상단에 붙도록 3px */
+  padding: 3px 10px 10px;
   border-radius: var(--radius-lg);
 }
 
@@ -46,25 +47,19 @@
   font-size: 12px;
 }
 
-/* 왼쪽 가장자리 가운데에 살짝 튀어나온 넓히기 버튼(상자 손잡이와 같은 얇은 화살표) */
+/* 박스 안 상단 중앙의 얇은 화살표 손잡이(에이전트/그룹 박스의 손잡이와 같은 모양).
+   누르면 좌우로 넓어지고(‹) 다시 누르면 원래 크기로(›) 돌아온다. */
 .wideButton {
-  position: absolute;
-  left: -11px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: inline-flex;
+  align-self: center;
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 48px;
-  padding: 0;
-  border: 1px solid var(--glass-border);
-  border-radius: 8px;
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  backdrop-filter: blur(var(--glass-blur));
-  box-shadow: var(--shadow-float);
+  /* 얇은 화살표지만 누를 수 있는 넓이는 남긴다 */
+  padding: 0 16px;
+  border: none;
+  background: transparent;
   color: var(--color-muted);
+  line-height: 0;
   cursor: pointer;
 }
 
@@ -73,8 +68,8 @@
 }
 
 .wideButton svg {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
 }
 
 /* 패널 접기/펴기 버튼(머리말 왼쪽) */

@@ -136,7 +136,7 @@ export default function ChatPanel({
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
-      {/* 왼쪽 가장자리 가운데에 살짝 튀어나온 크게 보기 버튼 */}
+      {/* 박스 안 상단 중앙의 얇은 화살표 손잡이(에이전트/그룹 박스와 같은 자리) — 좌우로 넓힌다 */}
       {open && (
         <button
           type="button"
