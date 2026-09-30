@@ -1,16 +1,27 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Agent, AgentRole, AiProvider, PermissionProfile, api } from '../lib/api';
+import { Agent, AgentRole, AiProvider, PermissionProfile, Project, api } from '../lib/api';
 import AgentProviderAssign from './AgentProviderAssign';
+import CliPanel from './CliPanel';
 import RunAgentModal from './RunAgentModal';
 import styles from './Agents.module.css';
 
 const UNAVAILABLE_LABELS: Record<string, string> = {
-  PROVIDER_DELETED: 'Provider 삭제됨',
-  CONNECTION_NOT_CONNECTED: '연결 안 됨',
+  PROVIDER_DELETED: '런타임 삭제됨',
+  RUNTIME_DISABLED: '런타임 꺼짐',
+  CONNECTION_NOT_CONNECTED: '폴더에서 확인 안 됨',
 };
 
-const EMPTY_FORM = { name: '', roleId: '', permissionProfileId: '', providerId: '', model: '', mode: '' };
+const EMPTY_FORM = {
+  name: '',
+  projectId: '',
+  roleId: '',
+  permissionProfileId: '',
+  providerId: '',
+  persona: '',
+  model: '',
+  mode: '',
+};
 
 export default function Agents() {
   const navigate = useNavigate();
@@ -18,9 +29,15 @@ export default function Agents() {
   const [roles, setRoles] = useState<AgentRole[]>([]);
   const [permissionProfiles, setPermissionProfiles] = useState<PermissionProfile[]>([]);
   const [providers, setProviders] = useState<AiProvider[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [runTarget, setRunTarget] = useState<Agent | null>(null);
-
+  const [cliTarget, setCliTarget] = useState<{
+    providerId: number;
+    providerName: string;
+    install: string[];
+    workspaceId?: number;
+  } | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
 
   const loadAll = () => {
@@ -28,17 +45,20 @@ export default function Agents() {
     api.listRoles().then(setRoles).catch(() => {});
     api.listPermissionProfiles().then(setPermissionProfiles).catch(() => {});
     api.listProviders().then(setProviders).catch(() => {});
+    api.listProjects().then(setProjects).catch(() => {});
   };
 
   useEffect(() => {
     loadAll();
   }, []);
 
-  const selectedProvider = providers.find((p) => String(p.id) === form.providerId) ?? null;
+  const enabledProviders = providers.filter((p) => p.enabled);
+  const selectedProvider = enabledProviders.find((p) => String(p.id) === form.providerId) ?? null;
   const modelOptions = selectedProvider?.capabilities?.models ?? [];
   const modeOptions = selectedProvider?.capabilities?.modes ?? [];
-  const modelNotListed = form.model !== '' && modelOptions.length > 0 && !modelOptions.includes(form.model);
-  const modeNotListed = form.mode !== '' && modeOptions.length > 0 && !modeOptions.includes(form.mode);
+
+  const defaultWorkspaceId = (projectId: number) =>
+    projects.find((p) => p.id === projectId)?.workspaces.find((w) => w.isDefault)?.workspaceId;
 
   const quickCreateRole = async () => {
     const name = window.prompt('Role 이름 (예: Backend Developer)');
@@ -63,12 +83,18 @@ export default function Agents() {
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (!form.projectId) {
+      setError('에이전트는 프로젝트 안에서 만듭니다. 프로젝트를 선택하세요.');
+      return;
+    }
     try {
       await api.createAgent({
         ...form,
+        projectId: Number(form.projectId),
         roleId: Number(form.roleId),
         permissionProfileId: Number(form.permissionProfileId),
         providerId: Number(form.providerId),
+        persona: form.persona || undefined,
         model: form.model || undefined,
         mode: form.mode || undefined,
       });
@@ -82,6 +108,10 @@ export default function Agents() {
   return (
     <div>
       <h1>Agents</h1>
+      <p>
+        에이전트는 프로젝트 안에서 만들고, 켜둔 런타임과 이 에이전트만의 페르소나(성격/일하는 방식)를 지정합니다. 실행
+        가능 여부는 프로젝트의 기본 워크스페이스에서 그 런타임이 확인됐는지로 결정됩니다.
+      </p>
 
       <form onSubmit={onSubmit} className={styles.form}>
         <input
@@ -90,6 +120,16 @@ export default function Agents() {
           onChange={(e) => setForm({ ...form, name: e.target.value })}
           required
         />
+
+        <select value={form.projectId} onChange={(e) => setForm({ ...form, projectId: e.target.value })} required>
+          <option value="">프로젝트 선택 (에이전트는 프로젝트 소속)</option>
+          {projects.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+              {p.workspaces.length > 0 ? ` — ${p.workspaces.length}개 워크스페이스` : ' (워크스페이스 없음)'}
+            </option>
+          ))}
+        </select>
 
         <div className="formRow">
           <select value={form.roleId} onChange={(e) => setForm({ ...form, roleId: e.target.value })} required>
@@ -124,18 +164,28 @@ export default function Agents() {
         </div>
 
         <select value={form.providerId} onChange={(e) => setForm({ ...form, providerId: e.target.value })} required>
-          <option value="">AI Provider 선택</option>
-          {providers.map((p) => (
+          <option value="">런타임 선택 (켜둔 것만)</option>
+          {enabledProviders.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name} ({p.key})
             </option>
           ))}
         </select>
+        {enabledProviders.length === 0 && (
+          <p className={styles.hint}>켜져 있는 런타임이 없습니다. 에이전트 설정에서 런타임을 켜세요.</p>
+        )}
+
+        <textarea
+          rows={3}
+          placeholder="페르소나 (성격/일하는 방식 — 시스템 프롬프트로 덧붙습니다)"
+          value={form.persona}
+          onChange={(e) => setForm({ ...form, persona: e.target.value })}
+        />
 
         {selectedProvider && (
           <p className={styles.hint}>
             {selectedProvider.name} 지원 목록 — 모델: {modelOptions.length > 0 ? modelOptions.join(', ') : '미등록'} / 모드:{' '}
-            {modeOptions.length > 0 ? modeOptions.join(', ') : '미등록'} (Agent 연결 설정에서 편집)
+            {modeOptions.length > 0 ? modeOptions.join(', ') : '미등록'} (에이전트 설정에서 편집)
           </p>
         )}
 
@@ -163,17 +213,6 @@ export default function Agents() {
           ))}
         </datalist>
 
-        {modelNotListed && (
-          <p className={styles.hint}>
-            모델 "{form.model}" 은 {selectedProvider?.name} 지원 목록에 없습니다. CLI가 지원하면 그대로 동작합니다.
-          </p>
-        )}
-        {modeNotListed && (
-          <p className={styles.hint}>
-            모드 "{form.mode}" 은 {selectedProvider?.name} 지원 목록에 없습니다. CLI가 지원하면 그대로 동작합니다.
-          </p>
-        )}
-
         <button type="submit">Agent 생성</button>
       </form>
 
@@ -183,8 +222,9 @@ export default function Agents() {
         <thead>
           <tr>
             <th>Name</th>
+            <th>Project</th>
             <th>Role</th>
-            <th>Provider</th>
+            <th>Runtime</th>
             <th>Model / Mode</th>
             <th></th>
           </tr>
@@ -198,6 +238,7 @@ export default function Agents() {
                   <span className={styles.unavailable}>{UNAVAILABLE_LABELS[a.unavailableReason] ?? '사용 불가'}</span>
                 )}
               </td>
+              <td>{a.project?.name ?? '-'}</td>
               <td>{a.role.name}</td>
               <td>
                 {a.provider.name}{' '}
@@ -210,15 +251,38 @@ export default function Agents() {
                 <button
                   onClick={() => setRunTarget(a)}
                   disabled={!a.available}
-                  title={a.available ? undefined : '사용 불가 상태입니다. Agent 연결 설정에서 연결을 확인하세요.'}
+                  title={a.available ? undefined : '사용 불가: 워크스페이스에서 폴더 확인 또는 런타임 on/off 를 확인하세요.'}
                 >
                   Run
+                </button>
+                <button
+                  onClick={() =>
+                    setCliTarget({
+                      providerId: a.providerId,
+                      providerName: a.provider.name,
+                      install: a.provider.capabilities?.install ?? [],
+                      workspaceId: defaultWorkspaceId(a.projectId),
+                    })
+                  }
+                >
+                  CLI 확인
                 </button>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+
+      {cliTarget && (
+        <CliPanel
+          providerId={cliTarget.providerId}
+          providerName={cliTarget.providerName}
+          workspaceId={cliTarget.workspaceId}
+          installCommands={cliTarget.install}
+          onClose={() => setCliTarget(null)}
+          onChecked={loadAll}
+        />
+      )}
 
       {runTarget && (
         <RunAgentModal

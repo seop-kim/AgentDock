@@ -6,7 +6,9 @@ public record AgentExecutionRequest(
         String executionId,
         String prompt,
         String workspacePath,
+        String persona,
         String model,
         String mode,
         BiConsumer<String, String> onLog
-) {}
+) {
+}

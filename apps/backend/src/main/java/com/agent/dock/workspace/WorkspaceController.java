@@ -12,6 +12,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class WorkspaceController {
     private final WorkspaceService service;
+    private final WorkspaceRuntimeService runtimeService;
 
     @GetMapping
     public List<WorkspaceResponse> findAll() {
@@ -27,5 +28,18 @@ public class WorkspaceController {
     @ResponseStatus(HttpStatus.CREATED)
     public WorkspaceResponse create(@Valid @RequestBody CreateWorkspaceRequest request) {
         return service.create(request);
+    }
+
+    /** 켜져 있는 런타임들과 이 폴더에서의 상태. */
+    @GetMapping("/{id}/runtimes")
+    public List<WorkspaceRuntimeResponse> listRuntimes(@PathVariable Long id) {
+        return runtimeService.findAll(id);
+    }
+
+    /** 이 폴더를 작업 디렉터리로 CLI 를 실제 실행해 확인한다. */
+    @PostMapping("/{id}/runtimes/{providerId}/check")
+    @ResponseStatus(HttpStatus.CREATED)
+    public WorkspaceRuntimeResponse checkRuntime(@PathVariable Long id, @PathVariable Long providerId) {
+        return runtimeService.check(id, providerId);
     }
 }

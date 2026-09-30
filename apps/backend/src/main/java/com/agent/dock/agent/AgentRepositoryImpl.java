@@ -14,10 +14,10 @@ public class AgentRepositoryImpl implements AgentRepositoryCustom {
     public List<Agent> findAllWithRelations() {
         QAgent agent = QAgent.agent;
         return queryFactory.selectFrom(agent)
+                .leftJoin(agent.project).fetchJoin()
                 .leftJoin(agent.role).fetchJoin()
                 .leftJoin(agent.permissionProfile).fetchJoin()
                 .leftJoin(agent.provider).fetchJoin()
-                .leftJoin(agent.connection).fetchJoin()
                 .orderBy(agent.name.asc())
                 .fetch();
     }
@@ -26,10 +26,10 @@ public class AgentRepositoryImpl implements AgentRepositoryCustom {
     public Optional<Agent> findByIdWithRelations(Long id) {
         QAgent agent = QAgent.agent;
         Agent result = queryFactory.selectFrom(agent)
+                .leftJoin(agent.project).fetchJoin()
                 .leftJoin(agent.role).fetchJoin()
                 .leftJoin(agent.permissionProfile).fetchJoin()
                 .leftJoin(agent.provider).fetchJoin()
-                .leftJoin(agent.connection).fetchJoin()
                 .where(agent.id.eq(id))
                 .fetchOne();
         return Optional.ofNullable(result);

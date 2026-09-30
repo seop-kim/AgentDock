@@ -34,8 +34,9 @@ public class AiProvider {
     @Column(nullable = false, columnDefinition = "jsonb")
     private Map<String, Object> capabilities = new HashMap<>();
 
-    @OneToMany(mappedBy = "provider")
-    private List<AiConnection> connections;
+    /** 런타임 on/off. 화면(에이전트 설정)에서 켜고 끄며, 켜져 있어야 할당·실행할 수 있다. */
+    @Column(nullable = false)
+    private boolean enabled;
 
     @OneToMany(mappedBy = "provider")
     private List<Agent> agents;

@@ -2,9 +2,8 @@ package com.agent.dock.provider.login;
 
 import com.agent.dock.common.BadRequestException;
 import com.agent.dock.common.NotFoundException;
-import com.agent.dock.provider.AiConnection;
-import com.agent.dock.provider.AiConnectionRepository;
 import com.agent.dock.provider.AiProvider;
+import com.agent.dock.provider.AiProviderRepository;
 import com.agent.dock.provider.ProviderKey;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,6 +19,7 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
@@ -36,14 +36,14 @@ class LoginSessionServiceTest {
     static class FakeLoginProcess implements LoginProcess {
         Consumer<String> outputListener = s -> { };
         IntConsumer exitListener = c -> { };
-        List<String> started;
+        List<List<String>> started;
         final List<String> written = new ArrayList<>();
         boolean closed;
         boolean failStart;
 
-        @Override public void start(List<String> command) throws IOException {
+        @Override public void start(List<List<String>> commands) throws IOException {
             if (failStart) throw new IOException("no such file");
-            started = command;
+            started = commands;
         }
         @Override public void onOutput(Consumer<String> listener) { outputListener = listener; }
         @Override public void onExit(IntConsumer listener) { exitListener = listener; }
@@ -62,47 +62,48 @@ class LoginSessionServiceTest {
         void advance(Duration duration) { now = now.plus(duration); }
     }
 
-    @Mock AiConnectionRepository connectionRepository;
+    @Mock AiProviderRepository providerRepository;
     @Mock LoginProcessFactory processFactory;
 
     FakeLoginProcess process;
     TestClock clock;
     LoginSessionService service;
 
-    private AiConnection connectionOf(ProviderKey key) {
+    private AiProvider providerOf(ProviderKey key) {
         AiProvider provider = new AiProvider();
         provider.setKey(key);
-        AiConnection connection = new AiConnection();
-        connection.setProvider(provider);
-        return connection;
+        return provider;
     }
 
     @BeforeEach
     void setUp() {
         process = new FakeLoginProcess();
         clock = new TestClock();
-        service = new LoginSessionService(connectionRepository,
+        service = new LoginSessionService(providerRepository,
                 new LoginCommandRegistry(List.of(new ClaudeCodeLoginCommand())), processFactory, clock);
     }
 
-    private void givenClaudeConnection() {
-        when(connectionRepository.findWithProvider(7L)).thenReturn(Optional.of(connectionOf(ProviderKey.CLAUDE_CODE)));
+    private void givenClaudeProvider() {
+        when(providerRepository.findByIdAndDeletedAtIsNull(7L)).thenReturn(Optional.of(providerOf(ProviderKey.CLAUDE_CODE)));
         when(processFactory.create()).thenReturn(process);
     }
 
     @Test
     void startRunsFixedClaudeLoginCommand() {
-        givenClaudeConnection();
+        givenClaudeProvider();
 
         String sessionId = service.start(7L);
 
         assertThat(sessionId).isNotBlank();
-        assertThat(process.started.subList(1, 3)).containsExactly("auth", "login");
+        // 로그인 명령은 셸로 감싸 .cmd/.ps1 실행 파일도 쓸 수 있게 한다
+        assertThat(process.started).hasSize(1);
+        assertThat(process.started.get(0)).hasSize(3);
+        assertThat(process.started.get(0).get(2)).contains("auth login");
     }
 
     @Test
     void lateSubscriberReplaysEarlierOutputThenReceivesLiveOutput() {
-        givenClaudeConnection();
+        givenClaudeProvider();
         String sessionId = service.start(7L);
         process.emit("Open https://example.com/login");
 
@@ -116,7 +117,7 @@ class LoginSessionServiceTest {
 
     @Test
     void exitEventIsDeliveredWithExitCode() {
-        givenClaudeConnection();
+        givenClaudeProvider();
         String sessionId = service.start(7L);
         List<LoginEvent> got = new ArrayList<>();
         service.subscribe(sessionId, got::add);
@@ -130,7 +131,7 @@ class LoginSessionServiceTest {
 
     @Test
     void secondStartWhileActiveReturnsSameSession() {
-        givenClaudeConnection();
+        givenClaudeProvider();
 
         String first = service.start(7L);
         String second = service.start(7L);
@@ -141,7 +142,7 @@ class LoginSessionServiceTest {
 
     @Test
     void inputIsWrittenWithNewline() {
-        givenClaudeConnection();
+        givenClaudeProvider();
         String sessionId = service.start(7L);
 
         service.input(sessionId, "abc123");
@@ -151,7 +152,7 @@ class LoginSessionServiceTest {
 
     @Test
     void inputAfterExitIsRejected() {
-        givenClaudeConnection();
+        givenClaudeProvider();
         String sessionId = service.start(7L);
         process.exit(0);
 
@@ -159,8 +160,8 @@ class LoginSessionServiceTest {
     }
 
     @Test
-    void providerWithoutLoginCommandIsRejected() {
-        when(connectionRepository.findWithProvider(8L)).thenReturn(Optional.of(connectionOf(ProviderKey.CODEX)));
+    void runtimeWithoutLoginCommandIsRejected() {
+        when(providerRepository.findByIdAndDeletedAtIsNull(8L)).thenReturn(Optional.of(providerOf(ProviderKey.CODEX)));
 
         assertThatThrownBy(() -> service.start(8L))
                 .isInstanceOf(BadRequestException.class)
@@ -170,21 +171,21 @@ class LoginSessionServiceTest {
     @Test
     void missingCliBinaryEndsSessionWithMessageAndExitMinusOne() {
         process.failStart = true;
-        givenClaudeConnection();
+        givenClaudeProvider();
         String sessionId = service.start(7L);
 
         List<LoginEvent> got = new ArrayList<>();
         service.subscribe(sessionId, got::add);
 
         assertThat(got).hasSize(2);
-        assertThat(got.get(0).content()).contains("CLI");
+        assertThat(got.get(0).content()).contains("CLI 실행 실패");
         assertThat(got.get(1).exitEvent()).isTrue();
         assertThat(got.get(1).exitCode()).isEqualTo(-1);
     }
 
     @Test
     void idleSessionIsKilledAfterTimeout() {
-        givenClaudeConnection();
+        givenClaudeProvider();
         service.start(7L);
 
         clock.advance(Duration.ofMinutes(6));
@@ -195,7 +196,7 @@ class LoginSessionServiceTest {
 
     @Test
     void activityResetsIdleTimer() {
-        givenClaudeConnection();
+        givenClaudeProvider();
         service.start(7L);
 
         clock.advance(Duration.ofMinutes(4));
@@ -211,5 +212,66 @@ class LoginSessionServiceTest {
         assertThatThrownBy(() -> service.subscribe("nope", e -> { })).isInstanceOf(NotFoundException.class);
         assertThatThrownBy(() -> service.input("nope", "x")).isInstanceOf(NotFoundException.class);
         assertThatThrownBy(() -> service.stop("nope")).isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void deletedRuntimeIsNotFound() {
+        when(providerRepository.findByIdAndDeletedAtIsNull(9L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.start(9L)).isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void installRunsStoredInstallSteps() {
+        AiProvider provider = providerOf(ProviderKey.COMMAND_CODE);
+        provider.setCapabilities(Map.of("install", List.of("npm install -g command-code")));
+        when(providerRepository.findByIdAndDeletedAtIsNull(9L)).thenReturn(Optional.of(provider));
+        when(processFactory.create()).thenReturn(process);
+
+        service.start(9L, SessionKind.INSTALL);
+
+        assertThat(process.started).hasSize(1);
+        assertThat(process.started.get(0)).contains("npm install -g command-code");
+    }
+
+    @Test
+    void installAddsPrerequisiteStepsWhenRequiredToolIsMissing() {
+        AiProvider provider = providerOf(ProviderKey.CODEX);
+        provider.setCapabilities(Map.of(
+                "install", List.of("npm install -g @openai/codex"),
+                "installRequire", "definitely-missing-tool-xyz",
+                "installPrerequisite", List.of("nvm install lts", "nvm use lts")));
+        when(providerRepository.findByIdAndDeletedAtIsNull(9L)).thenReturn(Optional.of(provider));
+        when(processFactory.create()).thenReturn(process);
+
+        service.start(9L, SessionKind.INSTALL);
+
+        // 안내 1 + 선행 2 + 안내 1 + 본 설치 1
+        assertThat(process.started).hasSize(5);
+        assertThat(process.started.get(1)).contains("nvm install lts");
+        assertThat(process.started.get(4)).contains("npm install -g @openai/codex");
+    }
+
+    @Test
+    void installWithoutCommandIsRejected() {
+        when(providerRepository.findByIdAndDeletedAtIsNull(9L)).thenReturn(Optional.of(providerOf(ProviderKey.COMMAND_CODE)));
+
+        assertThatThrownBy(() -> service.start(9L, SessionKind.INSTALL))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("설치 명령");
+    }
+
+    @Test
+    void installAndLoginSessionsAreSeparate() {
+        AiProvider provider = providerOf(ProviderKey.CLAUDE_CODE);
+        provider.setCapabilities(Map.of("install", List.of("npm install -g @anthropic-ai/claude-code")));
+        when(providerRepository.findByIdAndDeletedAtIsNull(7L)).thenReturn(Optional.of(provider));
+        when(processFactory.create()).thenReturn(process);
+
+        String login = service.start(7L, SessionKind.LOGIN);
+        String install = service.start(7L, SessionKind.INSTALL);
+
+        assertThat(install).isNotEqualTo(login);
+        verify(processFactory, times(2)).create();
     }
 }

@@ -9,36 +9,48 @@ import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 
-/** ProcessBuilder(shell 미경유) 기반 구현. stderr 를 stdout 에 합쳐 읽는다. */
+/** ProcessBuilder(shell 미경유) 기반 구현. stderr 를 stdout 에 합쳐 읽고, 여러 단계를 순서대로 실행한다. */
 public class PipeLoginProcess implements LoginProcess {
     private Consumer<String> outputListener = text -> { };
     private IntConsumer exitListener = code -> { };
-    private Process process;
+    private volatile Process process;
 
     @Override
-    public void start(List<String> command) throws IOException {
-        ProcessBuilder builder = new ProcessBuilder(command);
-        builder.redirectErrorStream(true);
-        process = builder.start();
-
-        Thread reader = new Thread(this::pump, "login-output");
-        reader.setDaemon(true);
-        reader.start();
-
-        // 로그인 CLI 가 띄운 브라우저 등 자식 프로세스가 파이프를 잡고 있으면 EOF 가 오지 않을 수 있으므로,
-        // 종료 감지는 프로세스 종료 이벤트로 하고 남은 출력은 잠깐만 기다린다.
-        process.onExit().thenAccept(finished -> {
-            try {
-                reader.join(1000);
-            } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
-            }
-            exitListener.accept(finished.exitValue());
-        });
+    public void start(List<List<String>> commands) throws IOException {
+        Thread runner = new Thread(() -> runSteps(commands), "command-steps");
+        runner.setDaemon(true);
+        runner.start();
     }
 
-    private void pump() {
-        try (Reader in = new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)) {
+    private void runSteps(List<List<String>> commands) {
+        int exitCode = 0;
+        for (List<String> command : commands) {
+            try {
+                process = new ProcessBuilder(command).redirectErrorStream(true).start();
+            } catch (IOException ex) {
+                outputListener.accept("실행 실패: " + String.join(" ", command) + " — " + ex.getMessage() + "\n");
+                exitListener.accept(-1);
+                return;
+            }
+            pump(process.getInputStream());
+            try {
+                exitCode = process.waitFor();
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                exitListener.accept(-1);
+                return;
+            }
+            outputListener.accept("\n[종료 코드 " + exitCode + "] " + String.join(" ", command) + "\n");
+            if (exitCode != 0) {
+                exitListener.accept(exitCode);
+                return;
+            }
+        }
+        exitListener.accept(exitCode);
+    }
+
+    private void pump(java.io.InputStream input) {
+        try (Reader in = new InputStreamReader(input, StandardCharsets.UTF_8)) {
             char[] buffer = new char[1024];
             int read;
             while ((read = in.read(buffer)) != -1) {
@@ -61,15 +73,20 @@ public class PipeLoginProcess implements LoginProcess {
 
     @Override
     public void write(String text) throws IOException {
-        OutputStream out = process.getOutputStream();
+        Process current = process;
+        if (current == null) {
+            throw new IOException("실행 중인 단계가 없습니다");
+        }
+        OutputStream out = current.getOutputStream();
         out.write(text.getBytes(StandardCharsets.UTF_8));
         out.flush();
     }
 
     @Override
     public void close() {
-        if (process != null) {
-            process.destroyForcibly();
+        Process current = process;
+        if (current != null) {
+            current.destroyForcibly();
         }
     }
 }

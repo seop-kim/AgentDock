@@ -40,11 +40,17 @@ public class ClaudeCodeRuntime implements AgentRuntime {
     }
 
     /**
-     * CLI 인자 조립. Agent 의 mode 는 Claude Code 의 권한/실행 모드로 전달한다.
+     * CLI 인자 조립.
+     * - persona(에이전트 고유 성격/방식)는 기본 시스템 프롬프트에 덧붙인다(--append-system-prompt).
+     * - mode 는 권한/실행 모드(--permission-mode), model 은 --model.
      * 값이 없으면 플래그를 붙이지 않고 CLI 기본값을 쓴다.
      */
     List<String> buildArgs(AgentExecutionRequest request) {
         List<String> args = new ArrayList<>(List.of("-p", request.prompt(), "--output-format", "text"));
+        if (request.persona() != null && !request.persona().isBlank()) {
+            args.add("--append-system-prompt");
+            args.add(request.persona());
+        }
         if (request.model() != null && !request.model().isBlank()) {
             args.add("--model");
             args.add(request.model());
