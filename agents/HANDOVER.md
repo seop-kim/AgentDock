@@ -52,7 +52,7 @@ npm run build --workspace=apps/mockup    # tsc --noEmit && vite build (커밋 �
 | **설정 › 에이전트 연결 설정** | 런타임 카드(ON/OFF, 삭제, 추가 모달, 모델/모드/설치 계획 편집, CLI 확인 창에서 로그인·설치 가짜 로그). |
 | **설정 › 테마** | 시스템/라이트/다크 선택. localStorage 에 저장. |
 
-초기 시드 데이터(`store/seed.ts`): 런타임 2개(Claude Code, Command Code 켜짐; Codex, Gemini 는 삭제 상태라 추가 모달에서 고를 수 있음), 워크스페이스 3개, 프로젝트 3개(`test` 1개 워크스페이스, `shop` 2개 워크스페이스·에이전트 4·그룹 2, `blog` 비어 있음). `shop` 의 **Planner 는 미배치**(구성도에 없음)이고, Task 에는 담당(`agentId`)이 있어 카드에 **작업 중**(Backend Dev A)/**작업 대기중**(Frontend Dev A)/**작업 없음**(Reviewer)/**미배치**(Planner)가 모두 보인다.
+초기 시드 데이터(`store/seed.ts`): 런타임 2개(Claude Code, Command Code 켜짐; Codex, Gemini 는 삭제 상태라 추가 모달에서 고를 수 있음), 워크스페이스 3개, 프로젝트 3개(`test` 1개 워크스페이스·에이전트 1, `shop` 2개 워크스페이스·**에이전트 30·그룹 5**, `blog` 비어 있음). `shop` 은 **그룹 소속 20**(Backend Team 6 / Frontend Team 5 / QA Team 4 / DevOps Team 3 / Docs Team 2, 각 그룹 첫 멤버가 리더) + **그룹 없이 배치 6**(Reviewer A~C, Planner A~C) + **미배치 4**(Reviewer D·E, Planner D·E)로 나뉜다. 에이전트마다 맡은 Task 상태가 달라 카드에 **작업 중 6 / 작업 대기중 4 / 작업 없음 16 / 미배치 4** 가 골고루 보인다.
 
 ## 4. 코드 구조 (`apps/mockup/src`)
 
