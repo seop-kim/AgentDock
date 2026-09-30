@@ -3,9 +3,9 @@
   display: flex;
   flex-direction: column;
   flex: 1 1 0;
-  /* 손잡이 영역(22) + 머리말 + 상자 위아래 여백: 접었을 때 이만큼만 남는다 */
-  min-height: 88px;
-  overflow: hidden;
+  /* 손잡이 영역(22) + 머리말 + 상자 여백: 접었을 때 이만큼만 남는다 */
+  min-height: 69px;
+  /* overflow 를 두지 않는다: 글래스 상자의 blur 가 모서리 밖으로 네모나게 그려진다 */
   transition: flex-grow 0.22s ease;
 }
 
@@ -43,10 +43,10 @@
   flex-direction: column;
   flex: 1 1 0;
   min-height: 0;
-  padding: var(--spacing-md);
+  /* 위는 화살표 손잡이가 상단에 가까이 붙도록 3px, 좌우·아래는 10px */
+  padding: 3px 10px 10px;
   border-radius: var(--radius-lg);
-  /* 스크롤은 몸통(.cards)이 맡고, 상자는 넘치는 것을 자른다 */
-  overflow: hidden;
+  /* 모서리 밖으로 색이 새지 않게 overflow 를 두지 않는다(스크롤은 몸통 .cards 가 맡는다) */
 }
 
 .titleGroup {
