@@ -30,6 +30,8 @@ export default function GroupList({
 
   const projectGroups = groups.filter((g) => g.projectId === project.id);
   const agentName = (id: number) => agents.find((a) => a.id === id)?.name ?? '?';
+  // 구성도에서 빼 둔(미배치) 에이전트는 소속만 유지하고 목록/구성도에는 보이지 않는다.
+  const placedIds = new Set(agents.filter((a) => a.placed).map((a) => a.id));
 
   const onDragOver = (e: DragEvent, groupId: number) => {
     if (!isAgentDrag(e)) return;
@@ -71,6 +73,11 @@ export default function GroupList({
       <div className={styles.cards}>
         {projectGroups.map((group) => {
           const selected = target?.kind === 'group' && target.id === group.id;
+          const memberIds = group.memberIds.filter((id) => placedIds.has(id));
+          const leaderName =
+            group.leaderAgentId !== null && placedIds.has(group.leaderAgentId)
+              ? agentName(group.leaderAgentId)
+              : '없음';
           return (
             <div
               key={group.id}
@@ -96,12 +103,11 @@ export default function GroupList({
                 </button>
               </div>
               <div className={shared.muted}>
-                멤버 {group.memberIds.length} · 리더{' '}
-                {group.leaderAgentId !== null ? agentName(group.leaderAgentId) : '없음'}
+                멤버 {memberIds.length} · 리더 {leaderName}
               </div>
               <div className={styles.members}>
-                {group.memberIds.length === 0 && <span className={styles.emptyDrop}>에이전트를 여기로 끌어 놓으세요</span>}
-                {group.memberIds.map((agentId) => (
+                {memberIds.length === 0 && <span className={styles.emptyDrop}>에이전트를 여기로 끌어 놓으세요</span>}
+                {memberIds.map((agentId) => (
                   <span
                     key={agentId}
                     className={styles.member}

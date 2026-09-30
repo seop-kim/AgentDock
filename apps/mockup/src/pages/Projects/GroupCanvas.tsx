@@ -305,7 +305,7 @@ export default function GroupCanvas({
                 <button
                   type="button"
                   className={styles.canvasRemove}
-                  title="구성도에서 빼기 (에이전트 목록에만 남깁니다)"
+                  title="구성도에서 빼기 (에이전트 목록에만 남고, 그룹 소속은 유지됩니다)"
                   aria-label={`${agent.name} 구성도에서 빼기`}
                   onClick={() => setAgentPlaced(agent.id, false)}
                 >

@@ -183,11 +183,10 @@ function reducer(state: MockState, action: Action): MockState {
         groups: withoutMember(state.groups, action.id),
       };
     case 'agent/setPlaced':
-      // 구성도에서 빼면 그룹에서도 빠진다(다시 놓으면 그룹 없이 노드만 놓인다).
+      // 구성도에서 빼도 그룹 소속은 그대로 둔다(다시 놓으면 원래 그룹으로 돌아온다).
       return {
         ...state,
         agents: state.agents.map((a) => (a.id === action.id ? { ...a, placed: action.placed } : a)),
-        groups: action.placed ? state.groups : withoutMember(state.groups, action.id),
       };
     case 'group/create':
       return {
