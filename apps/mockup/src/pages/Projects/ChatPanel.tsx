@@ -136,18 +136,20 @@ export default function ChatPanel({
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
+      {/* 왼쪽 가장자리 가운데에 살짝 튀어나온 크게 보기 버튼 */}
+      {open && (
+        <button
+          type="button"
+          className={styles.wideButton}
+          onClick={onToggleWide}
+          aria-label={wide ? '원래 크기로' : '크게 보기'}
+          title={wide ? '원래 크기로' : '크게 보기'}
+        >
+          {wide ? <CollapseIcon size={16} /> : <ExpandIcon size={16} />}
+        </button>
+      )}
+
       <div className={styles.header}>
-        {open && (
-          <button
-            type="button"
-            className={styles.fold}
-            onClick={onToggleWide}
-            aria-label={wide ? '원래 크기로' : '크게 보기'}
-            title={wide ? '원래 크기로' : '크게 보기'}
-          >
-            {wide ? <CollapseIcon size={16} /> : <ExpandIcon size={16} />}
-          </button>
-        )}
         <button
           type="button"
           className={styles.fold}

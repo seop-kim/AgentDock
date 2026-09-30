@@ -57,14 +57,26 @@ export default function GroupList({
   };
 
   return (
-    <aside className={`${styles.list} ${open ? '' : styles.listCollapsed}`}>
+    <aside className={`${styles.panel} ${open ? '' : styles.panelCollapsed}`}>
+      {/* 상자 위 테두리에 붙는 접기/펴기 탭 */}
+      <button
+        type="button"
+        className={styles.tab}
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-label={open ? '그룹 패널 접기' : '그룹 패널 펴기'}
+        title={open ? '그룹 패널 접기' : '그룹 패널 펴기'}
+      >
+        {open ? <ChevronUpIcon /> : <ChevronDownIcon />}
+      </button>
+
+      <div className={styles.list}>
       <div
         className={styles.header}
         role="button"
         tabIndex={0}
         aria-expanded={open}
         aria-label={open ? '그룹 패널 접기' : '그룹 패널 펴기'}
-        title={open ? '그룹 패널 접기' : '그룹 패널 펴기'}
         onClick={onToggle}
         onKeyDown={(e) => {
           if (e.key !== 'Enter' && e.key !== ' ') return;
@@ -73,9 +85,6 @@ export default function GroupList({
         }}
       >
         <div className={styles.titleGroup}>
-          <span className={styles.fold} aria-hidden="true">
-            {open ? <ChevronUpIcon /> : <ChevronDownIcon />}
-          </span>
           <h2 className={styles.title}>
             그룹 <span className={shared.muted}>{projectGroups.length}</span>
           </h2>
@@ -163,6 +172,7 @@ export default function GroupList({
             );
           })}
         </div>
+      </div>
       </div>
 
       {creating && <GroupFormModal project={project} onClose={() => setCreating(false)} />}

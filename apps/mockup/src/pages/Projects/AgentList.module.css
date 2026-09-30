@@ -1,20 +1,59 @@
+/* 패널 한 벌: 상자 위 테두리에 붙는 탭 + 상자. 접으면 탭과 머리말만 남는다. */
+.panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  /* 탭(22) + 머리말 + 상자 위아래 여백: 접었을 때 이만큼만 남는다 */
+  min-height: 88px;
+  overflow: hidden;
+  transition: flex-grow 0.22s ease;
+}
+
+.panelCollapsed {
+  flex-grow: 0;
+}
+
+/* 상자 위 테두리에 붙는 접기/펴기 탭(아래 테두리를 없애 상자와 이어 붙인다) */
+.tab {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 22px;
+  margin-left: var(--spacing-md);
+  margin-bottom: -1px;
+  padding: 0;
+  border: 1px solid var(--glass-border);
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: var(--color-text);
+}
+
+.tab svg {
+  width: 14px;
+  height: 14px;
+}
+
 .list {
   composes: glass from '../../styles/glass.module.css';
   display: flex;
   flex-direction: column;
   flex: 1 1 0;
-  /* 머리말 + 위아래 여백: 접었을 때 이만큼만 남는다(아래 flex-grow 애니메이션의 도착점) */
-  min-height: 66px;
+  min-height: 0;
   padding: var(--spacing-md);
   border-radius: var(--radius-lg);
   /* 스크롤은 몸통(.cards)이 맡고, 상자는 넘치는 것을 자른다 */
   overflow: hidden;
-  transition: flex-grow 0.22s ease, border-color 0.12s ease, background 0.12s ease;
-}
-
-/* 접었을 때: 머리말만 남고 몸통 높이가 0 으로 줄어든다(아래 .body 애니메이션) */
-.listCollapsed {
-  flex-grow: 0;
+  transition: border-color 0.12s ease, background 0.12s ease;
 }
 
 .titleGroup {
@@ -24,26 +63,13 @@
   min-width: 0;
 }
 
-/* 접기/펴기 표시(머리말 전체가 버튼이라 아이콘만 둔다) */
-.fold {
-  display: inline-flex;
-  align-items: center;
-  flex-shrink: 0;
-  color: var(--color-muted);
-}
-
-.fold svg {
-  width: 16px;
-  height: 16px;
-}
-
 /* 그룹 멤버 칩을 끌어 왔을 때(=그룹에서 빼기) */
 .dropActive {
   border-color: var(--color-primary);
   background: var(--color-code-bg);
 }
 
-/* 머리말 줄 전체가 접기/펴기 버튼이다 */
+/* 머리말 줄 전체도 접기/펴기 버튼이다(탭과 같은 동작) */
 .header {
   display: flex;
   justify-content: space-between;
@@ -54,11 +80,7 @@
   user-select: none;
 }
 
-.header:hover .fold {
-  color: var(--color-text);
-}
-
-/* 몸통: 상자 높이에 맞춰 줄고, 안쪽은 grid 행을 1fr ↔ 0fr 로 바꿔 접힌다. */
+/* 몸통: grid 행을 1fr ↔ 0fr 로 바꿔 안쪽을 접는다. */
 .body {
   display: grid;
   grid-template-rows: 1fr;
@@ -67,11 +89,11 @@
   transition: grid-template-rows 0.22s ease;
 }
 
-.listCollapsed .header {
+.panelCollapsed .header {
   margin-bottom: 0;
 }
 
-.listCollapsed .body {
+.panelCollapsed .body {
   grid-template-rows: 0fr;
 }
 

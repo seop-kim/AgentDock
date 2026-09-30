@@ -81,18 +81,30 @@ export default function AgentList({
 
   return (
     <aside
-      className={`${styles.list} ${open ? '' : styles.listCollapsed} ${dropActive ? styles.dropActive : ''}`}
+      className={`${styles.panel} ${open ? '' : styles.panelCollapsed}`}
       onDragOver={onDragOver}
       onDragLeave={() => setDropActive(false)}
       onDrop={onDrop}
     >
+      {/* 상자 위 테두리에 붙는 접기/펴기 탭 */}
+      <button
+        type="button"
+        className={styles.tab}
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-label={open ? '에이전트 패널 접기' : '에이전트 패널 펴기'}
+        title={open ? '에이전트 패널 접기' : '에이전트 패널 펴기'}
+      >
+        {open ? <ChevronUpIcon /> : <ChevronDownIcon />}
+      </button>
+
+      <div className={`${styles.list} ${dropActive ? styles.dropActive : ''}`}>
       <div
         className={styles.header}
         role="button"
         tabIndex={0}
         aria-expanded={open}
         aria-label={open ? '에이전트 패널 접기' : '에이전트 패널 펴기'}
-        title={open ? '에이전트 패널 접기' : '에이전트 패널 펴기'}
         onClick={onToggle}
         onKeyDown={(e) => {
           if (e.key !== 'Enter' && e.key !== ' ') return;
@@ -101,9 +113,6 @@ export default function AgentList({
         }}
       >
         <div className={styles.titleGroup}>
-          <span className={styles.fold} aria-hidden="true">
-            {open ? <ChevronUpIcon /> : <ChevronDownIcon />}
-          </span>
           <h2 className={styles.title}>
             에이전트 <span className={shared.muted}>{projectAgents.length}</span>
           </h2>
@@ -181,6 +190,7 @@ export default function AgentList({
             );
           })}
         </div>
+      </div>
       </div>
 
       {hover && <AgentHoverCard agent={hover.agent} project={project} anchor={hover.rect} />}
