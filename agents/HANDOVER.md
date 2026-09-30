@@ -44,8 +44,8 @@ npm run build --workspace=apps/mockup    # tsc --noEmit && vite build (커밋 �
 | **프로젝트 상세** | **구성도 캔버스가 사이드바를 뺀 화면 전체**를 채우고, 그 위에 요소가 떠 있다(아래). |
 | 상세 › 헤더 카드 | 프로젝트 이름, 이름 줄 오른쪽 끝 **설정(톱니) 아이콘**, 기본 워크스페이스, 에이전트/그룹/총 Task 수. |
 | 상세 › 접기/펴기 | 왼쪽 열 **맨 위(헤더 카드 위)** 의 작은 알약 버튼. 에이전트·그룹 패널을 접고 편다. 기본은 열림. |
-| 상세 › 에이전트 패널 | **이름 + 역할만 보이는 작은 카드**(44px). 카드 오른쪽 **"…" 메뉴**(상세 설정 / 삭제). **마우스 오버**하면 이름·역할·런타임/모델/모드·소속 그룹·연결된 에이전트(같은 그룹의 다른 멤버, 리더 ★)·프롬프트(persona)가 정보 창으로 뜬다. **누르면 선택**(카드 강조 + 캔버스가 그 노드로 부드럽게 이동 + 캔버스 노드에 "선택됨" 이름표와 고리). **선택된 카드를 다시 누르면 해제**. 제목 옆 **+ 아이콘**(색 없음)으로 새 에이전트. |
-| 상세 › 그룹 패널 | 에이전트 패널 아래. 그룹 카드(멤버 칩, 리더 ★, 삭제). **+ 아이콘**으로 새 그룹(이름 입력줄이 열림). 에이전트 카드를 그룹 카드로 **드래그 앤 드롭**하면 멤버. 카드를 누르면 채팅 대상이 된다. |
+| 상세 › 에이전트 패널 | **이름 + 역할만 보이는 작은 카드**(44px). 카드 오른쪽 **"…" 메뉴**(상세 설정 / 삭제). **+ 아이콘**은 이름·역할·런타임·모델/모드를 받는 **창**(`AgentFormModal`)을 띄운다(왼쪽 패널에 갇히지 않게 body 포털). **마우스 오버**하면 이름·역할·런타임/모델/모드·소속 그룹·연결된 에이전트(같은 그룹의 다른 멤버, 리더 ★)·프롬프트(persona)가 정보 창으로 뜬다. **누르면 선택**(카드 강조 + 캔버스가 그 노드로 부드럽게 이동 + 캔버스 노드에 "선택됨" 이름표와 고리). **선택된 카드를 다시 누르면 해제**. |
+| 상세 › 그룹 패널 | 에이전트 패널 아래. 그룹 카드(멤버 칩, 리더 ★, 삭제). **+ 아이콘**으로 새 그룹(이름을 받는 **창** `GroupFormModal` 이 뜬다). 에이전트 카드를 그룹 카드로 **드래그 앤 드롭**하면 멤버. 카드를 누르면 채팅 대상이 된다. |
 | 상세 › 구성도 캔버스 | 그룹은 상자, 에이전트는 노드. 그룹 안에서 리더가 위, 멤버가 아래에 선으로 이어진다. **그룹에 속하지 않은 에이전트는 이름표·상자 없이 노드만** 놓인다. 배경 드래그로 이동, 휠로 확대/축소, 오른쪽 위 도구에서 −/+/맞춤. 노드를 다른 그룹 상자로 끌면 옮겨지고, 왼쪽 에이전트 패널로 끌면 그룹에서 빠진다. 노드의 ★=리더 지정, ×=그룹에서 제거. |
 | 상세 › 채팅(명령) 창 | 구성도 **아래 가운데**에 떠 있다. 대상(에이전트/그룹)을 고르고 명령을 보내면 Task 가 생기고(총 Task 수 증가) 1.8초 뒤 **모의 응답**이 온다. **그룹에 보내면 리더가 받는다.** 리더가 없거나 실행 불가면 시스템 메시지로 사유를 알린다. 기록은 접고 펼 수 있다. |
 | 상세 › 프로젝트 설정 창 | 이름 변경, **워크스페이스 할당/해제/기본 지정**(할당은 여기서만), 프로젝트 삭제(에이전트·그룹·Task 도 함께 삭제). |
@@ -64,7 +64,8 @@ lib/         storage(localStorage 헬퍼), dnd(드래그 페이로드), useGroup
 store/       MockStore(전체 메모리 상태 + reducer + sendCommand), ThemeContext, seed(테스트 데이터)
 styles/      tokens.css(색 토큰: 라이트/다크), globals.css, glass.module.css, modal.module.css, shared.module.css
 pages/Projects/   Projects, ProjectDetail, AgentList, AgentCardMenu, AgentHoverCard, AgentFormModal(생성/수정 겸용),
-                  GroupList, GroupCanvas, ChatPanel, ProjectSettingsModal, ProjectWorkspaces (+ 각각의 *.module.css)
+                  GroupFormModal(새 그룹), GroupList, GroupCanvas, ChatPanel, ProjectSettingsModal, ProjectWorkspaces
+                  (+ 각각의 *.module.css)
 pages/Settings/   Settings(안쪽 왼쪽 메뉴), AgentConnectionSettings, ThemeSettings, RuntimeCard, AddRuntimeModal, CliPanel, CommandPanel
 ```
 
@@ -84,7 +85,7 @@ pages/Settings/   Settings(안쪽 왼쪽 메뉴), AgentConnectionSettings, Theme
 7. **캔버스에 점 격자 배경을 넣지 않는다. "그룹 없음" 영역/이름표를 표시하지 않는다**(그룹 없는 에이전트는 노드만).
 8. **설정 항목 구분은 탭이 아니라 설정 화면 안쪽 왼쪽 메뉴**이고, 사이드바에는 "설정" 아이콘 하나만 둔다.
 9. 워크스페이스 할당은 **프로젝트 상세의 설정 창**에서만 한다(목록에서 하지 않는다).
-10. 메뉴/정보 창 같은 떠 있는 팝업은 **`createPortal` 로 `document.body` 에 그린다.** 조상에 `backdrop-filter`(글래스)가 있으면 `position: fixed` 가 그 조상 기준이 되어 잘리거나 어긋난다.
+10. **모달·메뉴·정보 창 같은 떠 있는 팝업은 `createPortal` 로 `document.body` 에 그린다.** 조상에 `backdrop-filter`(글래스)가 있으면 `position: fixed` 가 그 조상 기준이 되어 잘리거나 어긋난다(에이전트·그룹 만들기 창이 왼쪽 글래스 패널에 갇혔던 문제가 여기 해당했다).
 11. 사용자 노출 문구는 한국어, 코드·식별자는 영어. 새 규칙을 만들면 `CONVENTIONS.md` 에 함께 적는다.
 
 ## 6. 사용자와 일하는 방식
