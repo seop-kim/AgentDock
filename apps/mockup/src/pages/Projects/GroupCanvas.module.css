@@ -114,17 +114,20 @@
   white-space: nowrap;
 }
 
-.boxDelete {
-  padding: 2px 8px;
-  border-color: transparent;
+/* 그룹 상자의 "⋮" 메뉴 버튼(프롬프트 편집 / 삭제) */
+.boxMenuButton {
+  flex-shrink: 0;
+  padding: 0 6px 2px;
+  border: 0;
   background: transparent;
   color: var(--color-muted);
-  font-size: 12px;
+  font-size: 16px;
+  line-height: 1;
 }
 
-.boxDelete:hover {
-  background: var(--color-error-bg);
-  color: var(--color-error);
+.boxMenuButton:hover {
+  background: transparent;
+  color: var(--color-text);
 }
 
 .emptyDrop {

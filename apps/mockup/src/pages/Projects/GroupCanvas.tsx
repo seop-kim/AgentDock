@@ -18,6 +18,8 @@ import { SEED_ROLES } from '../../store/seed';
 import shared from '../../styles/shared.module.css';
 import type { Agent, Project } from '../../types';
 import AgentNodeMenu from './AgentNodeMenu';
+import GroupCardMenu from './GroupCardMenu';
+import GroupPromptModal from './GroupPromptModal';
 import styles from './GroupCanvas.module.css';
 
 interface View {
@@ -96,6 +98,9 @@ export default function GroupCanvas({
   const [overKey, setOverKey] = useState<string | null>(null);
   // 노드 위에 버튼을 늘어놓지 않고 "⋮" 메뉴 하나로 모은다.
   const [nodeMenu, setNodeMenu] = useState<{ node: CanvasNode; agent: Agent; rect: DOMRect } | null>(null);
+  // 그룹 상자도 "⋮" 메뉴에서 프롬프트 편집/삭제를 한다(왼쪽 그룹 카드와 같다).
+  const [boxMenu, setBoxMenu] = useState<{ groupId: number; rect: DOMRect } | null>(null);
+  const [promptGroupId, setPromptGroupId] = useState<number | null>(null);
   // 노드나 그룹 상자를 끌어 위치를 옮긴다(노드를 그룹 상자 위에 놓으면 그 그룹으로 들어간다).
   type DragTarget = { kind: 'node'; agentId: number } | { kind: 'group'; groupId: number };
   const [dragTarget, setDragTarget] = useState<DragTarget | null>(null);
@@ -348,6 +353,7 @@ export default function GroupCanvas({
     onNotice,
   ]);
 
+  const promptGroup = projectGroups.find((g) => g.id === promptGroupId) ?? null;
   const isEmpty = placedAgents.length === 0 && projectGroups.length === 0;
 
   return (
@@ -389,11 +395,15 @@ export default function GroupCanvas({
                   </div>
                   <button
                     type="button"
-                    className={styles.boxDelete}
-                    onClick={() => onDeleteGroup(box.groupId, box.title)}
-                    aria-label={`${box.title} 그룹 삭제`}
+                    className={styles.boxMenuButton}
+                    aria-label={`${box.title} 메뉴`}
+                    aria-haspopup="menu"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setBoxMenu({ groupId: box.groupId, rect: e.currentTarget.getBoundingClientRect() });
+                    }}
                   >
-                    삭제
+                    ⋮
                   </button>
                 </div>
                 {box.isEmpty && <div className={styles.emptyDrop}>에이전트를 여기로 끌어 놓으세요</div>}
@@ -508,6 +518,23 @@ export default function GroupCanvas({
           위치 초기화
         </button>
       </div>
+
+      {boxMenu && (
+        <GroupCardMenu
+          anchor={boxMenu.rect}
+          onClose={() => setBoxMenu(null)}
+          onEditPrompt={() => {
+            setPromptGroupId(boxMenu.groupId);
+            setBoxMenu(null);
+          }}
+          onDelete={() => {
+            const group = projectGroups.find((g) => g.id === boxMenu.groupId);
+            setBoxMenu(null);
+            if (group) onDeleteGroup(group.id, group.name);
+          }}
+        />
+      )}
+      {promptGroup && <GroupPromptModal group={promptGroup} onClose={() => setPromptGroupId(null)} />}
 
       {nodeMenu && (
         <AgentNodeMenu
