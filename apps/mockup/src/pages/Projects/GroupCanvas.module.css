@@ -42,7 +42,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* 점 격자 배경. 이동/확대에 맞춰 함께 움직인다. */
 .viewport {
   position: relative;
   height: clamp(460px, 68vh, 760px);
@@ -50,9 +49,6 @@
   cursor: grab;
   touch-action: none;
   background-color: var(--color-bg);
-  background-image: radial-gradient(var(--color-border-strong) 1px, transparent 1px);
-  background-size: calc(24px * var(--vs)) calc(24px * var(--vs));
-  background-position: var(--vx) var(--vy);
 }
 
 .viewport:active {
