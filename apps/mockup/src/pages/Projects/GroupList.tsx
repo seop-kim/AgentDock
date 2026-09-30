@@ -1,10 +1,11 @@
-import { DragEvent, FormEvent, useState } from 'react';
+import { DragEvent, useState } from 'react';
 import { isAgentDrag, startAgentDrag } from '../../lib/dnd';
 import { useGroupDrop } from '../../lib/useGroupDrop';
 import { PlusIcon } from '../../components/icons';
 import { useMockStore } from '../../store/MockStore';
 import shared from '../../styles/shared.module.css';
 import type { ChatTarget, Project } from '../../types';
+import GroupFormModal from './GroupFormModal';
 import styles from './GroupList.module.css';
 
 /**
@@ -22,21 +23,13 @@ export default function GroupList({
   onSelect: (target: ChatTarget) => void;
   onNotice: (message: string) => void;
 }) {
-  const { agents, groups, createGroup, deleteGroup, removeGroupMember } = useMockStore();
+  const { agents, groups, deleteGroup, removeGroupMember } = useMockStore();
   const dropOnGroup = useGroupDrop(onNotice);
-  const [adding, setAdding] = useState(false);
-  const [name, setName] = useState('');
+  const [creating, setCreating] = useState(false);
   const [overId, setOverId] = useState<number | null>(null);
 
   const projectGroups = groups.filter((g) => g.projectId === project.id);
   const agentName = (id: number) => agents.find((a) => a.id === id)?.name ?? '?';
-
-  const onCreate = (e: FormEvent) => {
-    e.preventDefault();
-    createGroup(project.id, name.trim());
-    setName('');
-    setAdding(false);
-  };
 
   const onDragOver = (e: DragEvent, groupId: number) => {
     if (!isAgentDrag(e)) return;
@@ -60,42 +53,18 @@ export default function GroupList({
         <h2 className={styles.title}>
           그룹 <span className={shared.muted}>{projectGroups.length}</span>
         </h2>
-        {!adding && (
-          <button
-            type="button"
-            className={shared.addButton}
-            onClick={() => setAdding(true)}
-            aria-label="새 그룹"
-            title="새 그룹"
-          >
-            <PlusIcon />
-          </button>
-        )}
+        <button
+          type="button"
+          className={shared.addButton}
+          onClick={() => setCreating(true)}
+          aria-label="새 그룹"
+          title="새 그룹"
+        >
+          <PlusIcon />
+        </button>
       </div>
 
-      {adding && (
-        <form onSubmit={onCreate} className={styles.createForm}>
-          <input
-            autoFocus
-            placeholder="그룹 이름 (예: Backend Team)"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-          />
-          <button type="submit">추가</button>
-          <button
-            type="button"
-            onClick={() => {
-              setAdding(false);
-              setName('');
-            }}
-          >
-            취소
-          </button>
-        </form>
-      )}
-
-      {projectGroups.length === 0 && !adding && (
+      {projectGroups.length === 0 && (
         <p className={shared.muted}>그룹이 없습니다. 에이전트는 그룹 없이도 쓸 수 있습니다.</p>
       )}
 
@@ -161,6 +130,8 @@ export default function GroupList({
           );
         })}
       </div>
+
+      {creating && <GroupFormModal project={project} onClose={() => setCreating(false)} />}
     </aside>
   );
 }

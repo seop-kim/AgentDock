@@ -22,17 +22,6 @@
   font-size: 1rem;
 }
 
-.createForm {
-  display: flex;
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-md);
-}
-
-.createForm input {
-  flex: 1;
-  min-width: 0;
-}
-
 .cards {
   display: flex;
   flex-direction: column;

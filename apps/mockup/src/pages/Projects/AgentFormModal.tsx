@@ -1,4 +1,5 @@
 import { FormEvent, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { unavailableReason } from '../../lib/agentAvailability';
 import { useMockStore } from '../../store/MockStore';
 import { SEED_PERMISSION_PROFILES, SEED_ROLES } from '../../store/seed';
@@ -54,7 +55,8 @@ export default function AgentFormModal({
     onClose();
   };
 
-  return (
+  // 왼쪽 패널(글래스/스크롤)에 갇히지 않도록 body 에 포털로 그린다.
+  return createPortal(
     <div className={modal.overlay} onClick={onClose}>
       <form className={`${modal.modal} ${modal.wide}`} onClick={(e) => e.stopPropagation()} onSubmit={onSubmit}>
         <h2>{isEdit ? '에이전트 상세 설정' : '새 에이전트'}</h2>
@@ -158,6 +160,7 @@ export default function AgentFormModal({
           </button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body,
   );
 }
