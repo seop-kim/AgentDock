@@ -56,3 +56,14 @@
 .dangerButton:hover {
   background: var(--color-error-bg);
 }
+
+/* 글자 없이 + 아이콘만 있는 추가 버튼 */
+.addButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}

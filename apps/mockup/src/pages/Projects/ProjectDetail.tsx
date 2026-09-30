@@ -58,8 +58,16 @@ export default function ProjectDetail() {
   // 삭제된 에이전트가 선택된 채로 남지 않게 실제로 있는 에이전트만 선택으로 인정한다.
   const activeAgentId = agents.some((a) => a.id === selectedAgentId && a.projectId === project.id) ? selectedAgentId : null;
 
-  /** 에이전트를 선택하고 채팅 대상으로도 삼는다. 왼쪽 카드에서 누르면 구성도도 그쪽으로 이동한다. */
+  /**
+   * 에이전트를 선택하고 채팅 대상으로도 삼는다. 왼쪽 카드에서 누르면 구성도도 그쪽으로 이동한다.
+   * 이미 선택된 에이전트를 다시 누르면 선택이 풀린다(채팅 대상이 그 에이전트였다면 대상도 비운다).
+   */
   const selectAgent = (agentId: number, focus: boolean) => {
+    if (agentId === activeAgentId) {
+      setSelectedAgentId(null);
+      setChatTarget((prev) => (prev?.kind === 'agent' && prev.id === agentId ? null : prev));
+      return;
+    }
     setSelectedAgentId(agentId);
     setChatTarget({ kind: 'agent', id: agentId });
     if (focus) setFocusSeq((prev) => prev + 1);

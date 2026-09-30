@@ -1,6 +1,7 @@
 import { DragEvent, FormEvent, useState } from 'react';
 import { isAgentDrag, startAgentDrag } from '../../lib/dnd';
 import { useGroupDrop } from '../../lib/useGroupDrop';
+import { PlusIcon } from '../../components/icons';
 import { useMockStore } from '../../store/MockStore';
 import shared from '../../styles/shared.module.css';
 import type { ChatTarget, Project } from '../../types';
@@ -59,7 +60,17 @@ export default function GroupList({
         <h2 className={styles.title}>
           그룹 <span className={shared.muted}>{projectGroups.length}</span>
         </h2>
-        {!adding && <button onClick={() => setAdding(true)}>+ 새 그룹</button>}
+        {!adding && (
+          <button
+            type="button"
+            className={shared.addButton}
+            onClick={() => setAdding(true)}
+            aria-label="새 그룹"
+            title="새 그룹"
+          >
+            <PlusIcon />
+          </button>
+        )}
       </div>
 
       {adding && (
