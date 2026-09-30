@@ -17,6 +17,9 @@ export default function Dashboard() {
         <li className={styles.pending}>Agent 생성 (준비 중)</li>
         <li className={styles.pending}>Group 구성 (준비 중)</li>
         <li className={styles.pending}>Task 생성 및 실행 (준비 중)</li>
+        <li>
+          <Link to="/reality-check">현실성 점검 (실제 구현 시 막히는 지점)</Link>
+        </li>
       </ul>
     </div>
   );

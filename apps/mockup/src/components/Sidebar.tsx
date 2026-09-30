@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { readStorage, STORAGE_KEYS, writeStorage } from '../lib/storage';
-import { DashboardIcon, FolderIcon, MenuIcon, SettingsIcon } from './icons';
+import { AlertIcon, DashboardIcon, FolderIcon, MenuIcon, SettingsIcon } from './icons';
 import styles from './Sidebar.module.css';
 
 const MENUS = [
   { to: '/', label: 'Dashboard', Icon: DashboardIcon },
   { to: '/projects', label: '프로젝트', Icon: FolderIcon },
+  { to: '/reality-check', label: '현실성 점검', Icon: AlertIcon },
   { to: '/settings', label: '설정', Icon: SettingsIcon },
 ];
 

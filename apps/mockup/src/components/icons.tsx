@@ -47,6 +47,13 @@ export const FolderIcon = () => (
   </Icon>
 );
 
+export const AlertIcon = () => (
+  <Icon>
+    <path d="M12 4l8.5 15H3.5L12 4z" />
+    <path d="M12 10v4M12 17h.01" />
+  </Icon>
+);
+
 export const PlusIcon = () => (
   <Icon>
     <path d="M12 5v14M5 12h14" />
