@@ -60,6 +60,7 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
 - **다크모드 지원**: `tokens.css` 가 라이트/다크 값을 정의한다. `html[data-theme]` 명시값 > 시스템 설정 > 라이트. 새 색이 필요하면 토큰을 라이트·다크 양쪽(그리고 `prefers-color-scheme` 블록)에 함께 추가한다.
 - **메뉴는 왼쪽 사이드바**(`components/Sidebar.tsx`)에 모은다. 기본은 아이콘만 보이고, 위의 메뉴 버튼을 누르면 이름까지 펼쳐지며 다시 누르면 접힌다. 메뉴를 추가하려면 `Sidebar.tsx` 의 `MENUS` 에 항목을, `components/icons.tsx` 에 아이콘을 추가한다.
 - **설정 화면**(`/settings`)은 사이드바에 "설정" 아이콘 하나만 두고, 화면 안쪽 왼쪽 메뉴(`pages/Settings/Settings.tsx`)로 항목을 구분한다(탭·사이드바 하위 메뉴 아님): **에이전트 연결 설정**(`/settings/agents`, 런타임 카드), **테마**(`/settings/theme`, 시스템/라이트/다크. `store/ThemeContext.tsx`). 항목을 추가하려면 `Settings.tsx` 의 `SECTIONS` 와 `App.tsx` 의 중첩 라우트에 추가한다.
+- 내용 영역은 사이드바를 뺀 화면 전체 폭을 쓴다(`max-width` 로 가운데 정렬하지 않는다).
 - 현재 화면: Dashboard, 설정. 나머지 화면은 순서대로 추가한다.
 
 ## Backend 모듈 (`apps/backend/src/main/java/com/agent/dock`)
