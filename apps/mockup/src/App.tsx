@@ -3,6 +3,7 @@ import styles from './layout.module.css';
 import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
 import AgentConnectionSettings from './pages/Settings/AgentConnectionSettings';
+import Settings from './pages/Settings/Settings';
 import ThemeSettings from './pages/Settings/ThemeSettings';
 
 function Layout() {
@@ -21,7 +22,7 @@ export default function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<Dashboard />} />
-        <Route path="/settings">
+        <Route path="/settings" element={<Settings />}>
           <Route index element={<Navigate to="agents" replace />} />
           <Route path="agents" element={<AgentConnectionSettings />} />
           <Route path="theme" element={<ThemeSettings />} />

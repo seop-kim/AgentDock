@@ -68,20 +68,3 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
-.group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-/* 하위 메뉴: 펼치면 들여쓰고, 접힌 상태에서는 아이콘만 살짝 작게 */
-.child {
-  padding-left: 30px;
-  height: 36px;
-  font-size: 14px;
-}
-
-.childCollapsed {
-  height: 36px;
-}

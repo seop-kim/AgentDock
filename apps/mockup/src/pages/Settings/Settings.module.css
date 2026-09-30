@@ -1,3 +1,51 @@
+.layout {
+  display: flex;
+  gap: var(--spacing-lg);
+  align-items: flex-start;
+}
+
+.menu {
+  width: 200px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: var(--spacing-md);
+  border-right: 1px solid var(--color-border);
+}
+
+.menuTitle {
+  margin: 0 0 var(--spacing-sm);
+  padding: 0 12px;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.menuItem {
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  color: var(--color-muted);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.menuItem:hover {
+  background: var(--color-code-bg);
+  color: var(--color-text);
+}
+
+.menuItemActive,
+.menuItemActive:hover {
+  background: var(--color-code-bg);
+  color: var(--color-text);
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+}
+
 .sectionHeader {
   display: flex;
   justify-content: space-between;
