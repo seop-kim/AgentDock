@@ -2,26 +2,31 @@
   position: absolute;
   inset: 0;
   overflow: hidden;
-  background: var(--color-bg);
 }
 
-/* 오른쪽 아래에 떠 있는 확대/축소 도구 */
+/* 오른쪽 위에 떠 있는 확대/축소 도구 */
 .zoom {
+  composes: glass from '../../styles/glass.module.css';
   position: absolute;
+  top: var(--spacing-md);
   right: var(--spacing-md);
-  bottom: var(--spacing-md);
   display: flex;
   align-items: center;
   gap: 4px;
   padding: 6px 8px;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  background: var(--color-surface);
-  box-shadow: 0 4px 16px var(--color-shadow);
+  border-radius: var(--radius-lg);
 }
 
 .zoom button {
   white-space: nowrap;
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-text);
+}
+
+.zoom button:hover {
+  background: var(--color-code-bg);
+  filter: none;
 }
 
 .zoomValue {
@@ -38,7 +43,6 @@
   overflow: hidden;
   cursor: grab;
   touch-action: none;
-  background-color: var(--color-bg);
 }
 
 .viewport:active {
@@ -59,9 +63,11 @@
   top: var(--y);
   width: var(--w);
   height: var(--h);
-  border: 1px solid var(--color-border-strong);
-  border-radius: 10px;
-  background: var(--color-surface);
+  border: 1px solid var(--canvas-box-border);
+  border-radius: var(--radius-lg);
+  background: var(--canvas-box-bg);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   transition: border-color 0.12s ease, background 0.12s ease;
 }
 
@@ -127,8 +133,9 @@
 
 .edge {
   fill: none;
-  stroke: var(--color-border-strong);
-  stroke-width: 1.5;
+  stroke: var(--canvas-edge);
+  stroke-width: 2;
+  stroke-linecap: round;
 }
 
 .node {
@@ -141,10 +148,10 @@
   align-items: center;
   gap: 2px;
   padding: 0 4px;
-  border: 1px solid var(--color-border-strong);
-  border-radius: 8px;
-  background: var(--color-bg);
-  box-shadow: 0 1px 2px var(--color-shadow);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--glass-bg-strong);
+  box-shadow: 0 4px 14px var(--color-shadow), var(--glass-highlight);
   cursor: grab;
 }
 
@@ -158,6 +165,7 @@
 
 .nodeLeader {
   border-color: var(--color-primary);
+  box-shadow: 0 4px 18px var(--color-shadow), 0 0 0 1px var(--color-primary), var(--glass-highlight);
 }
 
 .nodeUnavailable {

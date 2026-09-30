@@ -1,30 +1,60 @@
 /*
  * 디자인 토큰. 색은 모두 여기서만 정의하고, 다른 CSS 는 var(--...) 만 쓴다.
  * 테마 결정 순서: html[data-theme] 명시값 > 시스템 설정(prefers-color-scheme) > 라이트.
+ *
+ * 글래스 스타일: 위에 떠 있는 패널(--glass-*)은 반투명 + 블러로 만든다.
+ *  - 라이트: 배경에 색이 번진 그라데이션(--app-bg)을 깔고 그 위에 흰 유리 패널을 올린다.
+ *  - 다크: 무채색. 배경은 너무 어둡지 않게(#161616) 두고, 떠 있는 것들은 배경보다 확실히 밝은 회색으로 구분한다.
+ * 라이트/다크 값은 아래 세 곳(라이트 기본, 다크 명시, 다크 시스템)에 똑같이 유지해야 한다.
  */
 
 :root {
   color-scheme: light;
 
-  --color-bg: #ffffff;
-  --color-surface: #ffffff;
-  --color-text: #1a1a1a;
-  --color-border: #dddddd;
-  --color-border-strong: #cccccc;
-  --color-muted: #666666;
-  --color-error: #c0392b;
-  --color-error-bg: #fdecea;
-  --color-primary: #1a1a1a;
-  --color-primary-hover: #333333;
+  --color-bg: #eef0fb;
+  --color-surface: rgba(255, 255, 255, 0.55);
+  --color-sidebar: #ffffff;
+  --color-input-bg: rgba(255, 255, 255, 0.78);
+  --color-text: #161a33;
+  --color-border: rgba(30, 36, 90, 0.1);
+  --color-border-strong: rgba(30, 36, 90, 0.2);
+  --color-muted: #616680;
+  --color-error: #d6404a;
+  --color-error-bg: rgba(214, 64, 74, 0.12);
+  --color-primary: #4b5df0;
+  --color-primary-hover: #3c4ddb;
   --color-on-primary: #ffffff;
-  --color-code-bg: #f2f2f2;
-  --color-output-bg: #1e1e1e;
-  --color-output-text: #e6e6e6;
+  --color-code-bg: rgba(75, 93, 240, 0.08);
+  --color-output-bg: #14162b;
+  --color-output-text: #e6e8f5;
   --color-output-link: #8ab4f8;
-  --color-overlay: rgba(0, 0, 0, 0.45);
-  --color-shadow: rgba(0, 0, 0, 0.08);
+  --color-overlay: rgba(20, 22, 50, 0.35);
+  --color-shadow: rgba(40, 50, 120, 0.16);
 
-  --radius: 4px;
+  /* 배경에 번지는 색(메시 그라데이션) */
+  --app-bg:
+    radial-gradient(900px 620px at 6% -8%, rgba(110, 135, 255, 0.4), transparent 60%),
+    radial-gradient(820px 620px at 100% 2%, rgba(205, 130, 255, 0.3), transparent 60%),
+    radial-gradient(900px 700px at 62% 112%, rgba(90, 205, 255, 0.28), transparent 60%),
+    #eef0fb;
+
+  /* 글래스 패널 */
+  --glass-bg: rgba(255, 255, 255, 0.58);
+  --glass-bg-strong: rgba(255, 255, 255, 0.84);
+  --glass-border: rgba(255, 255, 255, 0.8);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  --glass-blur: 18px;
+  --shadow-float: 0 10px 34px rgba(40, 50, 120, 0.16), 0 0 0 1px rgba(30, 36, 90, 0.06);
+
+  /* 구성도(캔버스) */
+  --canvas-box-bg: rgba(255, 255, 255, 0.38);
+  --canvas-box-border: rgba(75, 93, 240, 0.3);
+  --canvas-edge: rgba(75, 93, 240, 0.5);
+
+  --gradient-accent: linear-gradient(135deg, #5b6cff 0%, #8f5cff 100%);
+
+  --radius: 10px;
+  --radius-lg: 16px;
   --spacing-sm: 8px;
   --spacing-md: 16px;
   --spacing-lg: 24px;
@@ -37,45 +67,81 @@
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  --color-bg: #121212;
-  --color-surface: #1b1b1b;
+  --color-bg: #161616;
+  --color-surface: rgba(255, 255, 255, 0.06);
+  --color-sidebar: #1b1b1b;
+  --color-input-bg: rgba(255, 255, 255, 0.08);
   --color-text: #ececec;
-  --color-border: #2e2e2e;
-  --color-border-strong: #404040;
-  --color-muted: #9a9a9a;
+  --color-border: rgba(255, 255, 255, 0.12);
+  --color-border-strong: rgba(255, 255, 255, 0.22);
+  --color-muted: #a6a6a6;
   --color-error: #ff7b6e;
-  --color-error-bg: #3a1f1c;
+  --color-error-bg: rgba(255, 123, 110, 0.14);
   --color-primary: #ececec;
   --color-primary-hover: #ffffff;
-  --color-on-primary: #121212;
-  --color-code-bg: #262626;
+  --color-on-primary: #111111;
+  --color-code-bg: rgba(255, 255, 255, 0.09);
   --color-output-bg: #0a0a0a;
   --color-output-text: #dcdcdc;
   --color-output-link: #8ab4f8;
-  --color-overlay: rgba(0, 0, 0, 0.65);
+  --color-overlay: rgba(0, 0, 0, 0.6);
   --color-shadow: rgba(0, 0, 0, 0.5);
+
+  --app-bg:
+    radial-gradient(1100px 700px at 25% -10%, rgba(255, 255, 255, 0.06), transparent 60%),
+    #161616;
+
+  --glass-bg: rgba(66, 66, 70, 0.68);
+  --glass-bg-strong: rgba(76, 76, 82, 0.95);
+  --glass-border: rgba(255, 255, 255, 0.2);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  --shadow-float: 0 12px 36px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.4);
+
+  --canvas-box-bg: rgba(255, 255, 255, 0.05);
+  --canvas-box-border: rgba(255, 255, 255, 0.24);
+  --canvas-edge: rgba(255, 255, 255, 0.4);
+
+  --gradient-accent: linear-gradient(180deg, #f4f4f4 0%, #d6d6d6 100%);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
 
-    --color-bg: #121212;
-    --color-surface: #1b1b1b;
+    --color-bg: #161616;
+    --color-surface: rgba(255, 255, 255, 0.06);
+    --color-sidebar: #1b1b1b;
+    --color-input-bg: rgba(255, 255, 255, 0.08);
     --color-text: #ececec;
-    --color-border: #2e2e2e;
-    --color-border-strong: #404040;
-    --color-muted: #9a9a9a;
+    --color-border: rgba(255, 255, 255, 0.12);
+    --color-border-strong: rgba(255, 255, 255, 0.22);
+    --color-muted: #a6a6a6;
     --color-error: #ff7b6e;
-    --color-error-bg: #3a1f1c;
+    --color-error-bg: rgba(255, 123, 110, 0.14);
     --color-primary: #ececec;
     --color-primary-hover: #ffffff;
-    --color-on-primary: #121212;
-    --color-code-bg: #262626;
+    --color-on-primary: #111111;
+    --color-code-bg: rgba(255, 255, 255, 0.09);
     --color-output-bg: #0a0a0a;
     --color-output-text: #dcdcdc;
     --color-output-link: #8ab4f8;
-    --color-overlay: rgba(0, 0, 0, 0.65);
+    --color-overlay: rgba(0, 0, 0, 0.6);
     --color-shadow: rgba(0, 0, 0, 0.5);
+
+    --app-bg:
+      radial-gradient(1100px 700px at 25% -10%, rgba(255, 255, 255, 0.06), transparent 60%),
+      #161616;
+
+    --glass-bg: rgba(66, 66, 70, 0.68);
+    --glass-bg-strong: rgba(76, 76, 82, 0.95);
+    --glass-border: rgba(255, 255, 255, 0.2);
+    --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    --shadow-float: 0 12px 36px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.4);
+
+    --canvas-box-bg: rgba(255, 255, 255, 0.05);
+    --canvas-box-border: rgba(255, 255, 255, 0.24);
+    --canvas-edge: rgba(255, 255, 255, 0.4);
+
+    --gradient-accent: linear-gradient(180deg, #f4f4f4 0%, #d6d6d6 100%);
   }
 }

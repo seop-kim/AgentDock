@@ -1,19 +1,17 @@
 /* 구성도 아래 가운데(왼쪽 패널을 뺀 영역의 가운데)에 떠 있는 채팅 창 */
 .chat {
+  composes: glass from '../../styles/glass.module.css';
   position: absolute;
   bottom: var(--spacing-md);
   left: calc((100% + var(--inset)) / 2);
   transform: translateX(-50%);
-  width: min(720px, calc(100% - var(--inset) - 240px));
+  width: min(720px, calc(100% - var(--inset) - var(--spacing-md)));
   min-width: 320px;
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
   padding: 10px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  background: var(--color-surface);
-  box-shadow: 0 4px 16px var(--color-shadow);
+  border-radius: var(--radius-lg);
 }
 
 .header {
@@ -64,7 +62,7 @@
   padding: var(--spacing-sm);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
-  background: var(--color-bg);
+  background: var(--color-surface);
   font-size: 13px;
 }
 
@@ -74,14 +72,14 @@
   gap: 2px;
   max-width: 88%;
   padding: 6px 10px;
-  border-radius: 8px;
+  border-radius: 12px;
   background: var(--color-code-bg);
 }
 
 /* 내가 보낸 메시지는 오른쪽, 에이전트/시스템은 왼쪽 */
 .user {
   align-self: flex-end;
-  background: var(--color-primary);
+  background: var(--gradient-accent);
   color: var(--color-on-primary);
 }
 

@@ -29,11 +29,9 @@
 }
 
 .header {
+  composes: glass from '../../styles/glass.module.css';
   padding: 12px var(--spacing-md);
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  background: var(--color-surface);
-  box-shadow: 0 4px 16px var(--color-shadow);
+  border-radius: var(--radius-lg);
 }
 
 .back {
@@ -76,15 +74,13 @@
 }
 
 .openAgents {
+  composes: glass from '../../styles/glass.module.css';
   align-self: flex-start;
-  border-color: var(--color-border-strong);
-  background: var(--color-surface);
   color: var(--color-text);
-  box-shadow: 0 4px 16px var(--color-shadow);
 }
 
 .openAgents:hover {
-  background: var(--color-code-bg);
+  filter: brightness(1.05);
 }
 
 /* 프로젝트 이름 줄: 이름은 왼쪽, 설정 버튼은 그 줄 오른쪽 끝 */
@@ -119,5 +115,6 @@
   transform: translateX(-50%);
   margin: 0;
   max-width: calc(100% - 160px);
-  box-shadow: 0 4px 16px var(--color-shadow);
+  border: 1px solid var(--color-error);
+  box-shadow: var(--shadow-float);
 }

@@ -29,7 +29,7 @@ const MIN_SCALE = 0.3;
 const MAX_SCALE = 2;
 const FIT_MARGIN = 24;
 // 화면 위에 떠 있는 요소(헤더 카드, 채팅 창, 확대/축소 도구)가 가리는 영역. 맞춤은 이 바깥의 빈 곳에 맞춘다.
-const INSET_TOP = 24;
+const INSET_TOP = 72;
 const INSET_RIGHT = 24;
 const ZOOM_STEP = 1.2;
 
@@ -267,7 +267,7 @@ export default function GroupCanvas({
         )}
       </div>
 
-      {/* 오른쪽 아래에 떠 있는 확대/축소 도구 */}
+      {/* 오른쪽 위에 떠 있는 확대/축소 도구 */}
       <div className={styles.zoom}>
         <button type="button" onClick={() => zoomBy(1 / ZOOM_STEP)} aria-label="축소">
           −
