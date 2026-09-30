@@ -14,7 +14,7 @@
 
 Command Code처럼 위 세 파일 중 아무것도 자동으로 읽지 않는 툴을 쓸 경우, 그 툴의 system prompt/설정에 "작업 전에 `agents/CONVENTIONS.md`를 읽어라"를 직접 지정한다.
 
-진행 상태와 다음 작업은 [`agents/HANDOVER.md`](./HANDOVER.md) 를 본다. 이 문서는 규칙·구조의 기준이고, HANDOVER 는 "지금 어디까지 됐고 다음에 뭘 할지"의 스냅샷이다.
+진행 상태와 다음 작업은 [`agents/HANDOVER.md`](./HANDOVER.md) 를 본다(현재는 **목업 단계**). 이 문서는 규칙·구조의 기준이고, HANDOVER 는 "지금 어디까지 됐고 다음에 뭘 할지"의 스냅샷이다. 목업 이전의 백엔드/프론트 구현 단계 인수인계(일시 중단)는 [`agents/HANDOVER-implementation.md`](./HANDOVER-implementation.md) 에 보관한다.
 
 ## 기술 스택
 
