@@ -7,6 +7,8 @@ interface Risk {
   level: '높음' | '중간';
   problem: string;
   now: string;
+  /** 확정한 해결 방안(여러 안 중 고른 것). */
+  decision: string;
   actions: string[];
 }
 
@@ -25,6 +27,8 @@ const RISKS: Risk[] = [
     level: '높음',
     problem: '위임하려면 "이 에이전트가 낸 산출물"을 다음 에이전트에게 넘겨야 하는데, 지금은 결과가 어디에도 남지 않는다.',
     now: '실행 결과는 exit code 만 돌려주고, 표준출력은 SSE 로그로 흘러가고 끝난다.',
+    decision:
+      '결과는 실행에 원문으로 저장하고, 위임할 때 넘기는 것은 요약 + 변경 파일 목록으로 제한한다. 원문을 통째로 물려주지 않는다(컨텍스트 폭발 방지).',
     actions: [
       '실행 결과 텍스트를 Execution 에 저장한다(원문 또는 요약)',
       'Task 의 산출물(요약·파일 경로)로 연결한다',
@@ -37,6 +41,8 @@ const RISKS: Risk[] = [
     level: '높음',
     problem: '한 번의 CLI 호출은 매번 새 세션이다. "마스터와 나눈 대화"를 이어가지 못하니, 같은 얘기를 반복해야 한다.',
     now: '런타임은 `-p <프롬프트> --output-format text` 로 한 번 실행하고 끝난다. 세션 재개를 쓰지 않는다.',
+    decision:
+      '세션 유지가 필요한 곳은 마스터 대화 하나뿐이고, 에이전트 간 위임은 일회성 실행으로 충분하다. 재개 플래그가 확인되면 그걸 쓰고, 아니면 대화 요약을 프롬프트에 실어 보내는 폴백으로 간다(플래그에 의존하지 않게 설계).',
     actions: [
       'CLI 의 세션 재개 플래그를 `--help` 로 확인한다(추측 금지)',
       '대화 세션 id 를 저장해 마스터 대화를 이어붙인다',
@@ -48,11 +54,13 @@ const RISKS: Risk[] = [
     title: '에이전트가 위임할 통로가 없다',
     level: '높음',
     problem: '마스터가 "이 일은 Backend Team 에" 라고 판단해도, 그 결정을 받아 실제 실행을 만드는 경로가 없다.',
-    now: '프롬프트를 넘겨줄 뿐, 에이전트가 우리 백엔드를 호출할 도구가 없다.',
+    now: '프롬프트를 넘겨줄 뿐, 에이전트가 우리 백엔드를 호출할 통로가 없다.',
+    decision:
+      'MCP 서버를 두지 않는다. 실행 출력 끝에 JSON 계약(action: delegate | done)을 강제하고, 백엔드가 그것을 파싱해 하위 CLI 를 실행한 뒤 결과 요약을 붙여 같은 에이전트를 다시 호출한다(스텝당 프로세스 1개). 순수 백엔드 오케스트레이션이다.',
     actions: [
-      'MCP 서버나 hooks 로 "작업 생성" 도구를 노출한다',
-      '도구 호출을 검증해 하위 Execution 을 만든다',
-      '하위 결과를 호출한 에이전트에게 되돌려 다시 판단하게 한다',
+      '실행 프롬프트(시스템·페르소나 계층)에 출력 계약을 명시한다',
+      'stdout 에서 마지막 JSON 줄을 파싱하고 스키마를 검증한다(실패 시 1회 재시도)',
+      'delegate 면 하위 CLI 를 실행하고, 결과 요약을 붙여 같은 에이전트를 다시 호출한다(깊이·예산 상한 적용)',
     ],
   },
   {
@@ -61,6 +69,8 @@ const RISKS: Risk[] = [
     level: '높음',
     problem: 'A 가 B 에, B 가 다시 A 에 맡기는 식으로 깊이·횟수 제한이 없으면 프로세스가 끝없이 늘어난다.',
     now: '목업은 항상 1단계(마스터 → 리더)만 모의하고 끝난다.',
+    decision:
+      '깊이 3, 루트당 실행 20건, 예산 상한으로 자른다. 초과한 위임은 거부하고 사유를 위로 돌려보내 에이전트가 사용자에게 보고하게 한다.',
     actions: [
       '위임 깊이·총 횟수·비용 상한을 둔다',
       '순환(A→B→A)을 감지해 차단한다',
@@ -73,6 +83,8 @@ const RISKS: Risk[] = [
     level: '중간',
     problem: '위임 1건은 프로세스 1개다. 상한이 없으면 동시에 수십 개가 뜨고 토큰이 순식간에 사라진다.',
     now: '실행 단위로 프로세스를 띄우고 취소만 지원한다. 전역 큐나 동시 실행 상한은 없다.',
+    decision:
+      '전역 동시 4 / 프로젝트 2 + FIFO 큐 + 실행 타임아웃 10분 + 취소 전파. 대기 중 실행은 QUEUED 로 표시한다.',
     actions: [
       '프로젝트/전역 동시 실행 상한과 대기 큐를 둔다',
       '실행 타임아웃을 정한다',
@@ -85,6 +97,8 @@ const RISKS: Risk[] = [
     level: '높음',
     problem: '여러 에이전트가 같은 폴더에서 동시에 파일을 고치면 서로 덮어써 작업이 깨진다. 실무에서 가장 먼저 부딪히는 벽이다.',
     now: '실행 디렉터리는 프로젝트의 기본 워크스페이스 하나뿐이다. 격리 개념이 없다.',
+    decision:
+      '편집하는 실행은 git worktree 로 격리하고, 읽기만 하는 실행은 원본 폴더에서 돌린다. 자동 병합은 하지 않고, 병합은 부모 에이전트나 사람이 판단한다.',
     actions: [
       '에이전트별로 git worktree(브랜치)를 만들어 격리한다',
       '병합 단계와 충돌 처리(누가 합칠지)를 정한다',
@@ -97,8 +111,10 @@ const RISKS: Risk[] = [
     level: '중간',
     problem: '누구에게 맡길지 판단이 매번 달라지고, 정해둔 형식을 벗어난 답을 낼 수 있다.',
     now: '목업은 "리더가 받는다"는 고정 규칙으로 단순화해 두었다.',
+    decision:
+      '출력 계약(JSON)을 스키마로 검증하고 실패하면 1회 재시도, 그래도 안 되면 사람에게 넘긴다. 라우팅 결정과 근거 한 줄을 항상 기록한다.',
     actions: [
-      '도구/출력 스키마를 검증하고 실패하면 재시도한다',
+      '출력 계약(JSON)을 검증하고 실패하면 재시도한다',
       '재시도로도 안 되면 사람에게 넘긴다(에스컬레이션)',
       '판단 근거를 로그로 남겨 나중에 검토할 수 있게 한다',
     ],
@@ -109,6 +125,8 @@ const RISKS: Risk[] = [
     level: '중간',
     problem: '하위 에이전트가 상위보다 많은 권한을 가지면 안 된다. 프롬프트로만 막으면 우회된다.',
     now: '권한은 백엔드에서 403 으로 강제하는 기반이 이미 있다.',
+    decision:
+      '위임할 때 유효 권한 = 상위 ∩ 하위 를 계산해 자식 실행에 고정하고, 자식은 그 권한으로만 실행한다. 초과 시도는 거부하고 감사 로그로 남긴다.',
     actions: [
       '위임할 때 유효 권한을 상위 ∩ 하위로 계산한다',
       '위임 도구 호출에도 같은 가드를 건다',
@@ -121,6 +139,8 @@ const RISKS: Risk[] = [
     level: '중간',
     problem: '배포·삭제 같은 위험한 작업이 승인 없이 돌거나, 누가 누구에게 무엇을 맡겼는지 알 수 없으면 운영할 수 없다.',
     now: '목업에는 채팅 기록만 있다. 위임 트리·비용·실패 알림 화면이 없다.',
+    decision:
+      '위험 작업은 승인 대기로 멈추고 사람이 승인한다. 실행 트리(부모-자식)와 실행별 입출력·상태·시간·비용을 Tasks/실행 상세에 보여준다.',
     actions: [
       '위험한 작업에는 사람 승인 단계를 둔다',
       '위임 트리와 실행별 입출력·비용을 보여주는 화면을 만든다',
@@ -136,7 +156,7 @@ export default function RealityCheck() {
       <h1>현실성 점검</h1>
       <p className={styles.lead}>
         목업에서는 채팅이 "모의 응답"으로 끝나지만, 실제로 마스터가 <strong>일을 나누고 그룹 리더가 받아 판단</strong>하게
-        만들려면 아래를 실제로 구현해야 합니다. 지금 코드 기준으로 무엇이 비어 있는지 정리했습니다.
+        만들려면 아래를 실제로 구현해야 합니다. 항목마다 <strong>결정</strong>은 여러 안 중 고른 것입니다.
       </p>
 
       <section className={styles.section}>
@@ -156,7 +176,7 @@ export default function RealityCheck() {
       </section>
 
       <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>막히는 지점 {RISKS.length}가지</h2>
+        <h2 className={styles.sectionTitle}>막히는 지점과 해결 방안 {RISKS.length}가지</h2>
         <div className={styles.cards}>
           {RISKS.map((risk) => (
             <article className={styles.card} key={risk.id}>
@@ -171,6 +191,10 @@ export default function RealityCheck() {
                 </span>
               </div>
               <p className={styles.problem}>{risk.problem}</p>
+              <div className={styles.decision}>
+                <span className={styles.decisionLabel}>결정</span>
+                {risk.decision}
+              </div>
               <dl className={styles.rows}>
                 <dt>지금</dt>
                 <dd>{risk.now}</dd>
