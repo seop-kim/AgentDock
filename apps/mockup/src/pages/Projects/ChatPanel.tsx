@@ -1,8 +1,12 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
+import { ClipIcon, FileIcon } from '../../components/icons';
 import { unavailableReason } from '../../lib/agentAvailability';
+import { fileName } from '../../lib/executionSim';
 import { useMockStore } from '../../store/MockStore';
+import attach from '../../styles/attachment.module.css';
 import shared from '../../styles/shared.module.css';
-import type { ChatTarget, Project } from '../../types';
+import type { AttachedFile, ChatTarget, Project } from '../../types';
+import AttachFilesModal from './AttachFilesModal';
 import styles from './ChatPanel.module.css';
 import { ExecutionSummaryCard } from './ExecutionTree';
 
@@ -38,6 +42,9 @@ export default function ChatPanel({
 }) {
   const { agents, groups, providers, chats, executions, sendCommand } = useMockStore();
   const [text, setText] = useState('');
+  /** 이번 명령에 붙일 파일(보내면 비운다). */
+  const [attachments, setAttachments] = useState<AttachedFile[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
 
   const projectAgents = agents.filter((a) => a.projectId === project.id);
@@ -69,10 +76,13 @@ export default function ChatPanel({
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
+    if (!target) return;
     const trimmed = text.trim();
-    if (!target || trimmed === '') return;
-    sendCommand(project.id, target, trimmed);
+    // 파일만 붙이고 보내도 되게 한다(그때는 지시를 기본 문장으로 채운다).
+    if (trimmed === '' && attachments.length === 0) return;
+    sendCommand(project.id, target, trimmed === '' ? '첨부한 파일을 확인해줘' : trimmed, attachments);
     setText('');
+    setAttachments([]);
     onSent();
   };
 
@@ -123,6 +133,16 @@ export default function ChatPanel({
                 <div className={m.status === 'error' ? styles.error : undefined}>
                   {m.status === 'pending' ? <span className={styles.pending}>작업 중…</span> : m.text}
                 </div>
+                {m.attachments.length > 0 && (
+                  <ul className={attach.chips}>
+                    {m.attachments.map((file) => (
+                      <li key={`${file.workspaceId}:${file.path}`} className={attach.chip} title={file.path}>
+                        <FileIcon size={13} />
+                        <span className={attach.chipName}>{fileName(file.path)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 {rootId !== null && (
                   <ExecutionSummaryCard
                     executions={projectExecutions}
@@ -136,17 +156,58 @@ export default function ChatPanel({
         </div>
       )}
 
+      {attachments.length > 0 && (
+        <ul className={attach.chips}>
+          {attachments.map((file) => (
+            <li key={`${file.workspaceId}:${file.path}`} className={attach.chip} title={file.path}>
+              <FileIcon size={13} />
+              <span className={attach.chipName}>{fileName(file.path)}</span>
+              <button
+                type="button"
+                className={attach.chipRemove}
+                onClick={() => setAttachments((prev) => prev.filter((item) => item !== file))}
+                aria-label={`${fileName(file.path)} 첨부 빼기`}
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
       <form onSubmit={onSubmit} className={styles.form}>
+        <button
+          type="button"
+          className={styles.attach}
+          onClick={() => setPickerOpen(true)}
+          disabled={project.workspaces.length === 0}
+          aria-label="파일 첨부"
+          title={project.workspaces.length === 0 ? '워크스페이스가 없어 파일을 붙일 수 없습니다' : '파일 첨부'}
+        >
+          <ClipIcon size={18} />
+        </button>
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={target ? '명령을 입력하고 Enter' : '먼저 대상을 선택하세요'}
           aria-label="명령 입력"
         />
-        <button type="submit" disabled={!target || text.trim() === ''}>
+        <button type="submit" disabled={!target || (text.trim() === '' && attachments.length === 0)}>
           보내기
         </button>
       </form>
+
+      {pickerOpen && (
+        <AttachFilesModal
+          project={project}
+          attached={attachments}
+          onClose={() => setPickerOpen(false)}
+          onApply={(files) => {
+            setAttachments(files);
+            setPickerOpen(false);
+          }}
+        />
+      )}
     </section>
   );
 }

@@ -88,6 +88,35 @@ export const SEED_WORKSPACES: Workspace[] = [
   { id: 3, name: 'shop-api', path: 'C:\\Users\\mock\\Documents\\GitHub\\shop-api' },
 ];
 
+/**
+ * 워크스페이스 폴더 안의 파일 목록(모의). 명령에 파일을 첨부할 때 이 목록에서 고른다.
+ * 실제 제품에서는 `GET /workspaces/browse` 로 진짜 폴더를 읽는다.
+ */
+export const SEED_FILES: Record<number, string[]> = {
+  1: [
+    'apps/backend/src/main/java/com/agent/dock/agent/AgentService.java',
+    'apps/backend/src/main/java/com/agent/dock/task/TaskService.java',
+    'apps/frontend/src/screens/Agents.tsx',
+    'agents/CONVENTIONS.md',
+    'package.json',
+  ],
+  2: [
+    'src/api/client.ts',
+    'src/components/InventoryTable.tsx',
+    'src/pages/Checkout.tsx',
+    'src/styles/checkout.css',
+    'package.json',
+  ],
+  3: [
+    'src/main/java/com/shop/api/InventoryController.java',
+    'src/main/java/com/shop/api/InventoryService.java',
+    'src/main/java/com/shop/api/OrderService.java',
+    'src/test/java/com/shop/api/InventoryServiceTest.java',
+    'build.gradle',
+    'README.md',
+  ],
+};
+
 export const SEED_ROLES: AgentRole[] = [
   { id: 1, name: 'Backend Developer' },
   { id: 2, name: 'Frontend Developer' },

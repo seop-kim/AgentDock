@@ -128,6 +128,12 @@ export interface Execution {
   sessionId: string;
 }
 
+/** 명령에 첨부한 파일. 경로는 그 워크스페이스 폴더 기준의 상대 경로다. */
+export interface AttachedFile {
+  workspaceId: number;
+  path: string;
+}
+
 /** 채팅 명령의 대상. 그룹에 보내면 그 그룹의 리더가 받는다. */
 export type ChatTarget = { kind: 'agent'; id: number } | { kind: 'group'; id: number };
 
@@ -144,4 +150,6 @@ export interface ChatMessage {
   status: 'pending' | 'done' | 'error';
   /** 이 응답으로 만들어진 실행 트리의 루트 실행. 명령이 아니면 null. */
   rootExecutionId: number | null;
+  /** 명령에 함께 보낸 첨부 파일. 없으면 빈 배열. */
+  attachments: AttachedFile[];
 }

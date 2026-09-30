@@ -6,6 +6,7 @@ import type {
   Agent,
   AgentGroup,
   AiProvider,
+  AttachedFile,
   Capabilities,
   ChatMessage,
   ChatTarget,
@@ -379,9 +380,10 @@ interface MockStore {
   chats: ChatMessage[];
   /**
    * 에이전트나 그룹(리더)에게 명령을 보낸다. **마스터**에게 보내면 마스터가 팀(그룹) 리더들에게 나눠 맡긴다(모의).
+   * 첨부한 파일은 라우팅(경로·확장자)과 실행 프롬프트에 함께 쓰인다.
    * 보낼 수 없으면 채팅에 사유가 시스템 메시지로 남는다.
    */
-  sendCommand: (projectId: number, target: ChatTarget, text: string) => void;
+  sendCommand: (projectId: number, target: ChatTarget, text: string, attachments: AttachedFile[]) => void;
 }
 
 const MockStoreContext = createContext<MockStore | null>(null);
@@ -395,7 +397,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
     return seq.current;
   };
 
-  const sendCommand = (projectId: number, target: ChatTarget, text: string) => {
+  const sendCommand = (projectId: number, target: ChatTarget, text: string, attachments: AttachedFile[]) => {
     const project = state.projects.find((p) => p.id === projectId);
     const group = target.kind === 'group' ? state.groups.find((g) => g.id === target.id) : undefined;
     const receiverId = target.kind === 'agent' ? target.id : group?.leaderAgentId;
@@ -413,6 +415,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
           text: message,
           status: 'error',
           rootExecutionId: null,
+          attachments: [],
         },
       });
 
@@ -442,6 +445,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       rootAgentId: receiver.id,
       fromMaster: isMaster,
       groups: state.groups.filter((g) => g.projectId === projectId),
+      attachments,
     });
 
     // 계획된 실행을 먼저 만들어 두고(QUEUED) 타임라인대로 상태를 바꾼다. 부모가 자식보다 먼저 온다.
@@ -484,6 +488,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
         targetLabel,
         status: 'done',
         rootExecutionId: null,
+        attachments,
       },
       pending: {
         id: agentMessageId,
@@ -493,6 +498,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
         text: '',
         status: 'pending',
         rootExecutionId: ids.get('e0') ?? null,
+        attachments: [],
       },
       tasks,
       executions,

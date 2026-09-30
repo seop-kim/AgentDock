@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react';
 
 /** 24x24 선(stroke) 아이콘. 색은 currentColor 를 따르므로 테마 토큰이 그대로 적용된다. */
-function Icon({ children }: { children: ReactNode }) {
+function Icon({ children, size = 20 }: { children: ReactNode; size?: number }) {
   return (
     <svg
-      width="20"
-      height="20"
+      width={size}
+      height={size}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -63,6 +63,19 @@ export const PlusIcon = () => (
 export const ChevronUpIcon = () => (
   <Icon>
     <path d="M6 15l6-6 6 6" />
+  </Icon>
+);
+
+export const ClipIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
+    <path d="M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.9l8.5-8.5" />
+  </Icon>
+);
+
+export const FileIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
+    <path d="M14 3v4a1 1 0 0 0 1 1h4" />
+    <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z" />
   </Icon>
 );
 

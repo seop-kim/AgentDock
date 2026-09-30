@@ -1,0 +1,121 @@
+/* 명령에 붙인 파일. 고르기 창과 입력줄·말풍선의 칩이 함께 쓴다. */
+
+.picker {
+  composes: glassStrong from './glass.module.css';
+  color: var(--color-text);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.picker h2 {
+  margin: 0;
+}
+
+.root {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.tree {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.folderGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.folder {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.files {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.file input {
+  padding: 0;
+}
+
+.count {
+  margin-right: auto;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+/* 입력줄 위와 말풍선 안의 첨부 칩 */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 8px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  color: var(--color-text);
+  font-size: 11px;
+}
+
+.chipName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chipRemove {
+  padding: 0 2px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.chipRemove:hover {
+  background: transparent;
+  color: var(--color-text);
+}

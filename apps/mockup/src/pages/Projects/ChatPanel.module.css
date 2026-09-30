@@ -115,3 +115,17 @@
   flex: 1;
   min-width: 0;
 }
+
+/* 파일 첨부 버튼(입력줄 왼쪽) */
+.attach {
+  flex-shrink: 0;
+  padding: 0 8px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-muted);
+}
+
+.attach:hover:not(:disabled) {
+  background: var(--color-code-bg);
+  color: var(--color-text);
+}

@@ -1,4 +1,4 @@
-import type { AgentGroup, ExecutionDecision, ExecutionMetrics, ExecutionStatus } from '../types';
+import type { AgentGroup, AttachedFile, ExecutionDecision, ExecutionMetrics, ExecutionStatus } from '../types';
 
 /* ---------------------------------------------------------------------------
  * 실행 흐름 모의.
@@ -18,6 +18,15 @@ const TEAM_KEYWORDS: Record<string, string[]> = {
   'QA Team': ['테스트', '버그', '재현', '검증', '회귀'],
   'DevOps Team': ['배포', 'ci', '도커', '인프라', '빌드'],
   'Docs Team': ['문서', 'readme', '가이드', '주석'],
+};
+
+/** 첨부한 파일 경로로 팀을 정하는 규칙. 확장자와 폴더 이름만 본다(내용은 읽지 않는다). */
+const FILE_ROUTES: Record<string, string[]> = {
+  'Backend Team': ['.java', '/api/', 'controller', 'service', 'repository'],
+  'Frontend Team': ['.tsx', '.jsx', '.css', 'components/', 'pages/'],
+  'QA Team': ['/test/', 'test.', 'spec.'],
+  'DevOps Team': ['build.gradle', 'pom.xml', 'package.json', '.yml', '.yaml', 'dockerfile'],
+  'Docs Team': ['.md', 'docs/'],
 };
 
 /** 팀별 결과 요약(모의). 실제로는 그 에이전트가 Handoff 로 돌려주는 값이다. */
@@ -76,10 +85,17 @@ export interface ExecutionPlan {
   durationMs: number;
 }
 
-/** 규칙으로 팀을 정한다. 어느 팀도 걸리지 않으면 마스터가 직접 처리한다는 뜻이다. */
-export function routeTeams(text: string, groups: AgentGroup[]): AgentGroup[] {
+/**
+ * 규칙으로 팀을 정한다. 요청 문장의 키워드로 먼저 보고, 첨부한 파일 경로로도 본다.
+ * 어느 팀도 걸리지 않으면 마스터가 직접 처리한다는 뜻이다.
+ */
+export function routeTeams(text: string, groups: AgentGroup[], attachments: AttachedFile[]): AgentGroup[] {
   const lower = text.toLowerCase();
-  return groups.filter((group) => (TEAM_KEYWORDS[group.name] ?? []).some((keyword) => lower.includes(keyword)));
+  const paths = attachments.map((file) => file.path.toLowerCase());
+  return groups.filter((group) => {
+    if ((TEAM_KEYWORDS[group.name] ?? []).some((keyword) => lower.includes(keyword))) return true;
+    return paths.some((path) => (FILE_ROUTES[group.name] ?? []).some((hint) => path.includes(hint)));
+  });
 }
 
 /** 실행 트리 하나(마스터 실행을 루트로 한)를 미리 계산한다. 화면은 이 계획대로 상태를 바꾼다. */
@@ -89,26 +105,29 @@ export function buildExecutionPlan(input: {
   /** 마스터가 낸 명령인지. 마스터만 팀으로 나눠 맡긴다. */
   fromMaster: boolean;
   groups: AgentGroup[];
+  /** 함께 보낸 파일. 라우팅과 프롬프트에 쓰인다. */
+  attachments: AttachedFile[];
 }): ExecutionPlan {
-  const { text, rootAgentId, fromMaster, groups } = input;
+  const { text, rootAgentId, fromMaster, groups, attachments } = input;
   const root: Draft = {
     key: 'e0',
     agentId: rootAgentId,
-    prompt: text,
+    prompt: withAttachments(text, attachments),
     teamName: null,
     startAt: 0,
     children: [],
     metrics: null,
   };
 
-  const teams = fromMaster ? routeTeams(text, groups) : [];
+  const teams = fromMaster ? routeTeams(text, groups, attachments) : [];
   teams.forEach((group, index) => {
     const leaderId = group.leaderAgentId;
     if (leaderId === null) return;
+    const instruction = `"${short(text)}" 를 ${group.name} 범위에서 처리`;
     const leader: Draft = {
       key: `e${index + 1}`,
       agentId: leaderId,
-      prompt: `"${short(text)}" 를 ${group.name} 범위에서 처리`,
+      prompt: withAttachments(instruction, attachments),
       teamName: group.name,
       startAt: 0,
       children: [],
@@ -276,4 +295,15 @@ function mockSessionId(seed: number): string {
 
 function short(text: string, max = 28): string {
   return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
+/** 경로에서 파일 이름만 뽑는다(화면에 짧게 보여 주려고). */
+export function fileName(path: string): string {
+  return path.split('/').pop() ?? path;
+}
+
+/** 첨부한 파일을 지시 한 줄에 붙인다. 마스터가 하위로 넘길 때도 같은 문장이 따라간다. */
+function withAttachments(prompt: string, attachments: AttachedFile[]): string {
+  if (attachments.length === 0) return prompt;
+  return `${prompt} · 첨부: ${attachments.map((file) => fileName(file.path)).join(', ')}`;
 }
