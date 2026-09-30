@@ -34,9 +34,10 @@ interface MockState {
   nextId: number;
 }
 
-export type NewAgentInput = Omit<Agent, 'id'>;
-/** 에이전트 수정 입력: 소속 프로젝트는 바꾸지 않는다. */
-export type AgentUpdateInput = Omit<Agent, 'id' | 'projectId'>;
+/** 생성 입력: 새 에이전트는 구성도에 놓인 상태로 시작하므로 배치 여부는 폼에서 받지 않는다. */
+export type NewAgentInput = Omit<Agent, 'id' | 'placed'>;
+/** 에이전트 수정 입력: 소속 프로젝트와 배치 여부는 바꾸지 않는다(배치는 구성도/목록에서 직접). */
+export type AgentUpdateInput = Omit<Agent, 'id' | 'projectId' | 'placed'>;
 
 type Action =
   | { type: 'provider/toggle'; id: number }
@@ -51,6 +52,7 @@ type Action =
   | { type: 'agent/create'; input: NewAgentInput }
   | { type: 'agent/update'; id: number; input: AgentUpdateInput }
   | { type: 'agent/delete'; id: number }
+  | { type: 'agent/setPlaced'; id: number; placed: boolean }
   | { type: 'group/create'; projectId: number; name: string }
   | { type: 'group/delete'; id: number }
   | { type: 'group/addMember'; groupId: number; agentId: number }
@@ -80,6 +82,15 @@ const mapGroup = (state: MockState, groupId: number, change: (group: AgentGroup)
   ...state,
   groups: state.groups.map((g) => (g.id === groupId ? change(g) : g)),
 });
+
+/** 그룹 목록에서 에이전트를 뺀다. 리더였다면 남은 첫 멤버가 리더를 이어받는다. */
+const withoutMember = (groups: AgentGroup[], agentId: number): AgentGroup[] =>
+  groups.map((group) => {
+    if (!group.memberIds.includes(agentId)) return group;
+    const memberIds = group.memberIds.filter((id) => id !== agentId);
+    const leaderAgentId = group.leaderAgentId === agentId ? (memberIds[0] ?? null) : group.leaderAgentId;
+    return { ...group, memberIds, leaderAgentId };
+  });
 
 function reducer(state: MockState, action: Action): MockState {
   switch (action.type) {
@@ -153,9 +164,10 @@ function reducer(state: MockState, action: Action): MockState {
         };
       });
     case 'agent/create':
+      // 새 에이전트는 구성도에 놓인 상태로 시작한다.
       return {
         ...state,
-        agents: [...state.agents, { ...action.input, id: state.nextId }],
+        agents: [...state.agents, { ...action.input, id: state.nextId, placed: true }],
         nextId: state.nextId + 1,
       };
     case 'agent/update':
@@ -168,12 +180,14 @@ function reducer(state: MockState, action: Action): MockState {
       return {
         ...state,
         agents: state.agents.filter((a) => a.id !== action.id),
-        groups: state.groups.map((g) => {
-          if (!g.memberIds.includes(action.id)) return g;
-          const memberIds = g.memberIds.filter((id) => id !== action.id);
-          const leaderAgentId = g.leaderAgentId === action.id ? (memberIds[0] ?? null) : g.leaderAgentId;
-          return { ...g, memberIds, leaderAgentId };
-        }),
+        groups: withoutMember(state.groups, action.id),
+      };
+    case 'agent/setPlaced':
+      // 구성도에서 빼면 그룹에서도 빠진다(다시 놓으면 그룹 없이 노드만 놓인다).
+      return {
+        ...state,
+        agents: state.agents.map((a) => (a.id === action.id ? { ...a, placed: action.placed } : a)),
+        groups: action.placed ? state.groups : withoutMember(state.groups, action.id),
       };
     case 'group/create':
       return {
@@ -247,6 +261,8 @@ interface MockStore {
   createAgent: (input: NewAgentInput) => void;
   updateAgent: (id: number, input: AgentUpdateInput) => void;
   deleteAgent: (id: number) => void;
+  /** 구성도에 놓기/빼기. 빼면 그룹에서도 빠지고 에이전트 목록에만 남는다. */
+  setAgentPlaced: (id: number, placed: boolean) => void;
   createGroup: (projectId: number, name: string) => void;
   deleteGroup: (id: number) => void;
   addGroupMember: (groupId: number, agentId: number) => void;
@@ -307,7 +323,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       type: 'chat/send',
       user: { id: userId, projectId, role: 'user', author: '나', text, targetLabel, status: 'done' },
       pending: { id: agentMessageId, projectId, role: 'agent', author: receiver.name, text: '', status: 'pending' },
-      task: { id: taskId, projectId, title, status: 'RUNNING' },
+      task: { id: taskId, projectId, title, status: 'RUNNING', agentId: receiver.id },
     });
 
     window.setTimeout(() => {
@@ -345,6 +361,7 @@ export function MockStoreProvider({ children }: { children: ReactNode }) {
       createAgent: (input) => dispatch({ type: 'agent/create', input }),
       updateAgent: (id, input) => dispatch({ type: 'agent/update', id, input }),
       deleteAgent: (id) => dispatch({ type: 'agent/delete', id }),
+      setAgentPlaced: (id, placed) => dispatch({ type: 'agent/setPlaced', id, placed }),
       createGroup: (projectId, name) => dispatch({ type: 'group/create', projectId, name }),
       deleteGroup: (id) => dispatch({ type: 'group/delete', id }),
       addGroupMember: (groupId, agentId) => dispatch({ type: 'group/addMember', groupId, agentId }),

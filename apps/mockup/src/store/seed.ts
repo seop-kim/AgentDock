@@ -112,8 +112,9 @@ export const SEED_PERMISSION_PROFILES: PermissionProfile[] = [
   { id: 2, name: 'Read Only (읽기만)' },
 ];
 
+/** Planner(5)는 구성도에 놓지 않은 상태(미배치)로 둔다. 에이전트 목록에만 보인다. */
 export const SEED_AGENTS: Agent[] = [
-  { id: 1, projectId: 1, name: 'test', roleId: 1, permissionProfileId: 1, providerId: 12, persona: '', model: '', mode: '' },
+  { id: 1, projectId: 1, name: 'test', roleId: 1, permissionProfileId: 1, providerId: 12, persona: '', model: '', mode: '', placed: true },
   {
     id: 2,
     projectId: 2,
@@ -124,6 +125,7 @@ export const SEED_AGENTS: Agent[] = [
     persona: '테스트를 먼저 작성하고 작은 단위로 커밋한다.',
     model: 'opus',
     mode: 'acceptEdits',
+    placed: true,
   },
   {
     id: 3,
@@ -135,6 +137,7 @@ export const SEED_AGENTS: Agent[] = [
     persona: '',
     model: 'sonnet',
     mode: 'plan',
+    placed: true,
   },
   {
     id: 4,
@@ -146,8 +149,20 @@ export const SEED_AGENTS: Agent[] = [
     persona: '변경 범위와 회귀 위험을 먼저 본다.',
     model: '',
     mode: '',
+    placed: true,
   },
-  { id: 5, projectId: 2, name: 'Planner', roleId: 4, permissionProfileId: 2, providerId: 12, persona: '', model: 'sonnet', mode: 'plan' },
+  {
+    id: 5,
+    projectId: 2,
+    name: 'Planner',
+    roleId: 4,
+    permissionProfileId: 2,
+    providerId: 12,
+    persona: '',
+    model: 'sonnet',
+    mode: 'plan',
+    placed: false,
+  },
 ];
 
 export const SEED_GROUPS: AgentGroup[] = [
@@ -155,12 +170,13 @@ export const SEED_GROUPS: AgentGroup[] = [
   { id: 2, projectId: 2, name: 'Frontend Team', leaderAgentId: 3, memberIds: [3] },
 ];
 
+/** 에이전트 상태(작업 중/대기중/없음)가 모두 보이도록 담당(agentId)과 상태를 나눠 둔다. */
 export const SEED_TASKS: Task[] = [
-  { id: 1, projectId: 1, title: '연결 확인', status: 'DONE' },
-  { id: 2, projectId: 1, title: 'README 정리', status: 'PENDING' },
-  { id: 3, projectId: 2, title: '주문 API 추가', status: 'RUNNING' },
-  { id: 4, projectId: 2, title: '장바구니 화면', status: 'PENDING' },
-  { id: 5, projectId: 2, title: '결제 오류 수정', status: 'FAILED' },
-  { id: 6, projectId: 2, title: '상품 목록 페이징', status: 'DONE' },
-  { id: 7, projectId: 2, title: '코드 리뷰', status: 'DONE' },
+  { id: 1, projectId: 1, agentId: 1, title: '연결 확인', status: 'DONE' },
+  { id: 2, projectId: 1, agentId: 1, title: 'README 정리', status: 'PENDING' },
+  { id: 3, projectId: 2, agentId: 2, title: '주문 API 추가', status: 'RUNNING' },
+  { id: 4, projectId: 2, agentId: 3, title: '장바구니 화면', status: 'PENDING' },
+  { id: 5, projectId: 2, agentId: 2, title: '결제 오류 수정', status: 'FAILED' },
+  { id: 6, projectId: 2, agentId: 3, title: '상품 목록 페이징', status: 'DONE' },
+  { id: 7, projectId: 2, agentId: 4, title: '코드 리뷰', status: 'DONE' },
 ];

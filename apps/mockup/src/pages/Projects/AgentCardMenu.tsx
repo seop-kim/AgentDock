@@ -6,17 +6,23 @@ const MENU_WIDTH = 168;
 
 /**
  * 에이전트 카드의 "…" 메뉴. 패널의 스크롤/블러 영역에 잘리지 않도록 body 에 포털로 그린다.
- * 바깥을 누르거나 Esc, 스크롤하면 닫힌다.
+ * 상세 설정 수정, 구성도에 놓기/빼기, 삭제를 한다. 바깥을 누르거나 Esc, 스크롤하면 닫힌다.
  */
 export default function AgentCardMenu({
   anchor,
+  placed,
   onEdit,
+  onTogglePlaced,
   onDelete,
   onClose,
 }: {
   /** "…" 버튼의 화면 좌표 */
   anchor: DOMRect;
+  /** 구성도에 놓여 있는지(메뉴 문구가 바뀐다) */
+  placed: boolean;
   onEdit: () => void;
+  /** 구성도에서 빼기 / 구성도에 놓기 */
+  onTogglePlaced: () => void;
   onDelete: () => void;
   onClose: () => void;
 }) {
@@ -48,6 +54,9 @@ export default function AgentCardMenu({
     >
       <button type="button" role="menuitem" className={styles.item} onClick={onEdit}>
         상세 설정
+      </button>
+      <button type="button" role="menuitem" className={styles.item} onClick={onTogglePlaced}>
+        {placed ? '구성도에서 빼기' : '구성도에 놓기'}
       </button>
       <button type="button" role="menuitem" className={`${styles.item} ${styles.danger}`} onClick={onDelete}>
         삭제

@@ -92,6 +92,37 @@
   font-size: 11px;
 }
 
+/* 상태 배지: 미배치 / 작업 중 / 작업 대기중 / 작업 없음 */
+.status {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  color: var(--color-muted);
+  font-size: 10px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.statusUnplaced {
+  border-style: dashed;
+  color: var(--color-muted);
+}
+
+.statusWorking {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.statusWaiting {
+  border-color: var(--color-warning);
+  color: var(--color-warning);
+}
+
+.statusIdle {
+  color: var(--color-muted);
+}
+
 .warnDot {
   width: 7px;
   height: 7px;
@@ -115,8 +146,3 @@
   filter: none;
 }
 
-.tip {
-  margin: var(--spacing-md) 0 0;
-  color: var(--color-muted);
-  font-size: 12px;
-}

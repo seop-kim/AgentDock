@@ -1,5 +1,6 @@
 import { DragEvent, useEffect, useRef, useState } from 'react';
 import { unavailableReason } from '../../lib/agentAvailability';
+import { agentStatus } from '../../lib/agentStatus';
 import { isAgentDrag, readAgentDrag, startAgentDrag } from '../../lib/dnd';
 import { PlusIcon } from '../../components/icons';
 import { useMockStore } from '../../store/MockStore';
@@ -31,7 +32,7 @@ export default function AgentList({
   selectedAgentId: number | null;
   onSelectAgent: (agentId: number) => void;
 }) {
-  const { agents, groups, providers, removeGroupMember, deleteAgent } = useMockStore();
+  const { agents, groups, providers, tasks, removeGroupMember, deleteAgent, setAgentPlaced } = useMockStore();
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Agent | null>(null);
   const [dropActive, setDropActive] = useState(false);
@@ -101,6 +102,13 @@ export default function AgentList({
         {projectAgents.map((agent) => {
           const role = SEED_ROLES.find((r) => r.id === agent.roleId);
           const reason = unavailableReason(agent, providers, project);
+          const status = agentStatus(agent, tasks);
+          const statusClass = {
+            UNPLACED: styles.statusUnplaced,
+            WORKING: styles.statusWorking,
+            WAITING: styles.statusWaiting,
+            IDLE: styles.statusIdle,
+          }[status.kind];
           const selected = selectedAgentId === agent.id;
           return (
             <div
@@ -126,6 +134,9 @@ export default function AgentList({
                 <strong className={styles.name}>{agent.name}</strong>
                 <span className={styles.role}>{role?.name}</span>
               </div>
+              <span className={`${styles.status} ${statusClass}`} title={`상태: ${status.label}`}>
+                {status.label}
+              </span>
               {reason && <span className={styles.warnDot} aria-label={reason} />}
               <button
                 type="button"
@@ -145,18 +156,20 @@ export default function AgentList({
         })}
       </div>
 
-      {projectAgents.length > 0 && (
-        <p className={styles.tip}>카드를 누르면 선택되어 구성도가 그 에이전트로 이동하고, 다시 누르면 선택이 풀립니다. 그룹으로 끌어 놓으면 멤버가 됩니다.</p>
-      )}
-
       {hover && <AgentHoverCard agent={hover.agent} project={project} anchor={hover.rect} />}
       {menu && (
         <AgentCardMenu
           anchor={menu.rect}
+          placed={menu.agent.placed}
           onClose={() => setMenu(null)}
           onEdit={() => {
             setEditing(menu.agent);
             setMenu(null);
+          }}
+          onTogglePlaced={() => {
+            const target = menu.agent;
+            setMenu(null);
+            setAgentPlaced(target.id, !target.placed);
           }}
           onDelete={() => {
             const target = menu.agent;

@@ -66,11 +66,13 @@ export default function GroupCanvas({
   insetBottom: number;
   onNotice: (message: string) => void;
 }) {
-  const { agents, groups, providers, deleteGroup, removeGroupMember, setGroupLeader } = useMockStore();
+  const { agents, groups, providers, deleteGroup, removeGroupMember, setGroupLeader, setAgentPlaced } = useMockStore();
   const dropOnGroup = useGroupDrop(onNotice);
   const projectAgents = useMemo(() => agents.filter((a) => a.projectId === project.id), [agents, project.id]);
+  // 구성도에는 "놓인" 에이전트만 그린다. 빼 둔 에이전트는 에이전트 목록에만 있다.
+  const placedAgents = useMemo(() => projectAgents.filter((a) => a.placed), [projectAgents]);
   const projectGroups = useMemo(() => groups.filter((g) => g.projectId === project.id), [groups, project.id]);
-  const layout = useMemo(() => layoutCanvas(projectAgents, projectGroups), [projectAgents, projectGroups]);
+  const layout = useMemo(() => layoutCanvas(placedAgents, projectGroups), [placedAgents, projectGroups]);
 
   const [view, setView] = useState<View>({ x: 0, y: 0, scale: 1 });
   const [overKey, setOverKey] = useState<string | null>(null);
@@ -201,7 +203,7 @@ export default function GroupCanvas({
     deleteGroup(id);
   };
 
-  const isEmpty = projectAgents.length === 0 && projectGroups.length === 0;
+  const isEmpty = placedAgents.length === 0 && projectGroups.length === 0;
 
   return (
     <section className={styles.canvas}>
@@ -300,6 +302,15 @@ export default function GroupCanvas({
                     ×
                   </button>
                 )}
+                <button
+                  type="button"
+                  className={styles.canvasRemove}
+                  title="구성도에서 빼기 (에이전트 목록에만 남깁니다)"
+                  aria-label={`${agent.name} 구성도에서 빼기`}
+                  onClick={() => setAgentPlaced(agent.id, false)}
+                >
+                  빼기
+                </button>
               </div>
             );
           })}

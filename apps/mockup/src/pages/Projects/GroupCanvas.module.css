@@ -248,6 +248,22 @@
   color: var(--color-primary);
 }
 
+/* 구성도에서 빼기: 노드를 지우고 에이전트 목록에만 남긴다 */
+.canvasRemove {
+  flex-shrink: 0;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.canvasRemove:hover {
+  background: transparent;
+  color: var(--color-text);
+}
+
 .emptyState {
   position: absolute;
   inset: 0;

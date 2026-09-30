@@ -59,6 +59,8 @@ export interface Agent {
   persona: string;
   model: string;
   mode: string;
+  /** 구성도에 놓였는지. false 면 구성도에는 없고 에이전트 목록에만 있다. */
+  placed: boolean;
 }
 
 export interface AgentGroup {
@@ -77,6 +79,8 @@ export interface Task {
   projectId: number;
   title: string;
   status: TaskStatus;
+  /** 이 Task 를 받은 에이전트(그룹에 보내면 리더). 담당이 없으면 null. */
+  agentId: number | null;
 }
 
 /** 채팅 명령의 대상. 그룹에 보내면 그 그룹의 리더가 받는다. */
