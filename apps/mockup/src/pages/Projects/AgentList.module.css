@@ -3,8 +3,8 @@
   display: flex;
   flex-direction: column;
   flex: 1 1 0;
-  /* 손잡이(18) + 머리말 + 상자 위아래 여백: 접었을 때 이만큼만 남는다 */
-  min-height: 84px;
+  /* 손잡이(16) + 머리말 + 상자 위아래 여백: 접었을 때 이만큼만 남는다 */
+  min-height: 82px;
   overflow: hidden;
   transition: flex-grow 0.22s ease;
 }
@@ -13,18 +13,21 @@
   flex-grow: 0;
 }
 
-/* 상자 위 테두리에 붙는 접기/펴기 손잡이(가로 막대. 아래 테두리를 없애 상자와 이어 붙인다) */
+/* 상자 위 테두리에 붙는 접기/펴기 손잡이.
+   위쪽 두 모서리를 큰 타원으로 깎아 **가운데(화살표)가 가장 높은 산능선** 모양이 된다:
+   양 끝에서 0 으로 시작해 가운데로 갈수록 높아졌다가 지나면 다시 낮아진다. */
 .tab {
-  align-self: stretch;
+  align-self: center;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 18px;
+  width: 160px;
+  height: 16px;
   margin-bottom: -1px;
   padding: 0;
   border: 1px solid var(--glass-border);
   border-bottom: none;
-  border-radius: 10px 10px 0 0;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
   background: var(--glass-bg);
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
@@ -38,8 +41,8 @@
 }
 
 .tab svg {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
 }
 
 .list {
