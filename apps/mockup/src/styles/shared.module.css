@@ -1,0 +1,57 @@
+/* 여러 컴포넌트가 함께 쓰는 조각. 화면 고유 스타일은 각 컴포넌트의 .module.css 에 둔다. */
+
+.badge {
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border-strong);
+}
+
+.badgeOk {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.badgeError {
+  color: var(--color-error);
+  border-color: var(--color-error);
+}
+
+.muted {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.hint {
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+}
+
+.statusRow {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+}
+
+.panel {
+  margin-top: var(--spacing-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--spacing-md);
+}
+
+.dangerButton {
+  background: transparent;
+  color: var(--color-error);
+  border-color: var(--color-error);
+}
+
+.dangerButton:hover {
+  background: var(--color-error-bg);
+}

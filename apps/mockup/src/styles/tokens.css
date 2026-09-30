@@ -1,0 +1,78 @@
+/*
+ * 디자인 토큰. 색은 모두 여기서만 정의하고, 다른 CSS 는 var(--...) 만 쓴다.
+ * 테마 결정 순서: html[data-theme] 명시값 > 시스템 설정(prefers-color-scheme) > 라이트.
+ */
+
+:root {
+  color-scheme: light;
+
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-text: #1a1a1a;
+  --color-border: #dddddd;
+  --color-border-strong: #cccccc;
+  --color-muted: #666666;
+  --color-error: #c0392b;
+  --color-error-bg: #fdecea;
+  --color-primary: #1a1a1a;
+  --color-primary-hover: #333333;
+  --color-on-primary: #ffffff;
+  --color-code-bg: #f2f2f2;
+  --color-output-bg: #1e1e1e;
+  --color-output-text: #e6e6e6;
+  --color-output-link: #8ab4f8;
+  --color-overlay: rgba(0, 0, 0, 0.45);
+
+  --radius: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --color-bg: #121212;
+  --color-surface: #1b1b1b;
+  --color-text: #ececec;
+  --color-border: #2e2e2e;
+  --color-border-strong: #404040;
+  --color-muted: #9a9a9a;
+  --color-error: #ff7b6e;
+  --color-error-bg: #3a1f1c;
+  --color-primary: #ececec;
+  --color-primary-hover: #ffffff;
+  --color-on-primary: #121212;
+  --color-code-bg: #262626;
+  --color-output-bg: #0a0a0a;
+  --color-output-text: #dcdcdc;
+  --color-output-link: #8ab4f8;
+  --color-overlay: rgba(0, 0, 0, 0.65);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --color-bg: #121212;
+    --color-surface: #1b1b1b;
+    --color-text: #ececec;
+    --color-border: #2e2e2e;
+    --color-border-strong: #404040;
+    --color-muted: #9a9a9a;
+    --color-error: #ff7b6e;
+    --color-error-bg: #3a1f1c;
+    --color-primary: #ececec;
+    --color-primary-hover: #ffffff;
+    --color-on-primary: #121212;
+    --color-code-bg: #262626;
+    --color-output-bg: #0a0a0a;
+    --color-output-text: #dcdcdc;
+    --color-output-link: #8ab4f8;
+    --color-overlay: rgba(0, 0, 0, 0.65);
+  }
+}
