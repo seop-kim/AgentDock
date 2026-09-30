@@ -1,4 +1,5 @@
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
+import { readStorage, STORAGE_KEYS, writeStorage } from '../lib/storage';
 
 export type ThemeChoice = 'system' | 'light' | 'dark';
 
@@ -9,9 +10,17 @@ interface ThemeStore {
 
 const ThemeContext = createContext<ThemeStore | null>(null);
 
-/** 테마 선택을 앱 전체에 적용한다. 목업 원칙에 따라 저장하지 않는다(새로고침하면 시스템 설정). */
+const isThemeChoice = (value: string | null): value is ThemeChoice =>
+  value === 'system' || value === 'light' || value === 'dark';
+
+function readStoredTheme(): ThemeChoice {
+  const stored = readStorage(STORAGE_KEYS.theme);
+  return isThemeChoice(stored) ? stored : 'system';
+}
+
+/** 테마 선택을 앱 전체에 적용하고 localStorage 에 저장한다. */
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<ThemeChoice>('system');
+  const [theme, setThemeState] = useState<ThemeChoice>(readStoredTheme);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -19,7 +28,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     else root.setAttribute('data-theme', theme);
   }, [theme]);
 
-  const store = useMemo(() => ({ theme, setTheme }), [theme]);
+  const store = useMemo<ThemeStore>(
+    () => ({
+      theme,
+      setTheme: (next) => {
+        setThemeState(next);
+        writeStorage(STORAGE_KEYS.theme, next);
+      },
+    }),
+    [theme],
+  );
 
   return <ThemeContext.Provider value={store}>{children}</ThemeContext.Provider>;
 }

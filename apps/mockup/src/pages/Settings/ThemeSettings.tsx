@@ -14,7 +14,7 @@ export default function ThemeSettings() {
   return (
     <div>
       <h1>테마</h1>
-      <p className={shared.hint}>목업에서는 선택이 저장되지 않아 새로고침하면 시스템 설정으로 돌아갑니다.</p>
+      <p className={shared.hint}>선택한 테마는 이 브라우저에 저장되어 다시 열어도 유지됩니다.</p>
       <div className={styles.themeOptions} role="radiogroup" aria-label="테마">
         {OPTIONS.map(({ value, label, description }) => (
           <label

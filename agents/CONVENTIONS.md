@@ -55,7 +55,7 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
 구현을 멈추고 목업을 먼저 만드는 중이다(`mockup` 브랜치). 목업이 확정되면 그것이 이후 개발의 기준이 된다. 설계는 `docs/superpowers/specs/2026-09-30-mockup-prototype-design.md`, 새로 쓰는 기획서/설계서는 `docs/planning/` 에 둔다.
 
 - 독립 Vite + React + TypeScript 앱(포트 **3040**, `npm run dev:mockup`). `apps/frontend`/`apps/backend` 는 건드리지 않는다.
-- 백엔드/DB 없음. 테스트 데이터는 `src/store/seed.ts`, 상태는 `src/store/MockStore.tsx`(메모리, 새로고침하면 초기화). `localStorage` 도 쓰지 않는다.
+- 백엔드/DB 없음. 테스트 데이터는 `src/store/seed.ts`, 상태는 `src/store/MockStore.tsx`(메모리, 새로고침하면 초기화). `localStorage` 는 **UI 설정만** 저장한다: 테마 선택, 사이드바 펼침 여부(키는 `src/lib/storage.ts` 의 `STORAGE_KEYS`, 접근은 그 파일의 `readStorage`/`writeStorage` 로만 한다. 테마는 첫 화면 깜빡임 방지용 초기 적용 스크립트가 `index.html` 에 있으며 키를 같게 유지한다). 그 밖의 데이터는 저장하지 않는다.
 - **CSS 는 전부 파일로 분리**한다(인라인 `style` 금지). 색은 `src/styles/tokens.css` 의 토큰(`var(--color-...)`)만 쓴다. 화면 고유 스타일은 `*.module.css`, 공용 조각은 `styles/shared.module.css`.
 - **다크모드 지원**: `tokens.css` 가 라이트/다크 값을 정의한다. `html[data-theme]` 명시값 > 시스템 설정 > 라이트. 새 색이 필요하면 토큰을 라이트·다크 양쪽(그리고 `prefers-color-scheme` 블록)에 함께 추가한다.
 - **메뉴는 왼쪽 사이드바**(`components/Sidebar.tsx`)에 모은다. 기본은 아이콘만 보이고, 위의 메뉴 버튼을 누르면 이름까지 펼쳐지며 다시 누르면 접힌다. 메뉴를 추가하려면 `Sidebar.tsx` 의 `MENUS` 에 항목을, `components/icons.tsx` 에 아이콘을 추가한다.

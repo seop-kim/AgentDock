@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
     <title>AgentDock Mockup</title>
+    <!-- 저장된 테마를 첫 화면 그리기 전에 적용해 깜빡임을 막는다(키는 store/ThemeContext.tsx 와 동일). -->
+    <script>
+      try {
+        var theme = localStorage.getItem('agentdock-mockup-theme');
+        if (theme === 'light' || theme === 'dark') document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>
