@@ -262,7 +262,9 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
           }
         });
 
-        projectTasks.forEach((task: ApiTask) => {
+        // 채팅은 도착 순서대로 쌓는다(명령 하나 = 내 말풍선 + 그 응답).
+        // 예전에는 메시지를 id 로 정렬했는데, 응답 id 를 크게 잡아 두는 바람에 내 말풍선이 전부 위로 몰렸다.
+        for (const task of projectTasks) {
           taskList.push({
             id: task.id,
             projectId: project.id,
@@ -280,9 +282,6 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
             rootExecutionId: task.latestExecutionId,
             attachments: [],
           });
-        });
-
-        for (const task of projectTasks) {
           if (task.latestExecutionId === null) continue;
           try {
             const tree: ExecutionTree = await api.getExecutionTree(task.latestExecutionId);
@@ -370,7 +369,8 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
       setGroups(groupList);
       setTasks(taskList);
       setExecutions(executionList);
-      setChats(chatList.sort((left, right) => left.id - right.id));
+      // 정렬하지 않는다: 위에서 만든 순서(도착 순서)가 곧 화면 순서다.
+      setChats(chatList);
       setRoles(roleList.map((role) => ({ id: role.id, name: role.name })));
       setPermissionProfiles(profileList.map((profile) => ({ id: profile.id, name: profile.name })));
       setNodePositions(positions);
