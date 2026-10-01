@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Agent, AgentGroup, Project, Task, api } from '../lib/api';
+import { Agent, AgentGroup, Project, Task, api } from '../../lib/api';
 import styles from './Tasks.module.css';
 
 export default function Tasks() {

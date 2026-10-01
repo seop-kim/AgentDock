@@ -1,16 +1,16 @@
 import { Navigate, Outlet, Route, Routes, useMatch } from 'react-router-dom';
 import styles from './layout.module.css';
 import Sidebar from './components/Sidebar';
-import Dashboard from './pages/Dashboard';
-import Projects from './pages/Projects';
-import ProjectDetail from './pages/ProjectDetail';
-import Groups from './pages/Groups';
-import Tasks from './pages/Tasks';
-import Providers from './pages/Providers';
-import Workspaces from './pages/Workspaces/Workspaces';
-import Agents from './pages/Agents';
-import ExecutionDetail from './pages/ExecutionDetail';
-import TerminalWindow from './pages/TerminalWindow';
+import Dashboard from './features/dashboard/Dashboard';
+import Projects from './features/project/Projects';
+import ProjectDetail from './features/project/ProjectDetail';
+import Groups from './features/task/Groups';
+import Tasks from './features/task/Tasks';
+import Providers from './features/runtime/Providers';
+import Workspaces from './features/workspace/Workspaces';
+import Agents from './features/agent/Agents';
+import ExecutionDetail from './features/execution/ExecutionDetail';
+import TerminalWindow from './features/execution/TerminalWindow';
 
 function Layout() {
   // 프로젝트 상세는 화면 전체를 쓰므로 여백·최대폭 제한 없이 그린다.

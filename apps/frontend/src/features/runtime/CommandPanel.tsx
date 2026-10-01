@@ -1,5 +1,5 @@
 import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
-import { api } from '../lib/api';
+import { api } from '../../lib/api';
 import styles from './Providers.module.css';
 
 export type CommandKind = 'login' | 'install';

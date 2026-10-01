@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react';
-import { api } from '../lib/api';
+import { api } from '../../lib/api';
 import styles from './AddProviderModal.module.css';
 
 const DEFAULT_NAMES: Record<string, string> = {

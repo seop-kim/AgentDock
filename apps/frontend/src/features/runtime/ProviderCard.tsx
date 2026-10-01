@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AiProvider, api } from '../lib/api';
+import { AiProvider, api } from '../../lib/api';
 import CliPanel from './CliPanel';
 import styles from './Providers.module.css';
 

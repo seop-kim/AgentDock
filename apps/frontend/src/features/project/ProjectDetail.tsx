@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Agent, AgentGroup, Execution, Project, Task, api } from '../lib/api';
+import { Agent, AgentGroup, Execution, Project, Task, api } from '../../lib/api';
 import {
   formatCost,
   formatDuration,
@@ -8,9 +8,9 @@ import {
   statusClass,
   statusLabel,
   summaryOf,
-} from '../lib/executions';
-import ExecutionTreeModal from './ExecutionTreeModal';
-import executionStyles from '../styles/execution.module.css';
+} from '../../lib/executions';
+import ExecutionTreeModal from '../execution/ExecutionTreeModal';
+import executionStyles from '../../styles/execution.module.css';
 import styles from './ProjectDetail.module.css';
 
 type ChatTarget = { kind: 'master' } | { kind: 'group'; id: number } | { kind: 'agent'; id: number };

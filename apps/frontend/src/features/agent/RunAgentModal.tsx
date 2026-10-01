@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { Project, api } from '../lib/api';
+import { Project, api } from '../../lib/api';
 import styles from './RunAgentModal.module.css';
 
 interface RunAgentModalProps {

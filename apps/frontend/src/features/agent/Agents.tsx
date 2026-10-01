@@ -1,8 +1,8 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Agent, AgentRole, AiProvider, PermissionProfile, Project, api } from '../lib/api';
+import { Agent, AgentRole, AiProvider, PermissionProfile, Project, api } from '../../lib/api';
 import AgentProviderAssign from './AgentProviderAssign';
-import CliPanel from './CliPanel';
+import CliPanel from '../runtime/CliPanel';
 import RunAgentModal from './RunAgentModal';
 import styles from './Agents.module.css';
 

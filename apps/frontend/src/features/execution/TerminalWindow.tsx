@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Agent, Execution, api } from '../lib/api';
-import { formatCost, formatDuration, statusClass, statusLabel } from '../lib/executions';
-import terminalStyles from '../styles/terminal.module.css';
+import { Agent, Execution, api } from '../../lib/api';
+import { formatCost, formatDuration, statusClass, statusLabel } from '../../lib/executions';
+import terminalStyles from '../../styles/terminal.module.css';
 import styles from './TerminalWindow.module.css';
 
 interface Line {

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Agent, AiProvider, api } from '../lib/api';
+import { Agent, AiProvider, api } from '../../lib/api';
 import styles from './AgentProviderAssign.module.css';
 
 interface AgentProviderAssignProps {

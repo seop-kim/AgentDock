@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Project, Workspace, api } from '../lib/api';
-import WorkspacePicker from './Workspaces/WorkspacePicker';
+import { Project, Workspace, api } from '../../lib/api';
+import WorkspacePicker from '../workspace/WorkspacePicker';
 
 export default function Projects() {
   const [projects, setProjects] = useState<Project[]>([]);

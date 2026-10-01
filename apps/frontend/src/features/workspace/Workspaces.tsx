@@ -1,8 +1,8 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Workspace, WorkspaceRuntime, api } from '../../lib/api';
-import CliPanel from '../CliPanel';
+import CliPanel from '../runtime/CliPanel';
 import WorkspacePicker from './WorkspacePicker';
-import styles from './page.module.css';
+import styles from './Workspaces.module.css';
 
 interface CliTarget {
   workspaceId: number;

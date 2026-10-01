@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { Agent, AgentGroup, Project, api } from '../lib/api';
+import { Agent, AgentGroup, Project, api } from '../../lib/api';
 import styles from './Groups.module.css';
 
 export default function Groups() {

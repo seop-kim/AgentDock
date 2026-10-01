@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CliStatus, WorkspaceRuntime, api } from '../lib/api';
+import { CliStatus, WorkspaceRuntime, api } from '../../lib/api';
 import CommandPanel, { CommandKind } from './CommandPanel';
 import styles from './Providers.module.css';
 

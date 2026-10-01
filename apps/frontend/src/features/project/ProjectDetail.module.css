@@ -17,7 +17,7 @@
 }
 
 .projectCard {
-  composes: glass from '../styles/glass.module.css';
+  composes: glass from '../../styles/glass.module.css';
   border-radius: var(--radius-lg);
   padding: var(--spacing-md);
   display: flex;
@@ -52,7 +52,7 @@
 }
 
 .panel {
-  composes: glass from '../styles/glass.module.css';
+  composes: glass from '../../styles/glass.module.css';
   border-radius: var(--radius-lg);
   padding: var(--spacing-md);
   display: flex;
@@ -118,7 +118,7 @@
 
 /* 오른쪽: 채팅(명령) 패널 */
 .chat {
-  composes: glass from '../styles/glass.module.css';
+  composes: glass from '../../styles/glass.module.css';
   flex: 1;
   min-width: 0;
   border-radius: var(--radius-lg);

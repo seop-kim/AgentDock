@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AiProvider, api } from '../lib/api';
+import { AiProvider, api } from '../../lib/api';
 import AddProviderModal from './AddProviderModal';
 import ProviderCard from './ProviderCard';
 import styles from './Providers.module.css';

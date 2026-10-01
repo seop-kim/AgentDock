@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { api, ExecutionTree } from '../lib/api';
+import { api, ExecutionTree } from '../../lib/api';
 import {
   changedFilesOf,
   formatCost,
@@ -11,9 +11,9 @@ import {
   summaryOf,
   treeIsRunning,
   treeTotals,
-} from '../lib/executions';
-import executionStyles from '../styles/execution.module.css';
-import modalStyles from '../styles/modal.module.css';
+} from '../../lib/executions';
+import executionStyles from '../../styles/execution.module.css';
+import modalStyles from '../../styles/modal.module.css';
 
 interface Props {
   executionId: number;
