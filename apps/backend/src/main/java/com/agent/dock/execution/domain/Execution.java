@@ -67,6 +67,27 @@ public class Execution {
     @Column(name = "worktree_branch", length = 200)
     private String worktreeBranch;
 
+    /**
+     * 트리(루트 실행)가 끝날 때 그 워크트리를 트리 브랜치에 커밋한 짧은 sha. 커밋할 것이 없었으면 비어 있다.
+     * 트리 결과는 루트의 것이므로 **루트 실행에만** 채운다(자식은 비어 있다).
+     */
+    @Column(name = "result_commit", length = 64)
+    private String resultCommit;
+
+    /** 그 커밋을 메인 저장소로 되돌린 결과(MERGED/MANUAL/NONE). 되돌리지 않았으면 비어 있다. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "merge_status", length = 20)
+    private MergeStatus mergeStatus;
+
+    /** 자동 병합하지 못한 사유(MANUAL 이면 채워진다). 수동 병합 대상 브랜치는 로그에 남는다. */
+    @Column(name = "merge_detail", columnDefinition = "text")
+    private String mergeDetail;
+
+    /** 트리가 바꾼 파일 목록(git `diff --name-status <base>...HEAD`): `{status, path}` 배열. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "changed_files", columnDefinition = "jsonb")
+    private List<ChangedFile> changedFiles;
+
     /** 판단 실행이 마지막으로 낸 계약. 위임한 실행은 DELEGATE 로 남고(완료로 덮지 않는다) 위임 대상이 함께 남는다. */
     @Enumerated(EnumType.STRING)
     @Column(length = 20)

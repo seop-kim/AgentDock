@@ -151,6 +151,14 @@ export interface Execution {
   worktreePath: string | null;
   /** worktree 의 브랜치 이름(`agentdock/exec-<루트실행id>`). */
   worktreeBranch: string | null;
+  /** 트리 브랜치에 남긴 커밋의 짧은 sha(루트에만). 커밋할 것이 없으면 null. */
+  resultCommit: string | null;
+  /** 트리 결과를 메인 저장소로 되돌린 결과(루트에만): MERGED / MANUAL / NONE. */
+  mergeStatus: 'MERGED' | 'MANUAL' | 'NONE' | null;
+  /** 자동 병합하지 못한 사유(MANUAL 일 때). */
+  mergeDetail: string | null;
+  /** 트리가 바꾼 파일 목록(`{status, path}`). 커밋·병합하지 못했으면 빈 배열. */
+  changedFiles: { status: string; path: string }[] | null;
   startedAt: string | null;
   finishedAt: string | null;
 }

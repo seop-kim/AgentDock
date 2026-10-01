@@ -1,28 +1,34 @@
 package com.agent.dock.execution.service;
 
+import com.agent.dock.execution.domain.ChangedFile;
+import com.agent.dock.execution.domain.MergeStatus;
 import com.agent.dock.process.service.ProcessService;
 import java.io.File;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
- * 실행 트리를 git worktree 로 격리한다.
+ * 실행 트리를 git worktree 로 격리하고, 트리가 끝나면 그 결과를 메인 저장소로 되돌린다.
  *
  * <p>명령 하나(루트 실행)마다 워크스페이스 저장소의 worktree 를 하나 만들어, 그 트리 전체(루트 + 자식)가 그 안에서 돈다.
  * 자식의 편집을 부모가 봐야 하므로 자식은 부모와 **같은** worktree 를 쓰고, 서로 다른 명령(다른 루트)만 격리된다.
  * worktree 는 저장소 **밖** — 워크스페이스 폴더의 형제 폴더 `<폴더>-wt/<루트실행id>` — 에 두어 저장소의
  * `git status` 와 첨부 파일 목록을 더럽히지 않는다. 브랜치는 `agentdock/exec-<루트실행id>` 다.
  *
- * <p>워크트리·브랜치의 **자동 삭제는 없다**(정리는 `DELETE /executions/{id}/worktree` 로 사람이 판단해 부른다).
+ * <p>트리가 끝나면 {@link #collect} 가 그 worktree 의 변경을 **커밋 하나**로 남기고, 메인 저장소가 깨끗하면
+ * `git merge --no-ff` 로 되돌린다. 더럽거나 충돌하면 `git merge --abort` 로 절대 반쯤 병합된 상태를 남기지 않고
+ * 사유와 함께 수동 병합 대상으로 넘긴다. 워크트리·브랜치의 **자동 삭제는 없다**(정리는 `DELETE /executions/{id}/worktree`).
  *
  * <p>git 은 {@link ProcessService} 로 실행한다(셸 미경유 — {@code ProcessService} 가 {@code Executables} 로 실제 실행 파일을 찾는다).
  * 실패는 실행을 막지 않는다 — 만들지 못하면 비어 있는 결과와 사유를 돌려주고 호출부가 워크스페이스에서 계속 돌린다.
@@ -39,6 +45,12 @@ public class WorktreeService {
 
     private final ProcessService processService;
 
+    /**
+     * 병합은 **한 번에 하나만** 한다(공정 세마포어). 같은 메인 저장소에 여러 트리가 동시에 끝날 수 있어,
+     * `git merge` 가 겹치면 안 된다. 커밋은 각자 자기 worktree 에서 하므로 직렬화하지 않는다.
+     */
+    private final Semaphore mergeLock = new Semaphore(1, true);
+
     /** 만들어진 worktree. 실패하면 path/branch 가 비고 reason 에 사유가 담긴다(실행은 워크스페이스에서 계속된다). */
     public record Worktree(String path, String branch, String reason) {
         public boolean created() {
@@ -48,6 +60,23 @@ public class WorktreeService {
 
     /** 정리 결과. removed 가 false 면 detail 에 사유가 담긴다. */
     public record Removal(boolean removed, String detail) {
+    }
+
+    /**
+     * 트리 끝에서 되돌린 결과.
+     *
+     * @param status           MERGED(자동 병합) / MANUAL(사람이 병합해야 함) / NONE(커밋할 변경 없음)
+     * @param commit           트리 브랜치에 남긴 커밋의 짧은 sha. 커밋이 없으면 null
+     * @param detail           자동 병합하지 못한 사유(MANUAL 이면 채워진다)
+     * @param repositoryBranch 병합한 메인 저장소의 브랜치 이름(MERGED 일 때만 채워진다)
+     * @param changedFiles     트리가 바꾼 파일 목록(`git diff --name-status <base>...HEAD`)
+     */
+    public record TreeResult(MergeStatus status, String commit, String detail, String repositoryBranch,
+                             List<ChangedFile> changedFiles) {
+
+        static TreeResult none(String detail) {
+            return new TreeResult(MergeStatus.NONE, null, detail, null, List.of());
+        }
     }
 
     /**
@@ -114,6 +143,141 @@ public class WorktreeService {
             log.warn("worktree 삭제 실패: {}", ex.getMessage());
             return new Removal(false, String.valueOf(ex.getMessage()));
         }
+    }
+
+    /**
+     * 트리 끝에서 그 워크트리의 변경을 트리 브랜치에 **커밋 하나**로 남기고, 메인 저장소로 되돌린다.
+     *
+     * <p>커밋 메시지는 루트 실행의 최종 요약이다. body 에는 실행 id·참여 에이전트·변경 파일 수가 들어가고,
+     * {@code Co-Authored-By} 트레일러는 붙이지 않는다(저장소 규칙). 커밋할 변경이 없으면 빈 커밋을 만들지 않고 NONE 이다.
+     *
+     * <p>되돌리기는 메인 저장소 작업 트리가 깨끗할 때만 {@code git merge --no-ff} 로 한다. 더럽거나 충돌하면
+     * {@code git merge --abort} 로 되돌리고 사유와 함께 MANUAL 이다(반쯤 병합된 상태를 남기지 않는다).
+     * 병합은 {@link #mergeLock} 으로 전역 직렬화한다(여러 트리가 동시에 끝날 수 있다).
+     *
+     * @param repositoryPath 메인 저장소 경로(워크스페이스 루트)
+     * @param worktreePath   이 트리가 돈 worktree 경로
+     * @param branch         트리 브랜치(`agentdock/exec-<루트id>`)
+     * @param message        커밋 제목(루트 실행의 최종 요약)
+     * @param body           커밋 본문 앞부분(실행 id·참여 에이전트). 변경 파일 수는 여기서 덧붙인다
+     */
+    public TreeResult collect(String repositoryPath, String worktreePath, String branch, String message, String body) {
+        if (worktreePath == null || worktreePath.isBlank()) {
+            return TreeResult.none("워크트리가 없어 되돌릴 결과가 없습니다");
+        }
+        try {
+            GitResult status = git(List.of("status", "--porcelain"), worktreePath);
+            if (status.exitCode() != 0) {
+                return TreeResult.none(status.text());
+            }
+            if (status.text().isBlank()) {
+                return TreeResult.none("커밋할 변경이 없습니다");
+            }
+            int pending = countLines(status.text());
+
+            GitResult base = git(List.of("rev-parse", "HEAD"), worktreePath);
+            if (base.exitCode() != 0) {
+                return TreeResult.none(base.text());
+            }
+            if (git(List.of("add", "-A"), worktreePath).exitCode() != 0) {
+                return TreeResult.none("변경을 스테이징하지 못했습니다");
+            }
+            GitResult commit = git(List.of("commit", "-m", message, "-m", body + "\n변경 파일 " + pending + "개"),
+                    worktreePath);
+            if (commit.exitCode() != 0) {
+                return new TreeResult(MergeStatus.MANUAL, null, "커밋하지 못했습니다: " + commit.text(), null, List.of());
+            }
+            String sha = shortSha(worktreePath);
+            List<ChangedFile> files = changedFiles(worktreePath, base.text().strip());
+            return merge(repositoryPath, branch, sha, files);
+        } catch (Exception ex) {
+            log.warn("트리 결과 수집 실패: {}", ex.getMessage());
+            return TreeResult.none(String.valueOf(ex.getMessage()));
+        }
+    }
+
+    /** 메인 저장소로 되돌린다. 병합은 전역으로 직렬화한다(커밋은 각자 자기 worktree 에서 이미 끝났다). */
+    private TreeResult merge(String repositoryPath, String branch, String commit, List<ChangedFile> files)
+            throws Exception {
+        if (repositoryPath == null || repositoryPath.isBlank()) {
+            return new TreeResult(MergeStatus.MANUAL, commit, "메인 저장소 경로를 찾지 못했습니다", null, files);
+        }
+        mergeLock.acquire();
+        try {
+            GitResult status = git(List.of("status", "--porcelain"), repositoryPath);
+            if (status.exitCode() != 0) {
+                return new TreeResult(MergeStatus.MANUAL, commit,
+                        "메인 저장소 상태를 확인하지 못했습니다: " + status.text(), null, files);
+            }
+            if (!status.text().isBlank()) {
+                return new TreeResult(MergeStatus.MANUAL, commit,
+                        "메인 저장소에 커밋되지 않은 변경이 있습니다: " + firstLines(status.text(), 3), null, files);
+            }
+            String repositoryBranch = branchOf(repositoryPath);
+            GitResult merged = git(List.of("merge", "--no-ff", branch, "-m", "Merge branch '" + branch + "'"),
+                    repositoryPath);
+            if (merged.exitCode() == 0) {
+                return new TreeResult(MergeStatus.MERGED, commit, null, repositoryBranch, files);
+            }
+            // 충돌/실패: 절대 반쯤 병합된 상태로 두지 않는다.
+            String conflicts = firstLines(
+                    git(List.of("diff", "--name-only", "--diff-filter=U"), repositoryPath).text(), 5);
+            git(List.of("merge", "--abort"), repositoryPath);
+            String reason = conflicts.isBlank() ? merged.text() : conflicts;
+            return new TreeResult(MergeStatus.MANUAL, commit, "자동 병합에 실패했습니다: " + reason, null, files);
+        } finally {
+            mergeLock.release();
+        }
+    }
+
+    /** `git diff --name-status <base>...HEAD` 한 줄씩 파싱한다. 이름 바꾸기(R)/복사(C)는 마지막 필드가 새 경로다. */
+    private List<ChangedFile> changedFiles(String worktreePath, String base) throws Exception {
+        GitResult diff = git(List.of("diff", "--name-status", base + "...HEAD"), worktreePath);
+        if (diff.exitCode() != 0) {
+            return List.of();
+        }
+        List<ChangedFile> files = new ArrayList<>();
+        for (String line : diff.text().split("\\R")) {
+            String[] parts = line.split("\\t");
+            if (parts.length < 2) {
+                continue;
+            }
+            files.add(new ChangedFile(parts[0].strip(), parts[parts.length - 1].strip()));
+        }
+        return files;
+    }
+
+    private String shortSha(String cwd) throws Exception {
+        GitResult result = git(List.of("rev-parse", "--short", "HEAD"), cwd);
+        return result.exitCode() == 0 ? result.text().strip() : null;
+    }
+
+    private String branchOf(String cwd) throws Exception {
+        GitResult result = git(List.of("rev-parse", "--abbrev-ref", "HEAD"), cwd);
+        return result.exitCode() == 0 ? result.text().strip() : null;
+    }
+
+    private static int countLines(String text) {
+        int count = 0;
+        for (String line : text.split("\\R")) {
+            if (!line.isBlank()) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private static String firstLines(String text, int max) {
+        List<String> lines = new ArrayList<>();
+        for (String line : text.split("\\R")) {
+            if (!line.isBlank()) {
+                lines.add(line.strip());
+            }
+            if (lines.size() >= max) {
+                break;
+            }
+        }
+        return String.join(", ", lines);
     }
 
     /** 폴더가 git 저장소(작업 트리)인지 확인한다. git 이 없거나 실패하면 false. */

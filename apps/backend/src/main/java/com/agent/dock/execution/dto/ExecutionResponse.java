@@ -1,10 +1,13 @@
 package com.agent.dock.execution.dto;
 
+import com.agent.dock.execution.domain.ChangedFile;
 import com.agent.dock.execution.domain.Execution;
 import com.agent.dock.execution.domain.ExecutionDecision;
 import com.agent.dock.execution.domain.ExecutionStatus;
+import com.agent.dock.execution.domain.MergeStatus;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 
 public record ExecutionResponse(
         Long id, Long agentId, Long workspaceId, Long taskId, String prompt, ExecutionStatus status,
@@ -12,6 +15,7 @@ public record ExecutionResponse(
         String resultText, ExecutionDecision decision, Long delegatedTargetAgentId,
         Long parentExecutionId, Long rootExecutionId,
         String worktreePath, String worktreeBranch,
+        String resultCommit, MergeStatus mergeStatus, String mergeDetail, List<ChangedFile> changedFiles,
         Integer inputTokens, Integer outputTokens, Integer cacheReadTokens, Integer cacheCreationTokens,
         BigDecimal costUsd, Long durationMs, Integer numTurns, String sessionId,
         Instant createdAt, Instant updatedAt
@@ -29,6 +33,8 @@ public record ExecutionResponse(
                 e.getStartedAt(), e.getFinishedAt(), e.getExitCode(), e.getErrorMessage(),
                 e.getResultText(), e.getDecision(), delegatedTargetAgentId, parentExecutionId, e.getRootExecutionId(),
                 e.getWorktreePath(), e.getWorktreeBranch(),
+                e.getResultCommit(), e.getMergeStatus(), e.getMergeDetail(),
+                e.getChangedFiles() == null ? List.of() : e.getChangedFiles(),
                 e.getInputTokens(), e.getOutputTokens(), e.getCacheReadTokens(), e.getCacheCreationTokens(),
                 e.getCostUsd(), e.getDurationMs(), e.getNumTurns(), e.getSessionId(),
                 e.getCreatedAt(), e.getUpdatedAt());

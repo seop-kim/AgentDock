@@ -51,6 +51,11 @@ export default function TerminalWindow() {
             워크트리 {execution.worktreeBranch}
           </span>
         )}
+        {execution?.resultCommit && (
+          <span className={styles.state} title={execution.mergeDetail ?? undefined}>
+            커밋 {execution.resultCommit}
+          </span>
+        )}
       </header>
       <p className={styles.cwd}>{runDir ?? '워크스페이스가 없습니다'}</p>
       <TerminalView executionId={execution?.id ?? null} live={state === 'live'} className={styles.terminal} />

@@ -4,9 +4,11 @@ import com.agent.dock.agent.domain.Agent;
 import com.agent.dock.agent.repository.AgentRepository;
 import com.agent.dock.common.exception.ConflictException;
 import com.agent.dock.common.exception.NotFoundException;
+import com.agent.dock.execution.domain.ChangedFile;
 import com.agent.dock.execution.domain.Execution;
 import com.agent.dock.execution.domain.ExecutionDecision;
 import com.agent.dock.execution.domain.ExecutionStatus;
+import com.agent.dock.execution.domain.MergeStatus;
 import com.agent.dock.execution.dto.ExecutionFinishedEvent;
 import com.agent.dock.execution.dto.ExecutionLogResponse;
 import com.agent.dock.execution.dto.ExecutionResponse;
@@ -106,6 +108,20 @@ public class ExecutionService {
         update(executionId, execution -> {
             execution.setWorktreePath(path);
             execution.setWorktreeBranch(branch);
+        });
+    }
+
+    /**
+     * 트리 끝에서 되돌린 결과를 **루트 실행에** 기록한다(트리 결과는 루트의 것이라 자식에는 남기지 않는다).
+     * 커밋 sha·병합 상태·사유·변경 파일 목록을 화면(응답)에 그대로 싣는다.
+     */
+    public void recordTreeResult(Long executionId, MergeStatus mergeStatus, String commit, String detail,
+                                 List<ChangedFile> changedFiles) {
+        update(executionId, execution -> {
+            execution.setMergeStatus(mergeStatus);
+            execution.setResultCommit(commit);
+            execution.setMergeDetail(detail);
+            execution.setChangedFiles(changedFiles == null ? List.of() : changedFiles);
         });
     }
 

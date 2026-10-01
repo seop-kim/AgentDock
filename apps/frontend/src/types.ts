@@ -148,6 +148,23 @@ export interface Execution {
   worktreePath: string | null;
   /** worktree 의 브랜치 이름(`agentdock/exec-<루트실행id>`). 격리하지 못하면 null. */
   worktreeBranch: string | null;
+  /** 트리 브랜치에 남긴 커밋의 짧은 sha. 커밋할 것이 없었으면 null(트리 루트에만 채워진다). */
+  resultCommit: string | null;
+  /** 트리 결과를 메인 저장소로 되돌린 결과. 되돌릴 것이 없으면 null(트리 루트에만 채워진다). */
+  mergeStatus: MergeStatus | null;
+  /** 자동 병합하지 못한 사유(MANUAL 일 때). */
+  mergeDetail: string | null;
+  /** 트리가 바꾼 파일 목록(git `--name-status`). 커밋·병합하지 못했으면 빈 배열. */
+  changedFiles: ChangedFile[];
+}
+
+/** 트리 결과를 메인 저장소로 되돌린 결과. */
+export type MergeStatus = 'MERGED' | 'MANUAL' | 'NONE';
+
+/** 트리가 바꾼 파일 하나. status 는 git 변경 코드(A 추가 / M 수정 / D 삭제 …). */
+export interface ChangedFile {
+  status: string;
+  path: string;
 }
 
 /** 명령에 첨부한 파일. 경로는 그 워크스페이스 폴더 기준의 상대 경로다. */

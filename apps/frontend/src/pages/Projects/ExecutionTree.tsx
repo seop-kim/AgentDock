@@ -1,5 +1,7 @@
 import { createPortal } from 'react-dom';
 import {
+  MERGE_LABEL,
+  MERGE_TONE,
   STATUS_LABEL,
   STATUS_TONE,
   formatCost,
@@ -17,6 +19,24 @@ import type { Execution, ExecutionStatus } from '../../types';
 /** 실행 상태 배지. 채팅 카드와 실행 트리 창이 함께 쓴다. */
 export function ExecutionBadge({ status }: { status: ExecutionStatus }) {
   return <span className={`${exec.badge} ${exec[STATUS_TONE[status]]}`}>{STATUS_LABEL[status]}</span>;
+}
+
+/**
+ * 트리 결과 한 줄: 병합 상태 배지(병합됨/수동 병합 필요) · 커밋 sha · 변경 파일(`A path` …).
+ * 트리 결과는 루트 실행에만 채워지므로 자식(mergeStatus null)에는 아무것도 그리지 않는다.
+ */
+function TreeResultLine({ execution }: { execution: Execution }) {
+  const status = execution.mergeStatus;
+  if (status !== 'MERGED' && status !== 'MANUAL') return null;
+  return (
+    <p className={exec.rowFiles} title={execution.mergeDetail ?? undefined}>
+      <span className={`${exec.badge} ${exec[MERGE_TONE[status]]}`}>{MERGE_LABEL[status]}</span>
+      {execution.resultCommit && <> · 커밋 {execution.resultCommit}</>}
+      {execution.changedFiles.length > 0 && (
+        <> · {execution.changedFiles.map((file) => `${file.status} ${file.path}`).join(', ')}</>
+      )}
+    </p>
+  );
 }
 
 /** 아직 계약을 내지 않은 실행을 "직접 처리"로 잘못 보여주지 않도록 따로 표시한다. */
@@ -72,6 +92,7 @@ export function ExecutionSummaryCard({
           </li>
         ))}
       </ul>
+      <TreeResultLine execution={rows[0].execution} />
       <span className={exec.note}>지표는 CLI 가 돌려준 실제 값입니다.</span>
     </div>
   );
@@ -162,6 +183,7 @@ export default function ExecutionTreeModal({
                   )}
                 </p>
               )}
+              {execution.parentExecutionId === null && <TreeResultLine execution={execution} />}
               {execution.handoff && <p className={exec.rowSummary}>{execution.handoff.summary}</p>}
               {execution.handoff !== null && execution.handoff.changedFiles.length > 0 && (
                 <p className={exec.rowFiles}>{execution.handoff.changedFiles.join('  ')}</p>

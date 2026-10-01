@@ -196,6 +196,10 @@ function executionOf(execution: ApiExecution, projectId: number): Execution {
     sessionId: text(execution.sessionId),
     worktreePath: execution.worktreePath ?? null,
     worktreeBranch: execution.worktreeBranch ?? null,
+    resultCommit: execution.resultCommit ?? null,
+    mergeStatus: execution.mergeStatus ?? null,
+    mergeDetail: execution.mergeDetail ?? null,
+    changedFiles: execution.changedFiles ?? [],
   };
 }
 

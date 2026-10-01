@@ -22,6 +22,7 @@ import com.agent.dock.group.service.GroupService;
 import com.agent.dock.project.domain.Project;
 import com.agent.dock.project.repository.ProjectRepository;
 import com.agent.dock.runtime.dto.AgentExecutionResult;
+import com.agent.dock.runtime.util.JsonObjects;
 import jakarta.annotation.PostConstruct;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -110,6 +111,9 @@ public class DelegationService {
         TreeState state = new TreeState(projectId, taskId, root.getId(), target.worktreePath(), target.worktreeBranch());
         workers.submit(() -> {
             ExecutionStatus status = runExecution(root, target, text, judgement, 0, List.of(rootAgentId), state);
+            // 트리가 끝나면 그 워크트리의 결과를 커밋해 메인 저장소로 되돌린다(되돌리지 못하면 사유와 브랜치를 알린다).
+            // 스트림을 닫기 전에 하여 로그가 라이브로도 보이게 한다.
+            collectTreeResult(root, target);
             closeStream(root.getId(), status);
             executionService.publishFinished(root.getId(), taskId, status);
         });
@@ -133,6 +137,81 @@ public class DelegationService {
         return target;
     }
 
+    // ── 트리 결과 되돌리기 (트리 브랜치에 커밋 + 메인 저장소로 병합) ──────────────────
+
+    /**
+     * 트리(루트 실행)가 끝났으니 그 워크트리의 변경을 트리 브랜치에 **커밋 하나**로 남기고 메인 저장소로 되돌린다.
+     * 격리하지 못한 트리(워크트리 없음)는 되돌릴 것이 없다. 결과(커밋 sha·병합 상태·사유·변경 파일)는 루트 실행에
+     * 기록하고 SYSTEM 로그로 알린다 — 병합하지 못하면 사용자가 직접 병합하도록 브랜치를 알려 준다.
+     */
+    private void collectTreeResult(Execution root, ExecutionGuard.Target target) {
+        String worktreePath = target.worktreePath();
+        if (worktreePath == null || worktreePath.isBlank()) {
+            return;
+        }
+        Long rootId = root.getId();
+        Execution fresh = executionRepository.findById(rootId).orElse(root);
+        String message = commitMessage(fresh);
+        String body = "실행 #%d\n참여: %s".formatted(rootId, String.join(", ", participants(rootId)));
+        WorktreeService.TreeResult result = worktreeService.collect(
+                target.workspacePath(), worktreePath, target.worktreeBranch(), message, body);
+        executionService.recordTreeResult(rootId, result.status(), result.commit(), result.detail(),
+                result.changedFiles());
+        logTreeResult(rootId, result, target.worktreeBranch());
+    }
+
+    /** 커밋 제목: 루트 실행의 최종 요약(계약 done.summary / result_text)을 다듬어 쓴다. 없으면 `실행 #<id> 작업 결과`. */
+    private String commitMessage(Execution root) {
+        Map<String, Object> handoff = root.getHandoff();
+        if (handoff != null && handoff.get("summary") instanceof String summary && !summary.isBlank()) {
+            return summary.strip();
+        }
+        String resultText = root.getResultText();
+        if (resultText != null && !resultText.isBlank()) {
+            // 결과 텍스트가 계약 JSON(코드블록·앞뒤 설명 포함)이면 그 summary 만 꺼내 쓴다.
+            Optional<DelegationContract> contract = DelegationContract.parse(JsonObjects.objectIn(resultText));
+            if (contract.isPresent() && !contract.get().summary().isBlank()) {
+                return contract.get().summary().strip();
+            }
+            return resultText.strip();
+        }
+        return "실행 #%d 작업 결과".formatted(root.getId());
+    }
+
+    /** 트리에 참여한 에이전트 이름(중복 없이, 루트 → 자식 순서). 커밋 본문에 넣는다. */
+    private List<String> participants(Long rootExecutionId) {
+        List<Long> agentIds = new ArrayList<>();
+        executionRepository.findById(rootExecutionId).ifPresent(root -> agentIds.add(root.getAgentId()));
+        executionRepository.findByRootExecutionIdOrderByIdAsc(rootExecutionId)
+                .forEach(child -> agentIds.add(child.getAgentId()));
+        List<String> names = new ArrayList<>();
+        for (Long agentId : agentIds) {
+            if (agentId == null) {
+                continue;
+            }
+            String name = agentName(agentId);
+            if (!names.contains(name)) {
+                names.add(name);
+            }
+        }
+        return names;
+    }
+
+    /** 되돌린 결과를 SYSTEM 로그로 알린다(터미널 창에서 그대로 보인다). */
+    private void logTreeResult(Long rootId, WorktreeService.TreeResult result, String treeBranch) {
+        if (result.commit() != null) {
+            streamHub.system(rootId, "⎿ 변경 %d개를 커밋했습니다 (%s)"
+                    .formatted(result.changedFiles().size(), result.commit()));
+        }
+        switch (result.status()) {
+            case MERGED -> streamHub.system(rootId,
+                    "⎿ 메인 저장소(%s)로 병합했습니다".formatted(result.repositoryBranch()));
+            case MANUAL -> streamHub.system(rootId,
+                    "⎿ 자동 병합하지 못했습니다(%s). 브랜치 %s 를 직접 병합하세요".formatted(result.detail(), treeBranch));
+            case NONE -> streamHub.system(rootId, "⎿ 커밋·병합을 건너뜁니다: " + result.detail());
+        }
+    }
+
     // ── 실행 하나를 돌린다(자식은 재귀로 각자 돈다) ────────────────────────────────
 
     private ExecutionStatus runExecution(Execution execution, ExecutionGuard.Target target, String request,
@@ -149,7 +228,7 @@ public class DelegationService {
         }
     }
 
-    /** 끝난 실행의 스트림을 닫는다(끝난 상태와 exit code 를 알린다). */
+    /** 끝난 실행의 스트림을 닫는다(끝난 상태와 exit code 를 알린다). 루트는 트리 결과를 되돌린 뒤에 닫는다. */
     private void closeStream(Long id, ExecutionStatus status) {
         Integer exitCode = executionRepository.findById(id).map(Execution::getExitCode).orElse(null);
         streamHub.close(id, status, exitCode);

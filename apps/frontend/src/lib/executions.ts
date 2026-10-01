@@ -1,4 +1,4 @@
-import type { Execution, ExecutionStatus } from '../types';
+import type { Execution, ExecutionStatus, MergeStatus } from '../types';
 
 /* 실행 트리를 화면에 그릴 때 쓰는 조회·표시 도우미. */
 
@@ -18,6 +18,20 @@ export const STATUS_TONE: Record<ExecutionStatus, 'wait' | 'active' | 'done' | '
   WAITING_CHILD: 'wait',
   DONE: 'done',
   FAILED: 'failed',
+};
+
+/** 트리 결과 배지의 한국어 이름(실행 트리 창 루트 행·채팅 요약 카드·터미널 머리말이 함께 쓴다). */
+export const MERGE_LABEL: Record<MergeStatus, string> = {
+  MERGED: '병합됨',
+  MANUAL: '수동 병합 필요',
+  NONE: '변경 없음',
+};
+
+/** 트리 결과 배지 색. 기존 배지 색 클래스(active/wait/done)를 그대로 쓴다. */
+export const MERGE_TONE: Record<MergeStatus, 'active' | 'wait' | 'done'> = {
+  MERGED: 'active',
+  MANUAL: 'wait',
+  NONE: 'done',
 };
 
 export interface ExecutionRow {
