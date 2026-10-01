@@ -33,7 +33,7 @@ export const DEFAULT_CAPABILITIES: Record<string, Capabilities> = {
     models: [],
     modes: [],
     notes: 'CLI 설치 후 --help 로 확인해 채운다',
-    install: ['npm install -g command-code'],
+    install: ['npm i -g command-code@latest'],
     installRequire: 'npm',
     installPrerequisite: ['nvm install lts', 'nvm use lts'],
   },
