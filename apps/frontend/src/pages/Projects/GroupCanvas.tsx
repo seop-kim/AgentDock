@@ -10,6 +10,7 @@ import {
   useState,
 } from 'react';
 import { unavailableReason } from '../../lib/agentAvailability';
+import { agentStatus } from '../../lib/agentStatus';
 import { layoutCanvas, NODE_H, NODE_W, type CanvasNode } from '../../lib/canvasLayout';
 import { isAgentDrag, readAgentDrag } from '../../lib/dnd';
 import { useGroupDrop } from '../../lib/useGroupDrop';
@@ -76,6 +77,8 @@ export default function GroupCanvas({
     groups,
     providers,
     roles,
+    tasks,
+    executions,
     deleteGroup,
     removeGroupMember,
     setGroupLeader,
@@ -453,6 +456,14 @@ export default function GroupCanvas({
             if (!agent) return null;
             const role = roles.find((r) => r.id === agent.roleId);
             const reason = unavailableReason(agent, providers, project);
+            // 노드에도 왼쪽 카드와 같은 상태를 보여 준다(작업 중 / 작업 대기중). 작업 없음은 이름표를 달지 않아 지저분하지 않게 둔다.
+            const status = agentStatus(agent, tasks, executions);
+            const statusClass =
+              status.kind === 'WORKING'
+                ? styles.nodeStatusWorking
+                : status.kind === 'WAITING'
+                  ? styles.nodeStatusWaiting
+                  : '';
             const isSelected = node.agentId === selectedAgentId;
             // 끌고 있는 동안에는 포인터를 따라간다.
             const manual = nodePositions[node.agentId];
@@ -489,6 +500,11 @@ export default function GroupCanvas({
                   </span>
                 </div>
                 {agent.id === project.masterAgentId && <span className={styles.masterTag}>마스터</span>}
+                {status.kind !== 'IDLE' && (
+                  <span className={`${styles.nodeStatus} ${statusClass}`} title={`상태: ${status.label}`}>
+                    {status.label}
+                  </span>
+                )}
                 {reason && <span className={styles.warnDot} aria-label={reason} />}
                 {isSelected && <span className={styles.selectedTag}>선택됨</span>}
                 {/* 마스터는 그룹에 속하지 않고 구성도에서 뺄 수도 없어 노드에 할 동작이 없다 */}

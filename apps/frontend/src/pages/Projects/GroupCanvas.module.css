@@ -275,6 +275,31 @@
   background: var(--color-error);
 }
 
+/* 노드의 상태 배지(작업 중 / 작업 대기중). 왼쪽 카드와 같은 판정을 쓴다. 노드 아래 오른쪽에 붙여 이름을 가리지 않는다. */
+.nodeStatus {
+  position: absolute;
+  right: 6px;
+  bottom: -9px;
+  padding: 1px 6px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  background: var(--glass-bg-strong);
+  color: var(--color-muted);
+  font-size: 9px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.nodeStatusWorking {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.nodeStatusWaiting {
+  border-color: var(--color-warning);
+  color: var(--color-warning);
+}
+
 /* 노드의 "⋮" 메뉴 버튼. 리더로 지정 / 그룹에서 제거 / 구성도에서 빼기를 여기에 모은다. */
 .nodeMenuButton {
   flex-shrink: 0;

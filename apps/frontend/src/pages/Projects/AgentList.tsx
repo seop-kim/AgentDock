@@ -37,7 +37,7 @@ export default function AgentList({
   open: boolean;
   onToggle: () => void;
 }) {
-  const { agents, groups, providers, tasks, roles, removeGroupMember, deleteAgent, setAgentPlaced } =
+  const { agents, groups, providers, tasks, executions, roles, removeGroupMember, deleteAgent, setAgentPlaced } =
     useAgentDockStore();
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Agent | null>(null);
@@ -140,7 +140,7 @@ export default function AgentList({
           {projectAgents.map((agent) => {
             const role = roles.find((r) => r.id === agent.roleId);
             const reason = unavailableReason(agent, providers, project);
-            const status = agentStatus(agent, tasks);
+            const status = agentStatus(agent, tasks, executions);
             const statusClass = {
               UNPLACED: styles.statusUnplaced,
               WORKING: styles.statusWorking,

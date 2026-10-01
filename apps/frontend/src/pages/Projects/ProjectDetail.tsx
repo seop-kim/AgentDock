@@ -1,6 +1,7 @@
 import { CSSProperties, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { SettingsIcon } from '../../components/icons';
+import { useLiveRefresh } from '../../lib/useLiveRefresh';
 import { useAgentDockStore } from '../../store/AgentDockStore';
 import shared from '../../styles/shared.module.css';
 import type { ChatTarget } from '../../types';
@@ -27,7 +28,7 @@ const BOTTOM_INSET = 24;
 export default function ProjectDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { projects, workspaces, agents, groups, tasks, executions } = useAgentDockStore();
+  const { projects, workspaces, agents, groups, tasks, executions, reload } = useAgentDockStore();
   const [notice, setNotice] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   /** 실행 트리 창에 띄울 실행(채팅 응답에 딸린 루트 실행 id). */
@@ -58,6 +59,9 @@ export default function ProjectDetail() {
     if (masterAgentId === null) return;
     setChatTarget((prev) => prev ?? { kind: 'agent', id: masterAgentId });
   }, [masterAgentId]);
+
+  // 구성도·카드·채팅·요약 카드가 서로 어긋나지 않게 화면을 주기적으로 다시 읽는다(문서가 숨겨지면 멈춘다).
+  useLiveRefresh(reload);
 
   if (!project) {
     return (

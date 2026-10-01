@@ -1,6 +1,7 @@
 import { useParams } from 'react-router-dom';
 import TerminalView from '../components/TerminalView';
 import { currentExecution, currentTask, terminalState } from '../lib/terminal';
+import { useLiveRefresh } from '../lib/useLiveRefresh';
 import { useAgentDockStore } from '../store/AgentDockStore';
 import styles from './TerminalWindow.module.css';
 
@@ -8,10 +9,12 @@ import styles from './TerminalWindow.module.css';
  * 새 창으로 띄운 에이전트 터미널(`/terminal/:agentId`).
  * 스토어에서 그 에이전트의 **현재 실행**을 찾아(`currentExecution`/`currentTask`), 그 실행의 실제 로그를
  * 이 창이 직접 SSE 로 구독해 보여 준다(메인 창이 넘겨주는 스냅샷 다리는 없다).
+ * 이 창은 **항상 살아 있다** — 주기적으로 스토어를 다시 읽어 새 실행으로 넘어가고, 문서가 숨겨지면 멈춘다.
  */
 export default function TerminalWindow() {
   const { agentId } = useParams();
-  const { agents, projects, workspaces, tasks, executions, loading } = useAgentDockStore();
+  const { agents, projects, workspaces, tasks, executions, loading, reload } = useAgentDockStore();
+  useLiveRefresh(reload);
 
   const agent = agents.find((candidate) => candidate.id === Number(agentId)) ?? null;
   if (!agent) {
