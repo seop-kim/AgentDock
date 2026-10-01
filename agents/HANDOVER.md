@@ -9,8 +9,8 @@
 | 항목 | 내용 |
 | --- | --- |
 | 방침 | 목업을 기준으로 **실제 기능 1차 구현**을 진행했다. 범위는 **위임(실행 트리) 코어 + 프로젝트 상세 최소 화면**. 사용자가 정했다: "백엔드 기반은 유지하고 확장, 프론트는 목업 디자인으로 재구성 / 1차는 위임 코어 먼저 + 최소 화면". |
-| 작업 브랜치 | `feat/delegation` (기준 `dev`). 커밋 5개. **PR 은 아직 만들지 않았다**(`dev` 로 squash merge + `[Feat] …` 예정). |
-| 검증 | JUnit **90건 통과**, `npm run build --workspace=apps/frontend` 통과, **실제 CLI 로 마스터→팀원 병렬 위임 → 취합 `done` 까지 실측**했고 화면(라이트/다크)도 브라우저로 확인했다. |
+| 작업 브랜치 | `feat/self-host-setup` (기준 `dev`, PR #7 은 `dev` 에 머지됨). 이번 작업 커밋: `c714a48`(워크트리 격리) → `0019c83`(트리 결과 커밋·자동 병합) → 문서 커밋(이 파일). **PR 은 아직 만들지 않았다**(`dev` 로 squash merge + `[Feat] …` 예정). |
+| 검증 | JUnit **147건 통과**, `npm run build --workspace=apps/frontend` 통과, **실제 CLI 로 워크트리 생성 → 트리 브랜치 커밋 → 메인 저장소 자동 병합(`MERGED`)까지 실측**하고 화면(DOM)으로도 확인했다(8장). |
 | 남은 화면 | 목업에 있는 **구성도 캔버스, 파일 첨부, 현실성 점검, 설정 화면(안쪽 메뉴·테마 화면), Tasks/실행 목록 화면**은 아직 이식하지 않았다. |
 
 ## 2. 이번에 만든 것
@@ -56,7 +56,7 @@
 ```
 # 백엔드 (JDK 25 필요)
 $env:JAVA_HOME='C:\Users\chey.kim\.jdks\openjdk-25.0.2'
-cd apps/backend; .\gradlew.bat test          # JUnit 90건
+cd apps/backend; .\gradlew.bat test          # JUnit 147건
 npm run dev:backend:test                     # 8081 (Flyway 자동 적용, 시작 로그 확인)
 # 프론트
 $env:VITE_API_BASE='http://localhost:8081'; npm run dev:frontend:test   # 3031
@@ -82,8 +82,63 @@ npm run build --workspace=apps/frontend      # tsc --noEmit && vite build (커�
 
 ## 6. 알려진 함정 / 메모
 
-- **개발 DB(`AGENT_DOCK`)에 이번 검증용 데이터가 남아 있다**: 프로젝트 `test`(id 4), 에이전트 `총괄 마스터`(8)·`백엔드 A`(9)·`백엔드 B`(10)·`test`(7), 그룹 `백엔드 팀`(1, 리더 7), 워크스페이스 `delegation-test`(6, 임시 폴더) + `agentDock`(5), 실행 기록. 필요하면 지운다.
+- **개발 DB(`AGENT_DOCK`)의 이전 검증용 데이터 일부를 정리했다**(2026-10-01, 이번 작업): AgentDock 프로젝트(id 6)의 Task/Execution 중 **에이전트 테스트가 만든 행**(task 16~25, execution 26~39)을 지웠고, 그 프로젝트에는 이제 Task/Execution 이 없다. 프로젝트 `test`(id 4)·`TestAgecnt`(id 5)의 데이터, 워크스페이스 `agentDock`(5)·`delegation-test`(6)·`AgentDock-clone`(9), 에이전트/그룹 정의는 **사용자 데이터로 보고 남겨 두었다**.
+- 저장소 밖 임시 폴더: 워크트리 폴더 `C:\Users\chey.kim\Documents\GitHub\AgentDock-wt`(비었음)는 지웠다. **`C:\Users\chey.kim\AgentDock-clone` / `AgentDock-clone-wt` 는 이전 실측용으로 남아 있다**(이번 범위 밖 — 지워도 되는지 사용자 확인 필요).
 - `execution.status` 의 `WAITING_CHILD` 는 DB 제약이 없어(컬럼이 `VARCHAR(32)`) 마이그레이션에서 제약을 건드리지 않았다.
 - JPA 는 `validate` 라 **엔티티와 스키마가 어긋나면 기동이 실패**한다 — 마이그레이션을 추가하면 엔티티도 같이 고치고, 기동 로그(`Started AgentDockApplication`)를 확인한다.
-- 위임 실행 중 만든 자식은 **부모와 같은 실행 폴더(프로젝트 기본 워크스페이스)** 에서 돈다. worktree 격리는 아직 없다.
 - 목업 앱(`apps/mockup`, 포트 3040)은 **기준 화면**이다. 이식할 때 값을 비교하되 목업 자체는 고치지 않는다.
+
+## 7. 워크트리 격리 — 실행 디렉터리 분리 (2026-10-01 추가)
+
+지금까지 실행 트리의 모든 실행이 **같은 폴더(프로젝트 기본 워크스페이스)** 에서 돌아, 두 명령(또는 부모·자식)이 같은 파일을 동시에 고치면 서로 덮어썼다. 이제 **명령 하나(루트 실행)가 git worktree 하나**를 갖는다. 루트와 그 자식은 **같은** worktree 에서 돈다(자식의 편집을 부모가 봐야 하므로). 서로 다른 명령(다른 루트)만 서로 격리된다.
+
+- **새 코드**: `execution/service/WorktreeService`(`isGitRepository`/`create`/`remove`, git 은 `ProcessService` 로 셸 없이 실행), `ExecutionGuard.Target.cwd()`, `ExecutionFactory`(자식이 부모 worktree 를 물려받음), `ExecutionService.recordWorktree`/`removeWorktree`, `DELETE /executions/{id}/worktree`. 마이그레이션 **V13**(`execution.worktree_path`/`worktree_branch`, 멱등).
+- **흐름**: `DelegationService.start` 가 루트 실행 행을 만든 **직후** 워크스페이스가 git 저장소면 `git worktree add -b agentdock/exec-<루트id> <워크스페이스 형제폴더>-wt\<루트id>` 로 만들고, 그 트리 전체가 **cwd = worktree 경로** 로 돈다(`--add-dir` 불필요). 만들지 못하면(저장소가 아니거나 git 실패) 워크스페이스에서 그대로 돌리고 SYSTEM 로그에 사유를 남긴다 — **격리 실패가 실행을 막지 않는다**.
+- **자동 병합은 8장에서 추가됐다**: 격리만 있던 시점에는 결과를 되돌리지 않았다. 지금은 트리가 끝나면 커밋하고, 메인 저장소가 깨끗하면 자동 병합한다(8장). **워크트리·브랜치 자동 삭제는 여전히 없다** — 정리는 `DELETE /executions/{id}/worktree`(`?branch=true` 면 브랜치도 삭제, 204). 아직 도는 실행(`PENDING`/`RUNNING`/`WAITING_CHILD`)이면 **409**. 지운 뒤에는 실행의 경로·브랜치를 비운다.
+- **로그**: 성공 `⎿ 워크트리: <경로> (브랜치 <브랜치>)`, 실패 `⎿ 워크트리를 만들지 못해 워크스페이스에서 실행합니다: <사유>`(모두 SYSTEM).
+- **화면**(`apps/frontend`, 기존 토큰·CSS 모듈 클래스만 사용 — 목업 대비 디자인 변경 없음): 터미널 창 머리말의 `워크트리 <브랜치>` 배지와 worktree 경로(`.cwd`), 실행 트리 창 각 행의 `워크트리 <경로> · <브랜치>` 줄과 루트 행의 **워크트리 정리** 버튼(`window.confirm` 후 브랜치까지 삭제).
+- **프롬프트 규칙**(DB 데이터, 코드 아님): AgentDock 프로젝트(id 6)의 `project.master_prompt` 와 `agent_group.prompt` 5개 끝에 "한 트리 안에서 같은 파일을 동시에 고치지 말고 나눠 맡긴다. 워크트리 병합은 사람이 판단한다." 를 덧붙였다(멱등 UPDATE, 기존 문장 유지).
+
+**검증(실측)**
+
+- `.\gradlew.bat test` **143건 통과**(그 시점 기준 — 8장의 결과 수집 4건을 더해 최종 **147건**), `npm run build --workspace=apps/frontend` 통과.
+- 8081/3031 로 실제 확인: 프로젝트 6(마스터 13)에 명령을 보내자 `git worktree list` 에 `C:/Users/chey.kim/Documents/GitHub/AgentDock-wt/26 [agentdock/exec-26]` 가 생겼고, 실행 로그에 `⎿ 워크트리: ... (브랜치 agentdock/exec-26)` 과 CLI init 의 `⎿ 실행 시작 (model=claude-sonnet-5, cwd=C:\...\AgentDock-wt\26)` 이 남았다 — **실행이 worktree 안에서 돌았다는 직접 증거**다. 도는 중 `DELETE .../worktree?branch=true` 는 **409**, 끝난 뒤 같은 호출은 **204**(폴더와 브랜치 삭제, `git worktree list` 에서 사라짐), 두 번째 호출은 404.
+- 남은 산출물: 그때 남겨 둔 워크트리 `AgentDock-wt\27` + 브랜치 `agentdock/exec-27`(그리고 실측용 `AgentDock-wt\32` + `agentdock/exec-32`)를 **이번 작업에서 정리했다**(`git worktree remove --force` → `git branch -D` → `git worktree prune`, 빈 폴더 삭제).
+
+## 8. 트리 결과 수집·병합 — "명령 하나의 결과를 한 번에 되돌린다" (2026-10-01 추가)
+
+워크트리 격리(7장)로 명령 하나가 자기 작업 디렉터리에서 돌지만, **마지막 단계가 빠져 있었다** — 트리가 끝나도 그 결과가 메인 저장소로 돌아오지 않아 사용자가 합쳐진 결과를 볼 수 없었다. 이제 트리(루트 실행)가 끝나면 **커밋 하나를 남기고 메인 저장소가 깨끗하면 자동으로 병합**한다.
+
+- **새 코드**: `WorktreeService.collect`(트리 브랜치에 커밋 + 메인 저장소 병합, 실제 git — 셸 미경유), `execution/domain/{MergeStatus,ChangedFile}`, `ExecutionService.recordTreeResult`, `DelegationService.collectTreeResult`/`commitMessage`/`participants`/`logTreeResult`. 마이그레이션 **V14**(`execution.result_commit`/`merge_status`/`merge_detail`/`changed_files`, 멱등). `Execution`·`ExecutionResponse` 에 필드 추가.
+- **동작**: `DelegationService.start` 의 루트 백그라운드 작업이 `runExecution`(트리 실행) → `collectTreeResult` → `closeStream` → `publishFinished` 순서로 돈다(로그가 라이브로도 보이게 스트림을 닫기 전에 되돌린다).
+  - **커밋**: 변경이 있으면 트리 브랜치(`agentdock/exec-<루트id>`)에 커밋 하나. 제목 = 루트 실행의 최종 요약(계약 `done.summary`/`result_text`), 없으면 `실행 #<id> 작업 결과`. 본문 = 실행 id·참여 에이전트 이름·변경 파일 수. **`Co-Authored-By` 없음**. 커밋할 것이 없으면 빈 커밋 없이 `NONE`.
+  - **병합**: 메인 작업 트리가 깨끗하면 `git merge --no-ff <트리브랜치>` → `MERGED`. 더럽거나 충돌하면 `git merge --abort` 로 되돌리고 사유와 함께 `MANUAL`(직접 병합할 브랜치를 로그로 알린다). 병합은 공정 세마포어로 **전역 직렬화**(여러 트리가 동시에 끝날 수 있다).
+  - **기록/로그(루트에만)**: `result_commit`/`merge_status`/`merge_detail`/`changed_files` 를 루트 실행에 남기고 응답에 싣는다. SYSTEM: `⎿ 변경 N개를 커밋했습니다 (<sha>)` → `⎿ 메인 저장소(<브랜치>)로 병합했습니다` 또는 `⎿ 자동 병합하지 못했습니다(사유). 브랜치 <브랜치> 를 직접 병합하세요`.
+- **프롬프트 규칙**(DB 데이터, 코드 아님): AgentDock 프로젝트(id 6)의 `project.master_prompt` 와 `agent_group.prompt` 5개 끝에 "작업이 끝나면 변경 사항을 트리 브랜치에 커밋하고, 메인 저장소가 깨끗하면 자동으로 병합한다. 병합하지 못하면 사유와 브랜치를 사용자에게 알린다." 를 덧붙였다(멱등 UPDATE, 기존 문장 유지).
+
+**남은 한계 (설계대로)**
+
+- **워크트리·브랜치 자동 삭제 없음**: 병합에 성공해도 워크트리와 트리 브랜치는 남는다. 정리는 여전히 사람이 `DELETE /executions/{id}/worktree`(`?branch=true`)로 한다.
+- **더러운 메인 저장소면 자동 병합하지 않는다**: 커밋되지 않은 변경이 있으면(`git status` 가 비어 있지 않으면) `MANUAL` 로 남기고 사유·브랜치만 알린다. 사용자가 그 변경을 정리한 뒤 브랜치를 직접 병합해야 한다. **저장소에 추적되지 않는 파일/폴더가 하나만 있어도(`?? …`) MANUAL 이 된다** — 실측 중 실제로 겪었다(작업 폴더의 도구 폴더 때문에 `MERGED` 가 안 나왔다).
+- **되돌리기는 루트 실행에만 기록**하고 자식에는 남기지 않는다(트리 결과는 루트의 것).
+- **CLI 권한 모드가 쓰기를 막으면 트리가 `NONE` 으로 끝난다**: 에이전트 `mode`(=`--permission-mode`)가 기본값이면 무인 실행에서 CLI 가 파일 쓰기를 거부한다(`Claude requested permissions to write …` 로그). 이번 실측에서 마스터(13)와 백엔드 리더(14)가 이 때문에 파일을 못 만들어 두 번 `NONE` 이 나왔고, 쓰기 허용 모드(`acceptEdits`)를 준 마스터로 다시 돌려 `MERGED` 를 확인했다. 파일을 고쳐야 하는 에이전트에는 모드를 지정해 둔다(DB 데이터).
+
+**검증(실측)**
+
+- `.\gradlew.bat test` **147건 통과**(기존 143 + 결과 수집 4: `WorktreeResultCollectTest` — 깨끗한 메인 → MERGED, 더러운 메인 → MANUAL(반쯤 병합 없음), 변경 없음 → NONE, 변경 파일 파싱), `npm run build --workspace=apps/frontend` 통과.
+- 8081/3031 로 실제 확인(2026-10-01): 프로젝트 6(마스터 13)에 명령을 보내 **워크트리 생성 → 트리 브랜치 커밋 → 메인 저장소 자동 병합**을 끝까지 확인했다.
+  - `GET /executions/39` → `worktreePath=C:\Users\chey.kim\Documents\GitHub\AgentDock-wt\39`, `worktreeBranch=agentdock/exec-39`, `resultCommit=e0475d3`, `mergeStatus=MERGED`, `changedFiles=[{status:A, path:AGENTDOCK_LIVE_CHECK.md}]`.
+  - SYSTEM 로그: `⎿ 워크트리: …\AgentDock-wt\39 (브랜치 agentdock/exec-39)` → `⎿ 실행 시작 (model=claude-sonnet-5, cwd=…\AgentDock-wt\39)` → `⎿ 변경 1개를 커밋했습니다 (e0475d3)` → `⎿ 메인 저장소(feat/self-host-setup)로 병합했습니다`.
+  - git: 트리 브랜치 커밋 `e0475d3` 은 제목이 루트 실행 요약, 본문이 `실행 #39 / 참여: 총괄 / 변경 파일 1개`(Co-Authored-By 없음), 메인 저장소에는 `49fba63 Merge branch 'agentdock/exec-39'` 병합 커밋이 생겼다.
+  - 화면(3031, DOM): 채팅 실행 요약 카드 `병합됨 · 커밋 e0475d3 · A AGENTDOCK_LIVE_CHECK.md`, 실행 트리 창 루트 행 `병합됨 · 커밋 e0475d3 · A AGENTDOCK_LIVE_CHECK.md` + 워크트리 줄 + 정리 버튼, 터미널 머리말 `워크트리 agentdock/exec-39`·`커밋 e0475d3`·작업 디렉터리 `…\AgentDock-wt\39`.
+  - 확인 후 되돌림: 검증이 만든 커밋은 `git reset --hard 0019c83` 으로 지우고(작업 트리에 남은 `AGENTDOCK_LIVE_CHECK.md` 도 함께 사라짐), 워크트리 33·34·39 와 브랜치 `agentdock/exec-33/34/39` 를 삭제했고, 검증용 DB 행(task 23~25, execution 33~39, 로그 74줄)도 지웠다.
+
+## 9. 이번 작업이 남긴 저장소 상태 (2026-10-01)
+
+- **커밋**: `c714a48 feat(worktree): 실행을 git worktree 로 격리하고 결과를 남긴다` → `0019c83 feat(execution): 트리 결과를 커밋하고 자동 병합해 화면에 보여준다` → 문서 커밋(이 문서 + `CONVENTIONS.md`). 브랜치 `feat/self-host-setup`, `dev` 는 아직 이 커밋들을 받지 않았다(PR 예정).
+- **중간 상태를 실제로 갈랐다**: 이번 작업 전에는 워크트리 격리와 결과 수집이 **한 작업 트리에 섞여** 있었다. 커밋 1 은 격리만(테스트 143건), 커밋 2 는 결과 수집·병합(V14 + `WorktreeResultCollectTest`, 테스트 147건)으로 나눠 각 커밋에서 `gradlew test` 와 프론트 빌드를 통과시켰다.
+- **정리한 것**: 워크트리 `AgentDock-wt\27`(브랜치 `agentdock/exec-27`), `AgentDock-wt\32`(`agentdock/exec-32`, 커밋 `db868b6`), 이번 실측용 `33/34/39` + 그 브랜치들, 빈 `AgentDock-wt` 폴더. 프로젝트 6 의 테스트 Task/Execution 행.
+- **남겨 둔 것(사용자 판단 필요)**: 저장소 루트의 추적되지 않는 `.commandcode/`(에이전트 도구 폴더 — 이 때문에 자동 병합 판정이 `MANUAL` 이 될 수 있다. `.gitignore` 에 넣을지 결정 필요), `C:\Users\chey.kim\AgentDock-clone` / `AgentDock-clone-wt`(이전 실측용 클론).
+- **실행 중 남은 프로세스 없음**: 검증용 8081/3031 서버는 종료했고, 사용자의 8080 서버는 건드리지 않았다.
+- **다음 후보**: (1) 워크트리·브랜치 자동 정리 옵션(병합 성공 후), (2) `MANUAL` 인 트리를 화면에서 바로 병합하도록 돕는 버튼, (3) 저장소에 추적되지 않는 파일이 있어도 병합할지 정하는 정책(현재는 무조건 `MANUAL`).
+

@@ -42,7 +42,7 @@ Command Code처럼 위 세 파일 중 아무것도 자동으로 읽지 않는 �
 | **프로젝트** (`project`) | 워크스페이스를 **N개** 할당(`project_workspace`, 기본 1개). 에이전트를 프로젝트 안에서 만든다 |
 | **에이전트** (`agent`) | **프로젝트 소속**(`project_id NOT NULL`). 런타임 + Role + Permission + **페르소나**(`persona`, 그 에이전트만의 성격/일하는 방식 프롬프트) + model/mode |
 | **그룹** (`agent_group`) | 프로젝트 안에서 에이전트를 묶고 리더를 지정 |
-| **Task / Execution** | 프로젝트 소속. 실행 디렉터리는 프로젝트의 **기본 워크스페이스** |
+| **Task / Execution** | 프로젝트 소속. 실행 디렉터리는 프로젝트의 **기본 워크스페이스**(git 저장소면 그 저장소의 **worktree**, 아래 "워크트리 격리") |
 | **Agents 메뉴** | 전 프로젝트 에이전트 목록(읽기용) + 이 화면에서도 생성 가능(Stage 2 에서 프로젝트 상세로 이동 예정) |
 | **Tasks 메뉴** | 진행/종료 작업 목록 |
 
@@ -93,6 +93,21 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
 - **상태 표시**: 한 실행이 여러 스텝으로 이어지면 스텝이 끝나도 `SUCCEEDED` 로 두지 않는다 — `markRunning` 으로 되돌리고, 자식을 기다리는 동안은 `WAITING_CHILD`, 마지막에만 `markSucceeded`/`markEscalated`. **위임한 실행은 마지막 계약이 마무리여도 위임 대상(`delegatedTargetAgentId`)이 남는다**(누구에게 맡겼는지 화면에 남긴다).
 - **위임한 트리의 Task 상태**는 트리가 전부 끝났을 때 **한 번만** `ExecutionFinishedEvent` 로 알린다(스텝마다 알리면 Task 가 일찍 끝난 것으로 표시된다).
 
+### 워크트리 격리 (실행 디렉터리)
+
+**명령 하나(루트 실행)가 git worktree 하나를 갖는다.** 루트와 그 자식은 **같은** worktree 에서 돈다 — 자식의 편집을 부모가 봐야 하기 때문이다. 서로 다른 명령(다른 루트)만 서로 격리된다. `WorktreeService`(`execution/service`)가 담당하고, `DelegationService.start` 가 루트 실행 행을 만든 직후에 만든다.
+
+- **위치**: 저장소 **밖** — 워크스페이스 폴더의 형제 폴더 `<워크스페이스폴더>-wt/<루트실행id>` (예: `C:\Users\chey.kim\Documents\GitHub\AgentDock-wt\42`). 브랜치는 `agentdock/exec-<루트실행id>`. **저장소 안에 만들지 않는다**(`git status` 와 첨부 파일 목록을 더럽힌다).
+- **언제/어떻게**: 워크스페이스가 git 저장소면 `git worktree add -b <브랜치> <경로>` 로 만들고, 그 트리 전체가 **cwd = worktree 경로** 로 돈다(`ExecutionGuard.Target.cwd()`, `--add-dir` 이 필요 없다). 자식은 부모의 worktree 경로·브랜치를 물려받고(`ExecutionFactory`), 루트에는 `execution.worktree_path`/`worktree_branch` 로 기록된다. 응답에는 `ExecutionResponse`(따라서 트리 노드 `execution`)에 실린다.
+- **실패는 실행을 막지 않는다**: git 저장소가 아니거나 git 이 실패하면 워크스페이스에서 그대로 돌리고 SYSTEM 로그에 사유를 남긴다. 성공하면 `⎿ 워크트리: <경로> (브랜치 <브랜치>)`, 실패하면 `⎿ 워크트리를 만들지 못해 워크스페이스에서 실행합니다: <사유>`.
+- **트리 끝에 결과를 모아 되돌린다(커밋 + 자동 병합)**: 트리(루트 실행)가 끝나면 `WorktreeService.collect` 가 그 워크트리의 변경을 트리 브랜치에 **커밋 하나**로 남긴다. 커밋 제목은 루트 실행의 최종 요약(계약 `done.summary` / `result_text`)이고 본문은 실행 id·참여 에이전트 이름 목록·변경 파일 수다(**`Co-Authored-By` 트레일러는 붙이지 않는다**). 커밋할 것이 없으면 빈 커밋을 만들지 않고 `NONE` 이다.
+  - **메인 저장소로 병합**: 메인 작업 트리가 깨끗하면(`git status` 가 비었으면) `git merge --no-ff <트리브랜치>` 로 되돌려 `MERGED`. 더럽거나 충돌하면 `git merge --abort` 로 **절대 반쯤 병합된 상태를 남기지 않고** `MANUAL`(사유 + 직접 병합할 브랜치)로 넘긴다. 병합은 여러 트리가 동시에 끝날 수 있어 **전역 직렬화**(공정 세마포어)한다.
+  - **삭제는 여전히 사람이 한다**: 워크트리·브랜치의 **자동 삭제는 없다**. 정리는 `DELETE /executions/{id}/worktree`(`?branch=true` 면 브랜치도 삭제, 204). 아직 도는 실행(`PENDING`/`RUNNING`/`WAITING_CHILD`)이면 **409**. 지운 뒤에는 실행의 경로·브랜치를 비운다(두 번째 호출은 404).
+  - **기록**: 커밋 sha·병합 상태·사유·변경 파일을 **루트 실행에만** 남기고(V14) 응답(`ExecutionResponse`, 트리 노드)에 실린다. SYSTEM 로그: `⎿ 변경 N개를 커밋했습니다 (<sha>)` 다음에 `⎿ 메인 저장소(<브랜치>)로 병합했습니다` 또는 `⎿ 자동 병합하지 못했습니다(사유). 브랜치 <브랜치> 를 직접 병합하세요`.
+- **셸을 쓰지 않는다**: git 도 `ProcessService`(내부적으로 `Executables`)로 실행한다. 프롬프트 규칙(마스터·그룹 프롬프트에 넣는다): "한 트리 안에서 같은 파일을 동시에 고치지 말고 나눠 맡긴다. 워크트리 병합은 사람이 판단한다." 에 더해 "작업이 끝나면 변경 사항을 트리 브랜치에 커밋하고, 메인 저장소가 깨끗하면 자동으로 병합한다. 병합하지 못하면 사유와 브랜치를 사용자에게 알린다." 를 덧붙인다. 뒤 문장이 앞 문장의 "사람이 판단한다"를 좁힌다 — **깨끗할 때만 자동으로 병합**하고, 아니면 사유와 브랜치만 알려 사람이 병합한다.
+- **CLI 권한 모드 주의(실측)**: 에이전트의 `mode`(=`--permission-mode`)가 파일 쓰기를 막는 기본값이면 무인 실행에서 CLI 가 쓰기를 거부해 **트리에 변경이 남지 않고 `NONE` 으로 끝난다**(실제로 확인). 파일을 고쳐야 하는 에이전트는 `acceptEdits` 같은 쓰기 허용 모드를 지정한다(모드는 DB 데이터다).
+- **화면**: 터미널 창 머리말에 브랜치와 커밋 sha, 실행 트리 창의 각 행에 브랜치가 보이고, 트리 **루트 행**에는 병합 상태 배지(병합됨 / 수동 병합 필요)·커밋 sha·변경 파일 목록(`A path` 등)과 정리 버튼이 있다. 채팅 **실행 요약 카드**(`ExecutionSummaryCard`)에도 같은 결과 한 줄이 붙는다(`apps/frontend`, 기존 토큰·CSS 모듈 클래스만 쓴다).
+
 ### CLI 출력을 다루는 법 (실측으로 확인한 사실 — 추측 금지)
 
 - `--output-format stream-json`(+`--verbose`)으로 실행하고 **JSONL 한 줄씩** 받아 로그로 바꾼다(`runtime/ClaudeStreamJson`). `assistant` 이벤트의 content 블록(thinking/text/tool_use)이 로그 줄이 되고, 마지막 `result` 이벤트에서 결과 텍스트와 계측값을 꺼낸다(`usage`·`total_cost_usd`·`duration_ms`·`num_turns`·`session_id`·`is_error`).
@@ -116,12 +131,12 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
 - `task/` — `domain/`(Task, TaskStatus) · `service/` TaskService(작업 실행·채팅 명령) · `repository/` · `dto/`
 - `process/` — `service/` `ProcessService`(ProcessBuilder 래퍼) · `util/` `Executables`(PATH/PATHEXT 해석)
 - `runtime/` — `interfaces/` `AgentRuntime` · `service/`(ClaudeCodeRuntime, CommandCodeRuntime, RuntimeRegistry) · `dto/`(AgentExecutionRequest/Result, ExecutionMetrics) · `util/` `ClaudeStreamJson`(stream-json → 로그·계측) · `CommandCodeStreamJson`(cmdc NDJSON → 로그·계측) · `JsonObjects`(결과 텍스트에서 JSON 객체 찾기 — Claude/Command Code 공용)
-- `execution/` — `domain/`(Execution, ExecutionStatus, ExecutionDecision, ExecutionLog, LogStream) · `controller/` · `service/`(ExecutionService, ExecutionGuard, ExecutionFactory, ExecutionRunner, ExecutionStreamHub) · `repository/` · `dto/`(응답·트리·이벤트 등)
+- `execution/` — `domain/`(Execution, ExecutionStatus, ExecutionDecision, ExecutionLog, LogStream) · `controller/` · `service/`(ExecutionService, ExecutionGuard, ExecutionFactory, ExecutionRunner, ExecutionStreamHub, **WorktreeService**) · `repository/` · `dto/`(응답·트리·이벤트 등)
 - `delegation/` — `controller/`(ProjectCommandController) · `service/`(DelegationService, RuleRouter) · `dto/`(DelegationContract) · `util/`(ContractSchemas, DelegationPrompts)
 
 ## DB 스키마
 
-단일 진실은 **Flyway 마이그레이션**(`apps/backend/src/main/resources/db/migration/`, 현재 V1~V10)이며 컬럼명은 snake_case다. JPA는 `ddl-auto: validate` 로 일치만 검증한다.
+단일 진실은 **Flyway 마이그레이션**(`apps/backend/src/main/resources/db/migration/`, 현재 V1~V14)이며 컬럼명은 snake_case다. JPA는 `ddl-auto: validate` 로 일치만 검증한다.
 
 테이블: `ai_provider`, `agent_role`, `permission_profile`, `workspace`, `workspace_runtime_status`, `project`, `project_workspace`, `agent_group`, `agent_group_member`, `agent`, `task`, `execution`, `execution_log`.
 
@@ -134,7 +149,9 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
 - `project_workspace`(V7): 프로젝트↔워크스페이스 N:N. `is_default` 는 프로젝트당 1개(부분 유니크 인덱스). 기존 `project.workspace_id` 는 V7 에서 이관 후 제거됐다.
 - `agent.project_id NOT NULL`, `agent.persona TEXT`(V7). `agent.connection_id` 와 `ai_connection` 테이블은 V8 에서 제거됐다.
 - `agent_group` 은 SQL 예약어 `group` 회피용 이름. `task` 는 `group_id`/`agent_id` 중 정확히 하나만 갖는다(CHECK + 서비스 검증).
-- `execution.workspace_id` 는 실행 디렉터리(프로젝트 기본 워크스페이스)를 기록한다. `task.workspace_id` 는 아직 없다(필요해지면 추가).
+- `execution.workspace_id` 는 실행 디렉터리(프로젝트 기본 워크스페이스)를 기록한다. 실제 작업 디렉터리는 격리됐으면 `worktree_path`(아래 V13)다. `task.workspace_id` 는 아직 없다(필요해지면 추가).
+- `execution.worktree_path`(`VARCHAR(1024)`) / `worktree_branch`(`VARCHAR(200)`)(V13, 멱등): 그 실행 트리가 도는 git worktree 경로와 브랜치(`agentdock/exec-<루트실행id>`). 루트가 만들고 자식이 물려받는다. 격리하지 못했으면 비어 있고, 정리하면 다시 비운다.
+- `execution.result_commit`(`VARCHAR(64)`) / `merge_status`(`VARCHAR(20)`, `MERGED`/`MANUAL`/`NONE`) / `merge_detail`(TEXT) / `changed_files`(JSONB)(V14, 멱등): 트리(루트 실행)가 끝나 그 워크트리를 커밋해 메인 저장소로 되돌린 결과(**루트 실행에만** 채운다). `changed_files` 는 `{status, path}` 배열이다. `merge_status` 는 `MERGED`(자동 병합) / `MANUAL`(사람이 병합해야 함) / `NONE`(커밋할 변경 없음) 중 하나다.
 - `ai_provider.capabilities`(JSONB): `{"models": [...], "modes": [...], "notes": "..."}`. V5 시드, 화면에서 편집.
 
 ## 런타임 연결과 자격증명
