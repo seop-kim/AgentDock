@@ -8,7 +8,7 @@ import java.util.function.BiConsumer;
  *
  * @param executionId   실행 id(로그 스트림 키)
  * @param prompt        이번 스텝의 사용자 프롬프트
- * @param workspacePath 작업 디렉터리(프로젝트 기본 워크스페이스)
+ * @param workspacePath 이 실행이 도는 작업 디렉터리(cwd). 격리되면 루트가 만든 worktree 경로, 아니면 워크스페이스 경로다.
  * @param systemPrompt  프롬프트 계층(마스터 → 그룹 → 에이전트)을 합친 시스템 프롬프트
  * @param model         CLI 에 넘길 모델(null/빈 값이면 CLI 기본)
  * @param mode          CLI 권한 모드(null/빈 값이면 CLI 기본)

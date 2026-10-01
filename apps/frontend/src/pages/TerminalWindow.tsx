@@ -36,6 +36,8 @@ export default function TerminalWindow() {
     agent.id,
   );
   const state = terminalState(execution, task);
+  // 격리된 실행은 워크스페이스가 아니라 worktree 안에서 돈다 — 실제 작업 디렉터리를 보여 준다.
+  const runDir = execution?.worktreePath ?? cwd;
 
   return (
     <div className={styles.page}>
@@ -44,8 +46,13 @@ export default function TerminalWindow() {
         <span className={styles.state}>
           {state === 'live' ? '실행 중' : state === 'done' ? '완료' : '작업 없음'}
         </span>
+        {execution?.worktreeBranch && (
+          <span className={styles.state} title={execution.worktreePath ?? undefined}>
+            워크트리 {execution.worktreeBranch}
+          </span>
+        )}
       </header>
-      <p className={styles.cwd}>{cwd ?? '워크스페이스가 없습니다'}</p>
+      <p className={styles.cwd}>{runDir ?? '워크스페이스가 없습니다'}</p>
       <TerminalView executionId={execution?.id ?? null} live={state === 'live'} className={styles.terminal} />
     </div>
   );

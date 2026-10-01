@@ -40,6 +40,9 @@ public class ExecutionFactory {
         execution.setPrompt(prompt);
         execution.setStatus(ExecutionStatus.PENDING);
         execution.setParentExecution(parent);
+        // 루트가 만든 worktree 를 자식도 그대로 물려받는다(같은 트리 = 같은 작업 디렉터리).
+        execution.setWorktreePath(target.worktreePath());
+        execution.setWorktreeBranch(target.worktreeBranch());
         return execution;
     }
 }

@@ -141,6 +141,13 @@ export interface Execution {
   metrics: ExecutionMetrics | null;
   /** 세션 재개(`--resume`)에 쓰는 실행 세션 id. */
   sessionId: string;
+  /**
+   * 이 실행 트리가 도는 git worktree 경로(루트가 만들고 자식이 물려받는다).
+   * 워크스페이스가 git 저장소가 아니거나 만들지 못했으면 null(그때는 워크스페이스에서 실행).
+   */
+  worktreePath: string | null;
+  /** worktree 의 브랜치 이름(`agentdock/exec-<루트실행id>`). 격리하지 못하면 null. */
+  worktreeBranch: string | null;
 }
 
 /** 명령에 첨부한 파일. 경로는 그 워크스페이스 폴더 기준의 상대 경로다. */

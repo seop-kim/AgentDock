@@ -44,4 +44,14 @@ public class ExecutionController {
     public Map<String, Boolean> cancel(@PathVariable Long id) {
         return service.cancel(id);
     }
+
+    /**
+     * 워크트리 정리(사람이 판단해 부른다). `?branch=true` 면 전용 브랜치도 함께 지운다.
+     * 아직 도는 실행이면 409 — 자동 삭제는 없다.
+     */
+    @DeleteMapping("/{id}/worktree")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void removeWorktree(@PathVariable Long id, @RequestParam(defaultValue = "false") boolean branch) {
+        service.removeWorktree(id, branch);
+    }
 }

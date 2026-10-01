@@ -147,6 +147,10 @@ export interface Execution {
   durationMs: number | null;
   numTurns: number | null;
   sessionId: string | null;
+  /** 이 실행 트리가 도는 git worktree 경로. 격리하지 못하면 null(워크스페이스에서 실행). */
+  worktreePath: string | null;
+  /** worktree 의 브랜치 이름(`agentdock/exec-<루트실행id>`). */
+  worktreeBranch: string | null;
   startedAt: string | null;
   finishedAt: string | null;
 }
@@ -249,6 +253,9 @@ export const api = {
   getExecutionTree: (id: number) => request<ExecutionTree>(`/executions/${id}/tree`),
   getExecutionLogs: (id: number) => request<ExecutionLogEntry[]>(`/executions/${id}/logs`),
   cancelExecution: (id: number) => request<{ cancelled: boolean }>(`/executions/${id}/cancel`, { method: 'POST' }),
+  /** 워크트리 정리(사람이 판단해 부른다). deleteBranch 면 전용 브랜치도 함께 지운다. 도는 실행이면 409. */
+  removeExecutionWorktree: (id: number, deleteBranch = false) =>
+    request<void>(`/executions/${id}/worktree${deleteBranch ? '?branch=true' : ''}`, { method: 'DELETE' }),
 
   listProviders: () => request<Provider[]>('/ai-providers'),
   createProvider: (data: { key: string; name: string }) =>

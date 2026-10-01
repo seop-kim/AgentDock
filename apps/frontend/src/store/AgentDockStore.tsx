@@ -80,6 +80,8 @@ interface AgentDockStore {
   setGroupPrompt: (groupId: number, prompt: string) => void;
 
   sendCommand: (projectId: number, target: ChatTarget, text: string, attachments: AttachedFile[]) => void;
+  /** 실행 트리의 워크트리를 정리한다(사람이 판단해 부른다). deleteBranch 면 전용 브랜치도 지운다. */
+  removeWorktree: (executionId: number, deleteBranch: boolean) => void;
   uploadAttachments: (workspaceId: number, files: File[]) => Promise<AttachedFile[]>;
   loadWorkspaceFiles: (workspaceId: number) => void;
 }
@@ -192,6 +194,8 @@ function executionOf(execution: ApiExecution, projectId: number): Execution {
             durationMs: execution.durationMs ?? 0,
           },
     sessionId: text(execution.sessionId),
+    worktreePath: execution.worktreePath ?? null,
+    worktreeBranch: execution.worktreeBranch ?? null,
   };
 }
 
@@ -663,6 +667,8 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
       },
 
       sendCommand,
+      removeWorktree: (executionId, deleteBranch) =>
+        call(() => api.removeExecutionWorktree(executionId, deleteBranch)),
       uploadAttachments: async (workspaceId, files) => {
         try {
           const uploaded: ApiAttachment[] = await api.uploadAttachments(workspaceId, files);

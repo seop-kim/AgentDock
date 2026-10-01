@@ -57,6 +57,16 @@ public class Execution {
     @Column(name = "root_execution_id", insertable = false, updatable = false)
     private Long rootExecutionId;
 
+    /**
+     * 이 실행 트리가 도는 git worktree. 루트가 만들고 자식은 부모의 것을 물려받는다(같은 트리 = 같은 worktree).
+     * 워크스페이스가 git 저장소가 아니거나 만들지 못하면 비어 있다(그때는 워크스페이스에서 실행).
+     */
+    @Column(name = "worktree_path", length = 1024)
+    private String worktreePath;
+
+    @Column(name = "worktree_branch", length = 200)
+    private String worktreeBranch;
+
     /** 판단 실행이 마지막으로 낸 계약. 위임한 실행은 DELEGATE 로 남고(완료로 덮지 않는다) 위임 대상이 함께 남는다. */
     @Enumerated(EnumType.STRING)
     @Column(length = 20)

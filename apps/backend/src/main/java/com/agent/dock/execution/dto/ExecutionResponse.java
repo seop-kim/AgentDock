@@ -11,6 +11,7 @@ public record ExecutionResponse(
         Instant startedAt, Instant finishedAt, Integer exitCode, String errorMessage,
         String resultText, ExecutionDecision decision, Long delegatedTargetAgentId,
         Long parentExecutionId, Long rootExecutionId,
+        String worktreePath, String worktreeBranch,
         Integer inputTokens, Integer outputTokens, Integer cacheReadTokens, Integer cacheCreationTokens,
         BigDecimal costUsd, Long durationMs, Integer numTurns, String sessionId,
         Instant createdAt, Instant updatedAt
@@ -27,6 +28,7 @@ public record ExecutionResponse(
                 e.getId(), agentId, workspaceId, e.getTaskId(), e.getPrompt(), e.getStatus(),
                 e.getStartedAt(), e.getFinishedAt(), e.getExitCode(), e.getErrorMessage(),
                 e.getResultText(), e.getDecision(), delegatedTargetAgentId, parentExecutionId, e.getRootExecutionId(),
+                e.getWorktreePath(), e.getWorktreeBranch(),
                 e.getInputTokens(), e.getOutputTokens(), e.getCacheReadTokens(), e.getCacheCreationTokens(),
                 e.getCostUsd(), e.getDurationMs(), e.getNumTurns(), e.getSessionId(),
                 e.getCreatedAt(), e.getUpdatedAt());

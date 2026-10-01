@@ -39,9 +39,22 @@ public class ExecutionGuard {
     /**
      * 가드를 통과한 실행 대상. 엔티티 대신 값만 들고 있어 다른 스레드로 넘겨도 안전하다.
      *
-     * @param systemPrompt 프롬프트 계층(마스터 → 그룹 → 에이전트)을 합친 시스템 프롬프트
+     * @param systemPrompt   프롬프트 계층(마스터 → 그룹 → 에이전트)을 합친 시스템 프롬프트
+     * @param worktreePath   루트가 만든 git worktree 경로. 없으면 null 이고 워크스페이스에서 돈다
+     * @param worktreeBranch worktree 의 브랜치 이름. 격리하지 못하면 null
      */
-    public record Target(Long agentId, Long workspaceId, String workspacePath, String systemPrompt) {
+    public record Target(Long agentId, Long workspaceId, String workspacePath, String systemPrompt,
+                         String worktreePath, String worktreeBranch) {
+
+        /** CLI 를 실제로 돌릴 작업 디렉터리: worktree 가 있으면 그 안, 없으면 워크스페이스. */
+        public String cwd() {
+            return worktreePath == null || worktreePath.isBlank() ? workspacePath : worktreePath;
+        }
+
+        /** 루트가 만든 worktree 를 이 실행(자식 포함)에 물려준다. */
+        public Target withWorktree(String path, String branch) {
+            return new Target(agentId, workspaceId, workspacePath, systemPrompt, path, branch);
+        }
     }
 
     public Target prepare(Long agentId, Long projectId, Long groupId) {
@@ -70,7 +83,7 @@ public class ExecutionGuard {
         }
 
         return new Target(agent.getId(), workspace.getId(), workspace.getPath(),
-                systemPrompt(project, groupId, agent));
+                systemPrompt(project, groupId, agent), null, null);
     }
 
     /** 프롬프트 계층: 마스터(프로젝트) → 그룹 → 에이전트. 그룹을 통해 실행될 때만 그룹 프롬프트가 끼어든다. */

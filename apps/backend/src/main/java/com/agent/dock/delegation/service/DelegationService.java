@@ -16,6 +16,7 @@ import com.agent.dock.execution.service.ExecutionGuard;
 import com.agent.dock.execution.service.ExecutionRunner;
 import com.agent.dock.execution.service.ExecutionService;
 import com.agent.dock.execution.service.ExecutionStreamHub;
+import com.agent.dock.execution.service.WorktreeService;
 import com.agent.dock.group.dto.GroupResponse;
 import com.agent.dock.group.service.GroupService;
 import com.agent.dock.project.domain.Project;
@@ -61,6 +62,7 @@ public class DelegationService {
     private final ProjectRepository projectRepository;
     private final GroupService groupService;
     private final RuleRouter ruleRouter;
+    private final WorktreeService worktreeService;
 
     @Value("${agentdock.delegation.max-depth:3}")
     private int maxDepth;
@@ -84,7 +86,8 @@ public class DelegationService {
         this.cliSlots = new Semaphore(Math.max(1, maxConcurrent), true);
     }
 
-    private record TreeState(Long projectId, Long taskId, Long rootExecutionId) {
+    private record TreeState(Long projectId, Long taskId, Long rootExecutionId, String worktreePath,
+                             String worktreeBranch) {
     }
 
     /**
@@ -100,13 +103,34 @@ public class DelegationService {
         Execution root = started.execution();
         streamHub.open(root.getId());
 
+        // 이 명령(트리) 전체를 워크스페이스 저장소의 git worktree 로 격리한다. 못 만들면 워크스페이스에서 계속 돈다.
+        ExecutionGuard.Target target = isolated(root, started.target());
+
         boolean judgement = isJudgementAgent(rootAgentId, projectId);
-        TreeState state = new TreeState(projectId, taskId, root.getId());
+        TreeState state = new TreeState(projectId, taskId, root.getId(), target.worktreePath(), target.worktreeBranch());
         workers.submit(() -> {
-            ExecutionStatus status = runExecution(root, started.target(), text, judgement, 0, List.of(rootAgentId), state);
+            ExecutionStatus status = runExecution(root, target, text, judgement, 0, List.of(rootAgentId), state);
+            closeStream(root.getId(), status);
             executionService.publishFinished(root.getId(), taskId, status);
         });
         return root;
+    }
+
+    /**
+     * 루트 실행의 워크스페이스가 git 저장소면 worktree 를 만들어 그 경로를 실행에 기록하고 로그로 알린다.
+     * 만들지 못하면(저장소가 아니거나 git 실패) 워크스페이스 그대로 돌린다 — 격리 실패가 실행을 막지 않는다.
+     */
+    private ExecutionGuard.Target isolated(Execution root, ExecutionGuard.Target target) {
+        WorktreeService.Worktree worktree = worktreeService.create(target.workspacePath(), root.getId());
+        if (worktree.created()) {
+            executionService.recordWorktree(root.getId(), worktree.path(), worktree.branch());
+            streamHub.system(root.getId(),
+                    "⎿ 워크트리: %s (브랜치 %s)".formatted(worktree.path(), worktree.branch()));
+            return target.withWorktree(worktree.path(), worktree.branch());
+        }
+        streamHub.system(root.getId(),
+                "⎿ 워크트리를 만들지 못해 워크스페이스에서 실행합니다: " + worktree.reason());
+        return target;
     }
 
     // ── 실행 하나를 돌린다(자식은 재귀로 각자 돈다) ────────────────────────────────
@@ -114,19 +138,21 @@ public class DelegationService {
     private ExecutionStatus runExecution(Execution execution, ExecutionGuard.Target target, String request,
                                          boolean judgement, int depth, List<Long> path, TreeState state) {
         Long id = execution.getId();
-        ExecutionStatus status;
         try {
-            status = judgement
+            return judgement
                     ? runJudgement(execution, target, request, depth, path, state)
                     : runWork(execution, target, request);
         } catch (Exception ex) {
             log.error("execution {} failed", id, ex);
             executionService.markFailed(id, ex);
-            status = ExecutionStatus.FAILED;
+            return ExecutionStatus.FAILED;
         }
+    }
+
+    /** 끝난 실행의 스트림을 닫는다(끝난 상태와 exit code 를 알린다). */
+    private void closeStream(Long id, ExecutionStatus status) {
         Integer exitCode = executionRepository.findById(id).map(Execution::getExitCode).orElse(null);
         streamHub.close(id, status, exitCode);
-        return status;
     }
 
     /** 일하는 실행: 계약 없이 한 번 돌리고 Handoff 를 남긴다. */
@@ -230,7 +256,12 @@ public class DelegationService {
     private DelegationPrompts.ChildOutcome runChild(Execution parent, DelegationContract.Order order, int depth,
                                                     List<Long> path, TreeState state, String request) {
         Long childAgentId = order.agentId();
-        ExecutionGuard.Target target = guard.prepare(childAgentId, state.projectId(), groupIdOf(childAgentId, state.projectId()));
+        ExecutionGuard.Target prepared = guard.prepare(childAgentId, state.projectId(),
+                groupIdOf(childAgentId, state.projectId()));
+        // 루트가 만든 worktree 가 있으면 자식도 그 안에서 돈다(부모의 편집을 봐야 하므로 같은 디렉터리).
+        ExecutionGuard.Target target = state.worktreePath() == null
+                ? prepared
+                : prepared.withWorktree(state.worktreePath(), state.worktreeBranch());
         String childPrompt = order.expects().isBlank()
                 ? order.prompt()
                 : order.prompt() + "\n\n[기대 결과]\n" + order.expects();
@@ -239,6 +270,7 @@ public class DelegationService {
 
         boolean judgement = isJudgementAgent(childAgentId, state.projectId());
         ExecutionStatus status = runExecution(child, target, request, judgement, depth, append(path, childAgentId), state);
+        closeStream(child.getId(), status);
         return outcomeOf(childAgentId, status, child.getId());
     }
 
@@ -444,7 +476,7 @@ public class DelegationService {
             throw new IllegalStateException("실행이 중단되었습니다", ex);
         }
         try {
-            return runner.runStep(executionId, agent, target.workspacePath(), target.systemPrompt(), prompt, maxCostUsd);
+            return runner.runStep(executionId, agent, target.cwd(), target.systemPrompt(), prompt, maxCostUsd);
         } catch (RuntimeException ex) {
             throw ex;
         } catch (Exception ex) {

@@ -2,6 +2,7 @@ package com.agent.dock.execution.service;
 
 import com.agent.dock.agent.domain.Agent;
 import com.agent.dock.agent.repository.AgentRepository;
+import com.agent.dock.common.exception.ConflictException;
 import com.agent.dock.common.exception.NotFoundException;
 import com.agent.dock.execution.domain.Execution;
 import com.agent.dock.execution.domain.ExecutionDecision;
@@ -42,6 +43,7 @@ public class ExecutionService {
     private final ExecutionStreamHub streamHub;
     private final RuntimeRegistry runtimeRegistry;
     private final ApplicationEventPublisher eventPublisher;
+    private final WorktreeService worktreeService;
 
     public ExecutionResponse findOne(Long id) {
         Execution execution = executionRepository.findById(id)
@@ -97,6 +99,44 @@ public class ExecutionService {
     }
 
     public record Started(Execution execution, ExecutionGuard.Target target) {
+    }
+
+    /** 루트가 만든 git worktree 를 실행에 기록한다(자식은 이 값을 물려받아 같은 디렉터리에서 돈다). */
+    public void recordWorktree(Long executionId, String path, String branch) {
+        update(executionId, execution -> {
+            execution.setWorktreePath(path);
+            execution.setWorktreeBranch(branch);
+        });
+    }
+
+    /**
+     * 워크트리 정리(사람이 판단해 부른다 — 자동 삭제는 하지 않는다). 아직 도는 트리는 막고(409),
+     * 지운 뒤에는 실행에서 경로·브랜치를 비워 화면의 정리 표시도 함께 사라지게 한다.
+     */
+    public void removeWorktree(Long executionId, boolean deleteBranch) {
+        Execution execution = executionRepository.findById(executionId)
+                .orElseThrow(() -> new NotFoundException("Execution %d not found".formatted(executionId)));
+        if (isRunning(execution.getStatus())) {
+            throw new ConflictException("아직 실행 중인 트리의 워크트리는 지울 수 없습니다");
+        }
+        if (execution.getWorktreePath() == null || execution.getWorktreePath().isBlank()) {
+            throw new NotFoundException("Execution %d has no worktree".formatted(executionId));
+        }
+        WorktreeService.Removal removal = worktreeService.remove(
+                execution.getWorktreePath(), execution.getWorktreeBranch(), deleteBranch);
+        if (!removal.removed()) {
+            throw new ConflictException("워크트리를 지우지 못했습니다: " + removal.detail());
+        }
+        update(executionId, e -> {
+            e.setWorktreePath(null);
+            e.setWorktreeBranch(null);
+        });
+    }
+
+    /** 아직 끝나지 않은 상태(PENDING/RUNNING/WAITING_CHILD)인지. */
+    private static boolean isRunning(ExecutionStatus status) {
+        return status == ExecutionStatus.PENDING || status == ExecutionStatus.RUNNING
+                || status == ExecutionStatus.WAITING_CHILD;
     }
 
     public void markRunning(Long executionId) {

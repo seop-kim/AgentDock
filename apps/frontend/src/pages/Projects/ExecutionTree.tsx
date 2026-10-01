@@ -1,5 +1,13 @@
 import { createPortal } from 'react-dom';
-import { STATUS_LABEL, STATUS_TONE, formatCost, formatDuration, formatTokens, summarize, treeOrder } from '../../lib/executions';
+import {
+  STATUS_LABEL,
+  STATUS_TONE,
+  formatCost,
+  formatDuration,
+  formatTokens,
+  summarize,
+  treeOrder,
+} from '../../lib/executions';
 import { useAgentDockStore } from '../../store/AgentDockStore';
 import exec from '../../styles/execution.module.css';
 import modal from '../../styles/modal.module.css';
@@ -81,12 +89,21 @@ export default function ExecutionTreeModal({
   masterAgentId: number | null;
   onClose: () => void;
 }) {
-  const { agents } = useAgentDockStore();
+  const { agents, removeWorktree } = useAgentDockStore();
   const rows = treeOrder(executions, rootExecutionId);
   if (rows.length === 0) return null;
 
   const total = summarize(rows.map((row) => row.execution));
   const nameOf = (id: number) => agents.find((a) => a.id === id)?.name ?? '삭제된 에이전트';
+
+  /**
+   * 워크트리 정리(사람이 판단해 부른다). 한 트리 = 한 워크트리라서 루트 행에서만 정리할 수 있다.
+   * 자동 병합·자동 삭제는 없으므로 결과를 확인한 뒤 사람이 지운다.
+   */
+  const cleanupWorktree = (execution: Execution) => {
+    if (!window.confirm(`워크트리와 전용 브랜치를 지울까요?\n${execution.worktreePath ?? ''}`)) return;
+    removeWorktree(execution.id, true);
+  };
 
   return createPortal(
     <div className={modal.overlay} onClick={onClose}>
@@ -135,6 +152,16 @@ export default function ExecutionTreeModal({
                     : '실행 중…'}
                 </span>
               </div>
+              {execution.worktreeBranch && (
+                <p className={exec.rowFiles} title={execution.worktreePath ?? undefined}>
+                  워크트리 {execution.worktreePath} · {execution.worktreeBranch}
+                  {execution.parentExecutionId === null && (
+                    <button type="button" className={exec.cardButton} onClick={() => cleanupWorktree(execution)}>
+                      워크트리 정리
+                    </button>
+                  )}
+                </p>
+              )}
               {execution.handoff && <p className={exec.rowSummary}>{execution.handoff.summary}</p>}
               {execution.handoff !== null && execution.handoff.changedFiles.length > 0 && (
                 <p className={exec.rowFiles}>{execution.handoff.changedFiles.join('  ')}</p>
