@@ -1,0 +1,229 @@
+/* 오른쪽에 세로로 붙는 명령 패널. 구성도 위에 떠 있고, 내용이 길면 기록이 안에서 스크롤된다. */
+.chat {
+  composes: glass from '../../styles/glass.module.css';
+  position: absolute;
+  top: var(--spacing-md);
+  right: var(--spacing-md);
+  bottom: var(--spacing-md);
+  width: 360px;
+  max-width: calc(100% - var(--spacing-md) * 2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  /* 왼쪽은 넓히기 화살표가 설 자리만 조금 남긴다(크게 비우지 않는다) */
+  padding: 10px 12px 10px 14px;
+  border-radius: var(--radius-lg);
+}
+
+/* 접었을 때: 머리말만 남기고 위쪽에 붙는다 */
+.collapsed {
+  bottom: auto;
+}
+
+/* 크게 보기: 왼쪽 패널 옆부터 창 오른쪽까지 차지해 구성도를 덮는다(일시적). */
+.wide {
+  left: calc(var(--left-inset, 352px) + var(--spacing-md));
+  width: auto;
+}
+
+/* 넓어져도 말풍선이 너무 길어지지 않게 한다. */
+.wide .message {
+  max-width: 720px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.title {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.count {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+/* 명령 박스 **왼쪽 테두리 안쪽**의 넓히기 화살표.
+   누르면 좌우로 넓어지고(‹) 다시 누르면 원래 크기로(›) 돌아온다.
+   **클릭 범위는 왼쪽 세로 전체**(둥근 모서리를 피해 위아래 16px 만 비운다)이고, 화살표는 가운데 하나만 보인다. */
+.wideButton {
+  position: absolute;
+  left: 1px;
+  top: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+  line-height: 0;
+  cursor: pointer;
+}
+
+.wideButton:hover {
+  background: var(--color-code-bg);
+  color: var(--color-text);
+}
+
+.wideButton svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* 패널 접기/펴기 버튼(머리말 왼쪽) */
+.fold {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 2px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-muted);
+}
+
+.fold:hover {
+  background: var(--color-code-bg);
+  color: var(--color-text);
+  filter: none;
+}
+
+.fold svg {
+  width: 16px;
+  height: 16px;
+}
+
+.collapsed .fold svg {
+  transform: rotate(180deg);
+}
+
+.target {
+  width: 100%;
+}
+
+.hint {
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* 기록: 남는 높이를 다 쓰고, 길어지면 안에서 스크롤한다. */
+.log {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--spacing-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  font-size: 13px;
+}
+
+.message {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 88%;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: var(--color-code-bg);
+}
+
+/* 내가 보낸 메시지는 오른쪽, 에이전트/시스템은 왼쪽 */
+.user {
+  align-self: flex-end;
+  background: var(--gradient-accent);
+  color: var(--color-on-primary);
+}
+
+.user .meta {
+  color: inherit;
+  opacity: 0.75;
+}
+
+.agent,
+.system {
+  align-self: flex-start;
+}
+
+.meta {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.error {
+  color: var(--color-error);
+}
+
+.pending {
+  color: var(--color-muted);
+}
+
+/* 입력줄: 상자들과 같은 형태로 한 칸에 묶는다(둥근 테두리 + 반투명 배경, 여백은 위 3·좌우 10) */
+.form {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-input-bg);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+/* 칸 안이므로 입력 자체는 테두리·배경을 두지 않고, 포커스 표시는 칸 전체에 준다 */
+.form:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-code-bg);
+}
+
+.form input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 4px;
+  border: none;
+  background: transparent;
+}
+
+.form input:focus-visible {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* 파일 첨부 버튼(입력줄 왼쪽) */
+.attach {
+  flex-shrink: 0;
+  padding: 0 8px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-muted);
+}
+
+.attach:hover:not(:disabled) {
+  background: var(--color-code-bg);
+  color: var(--color-text);
+}
+
+/* 파일을 끌어오는 동안: 놓을 곳을 보여 준다(테두리는 글래스가 정하므로 outline 을 쓴다) */
+.dropTarget {
+  outline: 2px dashed var(--color-primary);
+  outline-offset: 2px;
+}
+
+.dropHint {
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px dashed var(--color-primary);
+  border-radius: var(--radius);
+  color: var(--color-primary);
+  font-size: 12px;
+}

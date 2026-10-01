@@ -16,38 +16,23 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export interface AgentRole {
-  id: number;
-  name: string;
-  description?: string | null;
-}
-
-export interface PermissionProfile {
-  id: number;
-  name: string;
-}
-
-export interface ProviderCapabilities {
+export interface Capabilities {
   models?: string[] | null;
   modes?: string[] | null;
   notes?: string | null;
-  /** CLI 설치 단계(순서대로 실행). 셸을 통해 실행된다. */
   install?: string[] | null;
-  /** 먼저 있어야 하는 실행 파일(예: npm). 없으면 installPrerequisite 를 먼저 실행한다. */
   installRequire?: string | null;
-  /** 필수 실행 파일이 없을 때 실행할 단계들(예: nvm install lts). */
   installPrerequisite?: string[] | null;
 }
 
-export interface AiProvider {
+export interface Provider {
   id: number;
   key: string;
   name: string;
-  capabilities?: ProviderCapabilities | null;
   enabled: boolean;
+  capabilities?: Capabilities | null;
 }
 
-/** 런타임 CLI 실행 파일 상태(폴더와 무관한 런타임 전역). */
 export interface CliStatus {
   resolvedPath: string | null;
   version: string | null;
@@ -55,7 +40,12 @@ export interface CliStatus {
   detail: string | null;
 }
 
-/** 워크스페이스(폴더)에서의 런타임 상태. */
+export interface Workspace {
+  id: number;
+  name: string;
+  path: string;
+}
+
 export interface WorkspaceRuntime {
   providerId: number;
   providerKey: string;
@@ -63,16 +53,8 @@ export interface WorkspaceRuntime {
   enabled: boolean;
   status: string;
   cliMissing: boolean;
-  install: string[];
-  installRequire: string | null;
   lastCheckedAt: string | null;
   lastError: string | null;
-}
-
-export interface Workspace {
-  id: number;
-  name: string;
-  path: string;
 }
 
 export interface ProjectWorkspaceInfo {
@@ -82,14 +64,12 @@ export interface ProjectWorkspaceInfo {
   isDefault: boolean;
 }
 
-export interface Project {
+export interface AgentRole {
   id: number;
   name: string;
-  description?: string | null;
-  workspaces: ProjectWorkspaceInfo[];
 }
 
-export interface ProjectSummary {
+export interface PermissionProfile {
   id: number;
   name: string;
 }
@@ -99,47 +79,104 @@ export interface AgentSummary {
   name: string;
 }
 
-export interface AgentGroup {
+export interface Project {
   id: number;
-  projectId: number;
   name: string;
   description?: string | null;
-  leader: AgentSummary | null;
-  members: AgentSummary[];
-}
-
-export interface Task {
-  id: number;
-  project: ProjectSummary | null;
-  group: AgentSummary | null;
-  agent: AgentSummary | null;
-  title: string;
-  prompt: string;
-  status: string;
-  latestExecutionId: number | null;
+  workspaces: ProjectWorkspaceInfo[];
+  masterAgent?: AgentSummary | null;
+  masterPrompt?: string;
 }
 
 export interface Agent {
   id: number;
   name: string;
   projectId: number;
-  project: ProjectSummary | null;
   role: AgentRole;
   permissionProfile: PermissionProfile;
-  provider: AiProvider;
+  provider: Provider;
   providerId: number;
   persona: string | null;
   model: string | null;
   mode: string | null;
+  placed: boolean;
+  nodeX: number | null;
+  nodeY: number | null;
   available: boolean;
   unavailableReason: 'PROVIDER_DELETED' | 'RUNTIME_DISABLED' | 'CONNECTION_NOT_CONNECTED' | null;
 }
 
+export interface AgentGroup {
+  id: number;
+  projectId: number;
+  name: string;
+  description?: string | null;
+  prompt: string | null;
+  leader: AgentSummary | null;
+  members: AgentSummary[];
+  nodeX: number | null;
+  nodeY: number | null;
+}
+
+export interface Task {
+  id: number;
+  title: string;
+  prompt: string;
+  status: string;
+  group: AgentSummary | null;
+  agent: AgentSummary | null;
+  latestExecutionId: number | null;
+}
+
 export interface Execution {
   id: number;
-  status: string;
+  agentId: number;
+  taskId: number | null;
   prompt: string;
+  status: string;
   exitCode: number | null;
+  errorMessage: string | null;
+  resultText: string | null;
+  decision: 'DELEGATE' | 'DONE' | null;
+  delegatedTargetAgentId: number | null;
+  parentExecutionId: number | null;
+  rootExecutionId: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  costUsd: number | null;
+  durationMs: number | null;
+  numTurns: number | null;
+  sessionId: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+
+export interface ExecutionTreeNode {
+  execution: Execution;
+  depth: number;
+  agentName: string | null;
+  targetAgentName: string | null;
+  logCount: number;
+}
+
+export interface ExecutionTree {
+  rootExecutionId: number;
+  nodes: ExecutionTreeNode[];
+}
+
+export interface ExecutionLogEntry {
+  id: number;
+  stream: string;
+  content: string;
+}
+
+export interface Attachment {
+  id: number;
+  workspaceId: number;
+  taskId: number | null;
+  originalName: string;
+  storedPath: string;
+  sizeBytes: number | null;
 }
 
 export interface WorkspaceBrowseEntry {
@@ -155,84 +192,102 @@ export interface WorkspaceBrowseResult {
 
 export const api = {
   base: API_BASE,
-  listRoles: () => request<AgentRole[]>('/roles'),
-  createRole: (data: { name: string; description?: string }) =>
-    request<AgentRole>('/roles', { method: 'POST', body: JSON.stringify(data) }),
 
-  listPermissionProfiles: () => request<PermissionProfile[]>('/permission-profiles'),
-  createPermissionProfile: (data: Record<string, unknown>) =>
-    request<PermissionProfile>('/permission-profiles', { method: 'POST', body: JSON.stringify(data) }),
+  listProjects: () => request<Project[]>('/projects'),
+  getProject: (id: number) => request<Project>(`/projects/${id}`),
+  createProject: (data: { name: string; description?: string }) =>
+    request<Project>('/projects', { method: 'POST', body: JSON.stringify(data) }),
+  updateProject: (id: number, data: { name: string; description?: string }) =>
+    request<Project>(`/projects/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteProject: (id: number) => request<void>(`/projects/${id}`, { method: 'DELETE' }),
+  setProjectMaster: (id: number, data: { agentId: number | null; masterPrompt?: string }) =>
+    request<Project>(`/projects/${id}/master`, { method: 'PUT', body: JSON.stringify(data) }),
+  assignProjectWorkspace: (id: number, workspaceId: number, isDefault = false) =>
+    request<Project>(`/projects/${id}/workspaces`, {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId, isDefault }),
+    }),
+  removeProjectWorkspace: (id: number, workspaceId: number) =>
+    request<void>(`/projects/${id}/workspaces/${workspaceId}`, { method: 'DELETE' }),
+  saveLayout: (
+    id: number,
+    data: {
+      agents: { agentId: number; x: number | null; y: number | null; placed: boolean }[];
+      groups: { groupId: number; x: number | null; y: number | null }[];
+    },
+  ) => request<void>(`/projects/${id}/layout`, { method: 'PUT', body: JSON.stringify(data) }),
+  clearLayout: (id: number) => request<void>(`/projects/${id}/layout`, { method: 'DELETE' }),
 
-  listProviders: () => request<AiProvider[]>('/ai-providers'),
+  listAgents: () => request<Agent[]>('/agents'),
+  createAgent: (data: Record<string, unknown>) =>
+    request<Agent>('/agents', { method: 'POST', body: JSON.stringify(data) }),
+  updateAgent: (id: number, data: Record<string, unknown>) =>
+    request<Agent>(`/agents/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteAgent: (id: number) => request<void>(`/agents/${id}`, { method: 'DELETE' }),
+
+  listGroups: (projectId: number) => request<AgentGroup[]>(`/groups?projectId=${projectId}`),
+  createGroup: (data: { projectId: number; name: string; description?: string; leaderAgentId?: number }) =>
+    request<AgentGroup>('/groups', { method: 'POST', body: JSON.stringify(data) }),
+  updateGroup: (id: number, data: { name: string; description?: string; prompt?: string; leaderAgentId?: number | null }) =>
+    request<AgentGroup>(`/groups/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteGroup: (id: number) => request<void>(`/groups/${id}`, { method: 'DELETE' }),
+  addGroupMember: (groupId: number, agentId: number) =>
+    request<AgentGroup>(`/groups/${groupId}/members`, { method: 'POST', body: JSON.stringify({ agentId }) }),
+  removeGroupMember: (groupId: number, agentId: number) =>
+    request<AgentGroup>(`/groups/${groupId}/members/${agentId}`, { method: 'DELETE' }),
+
+  listTasks: (projectId: number) => request<Task[]>(`/tasks?projectId=${projectId}`),
+  sendCommand: (
+    projectId: number,
+    data: { text: string; targetAgentId?: number | null; groupId?: number | null; attachmentIds?: number[] },
+  ) => request<{ taskId: number; rootExecutionId: number }>(`/projects/${projectId}/commands`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+
+  getExecution: (id: number) => request<Execution>(`/executions/${id}`),
+  getExecutionTree: (id: number) => request<ExecutionTree>(`/executions/${id}/tree`),
+  getExecutionLogs: (id: number) => request<ExecutionLogEntry[]>(`/executions/${id}/logs`),
+  cancelExecution: (id: number) => request<{ cancelled: boolean }>(`/executions/${id}/cancel`, { method: 'POST' }),
+
+  listProviders: () => request<Provider[]>('/ai-providers'),
   createProvider: (data: { key: string; name: string }) =>
-    request<AiProvider>('/ai-providers', { method: 'POST', body: JSON.stringify(data) }),
+    request<Provider>('/ai-providers', { method: 'POST', body: JSON.stringify(data) }),
   deleteProvider: (id: number) => request<void>(`/ai-providers/${id}`, { method: 'DELETE' }),
   setProviderEnabled: (id: number, enabled: boolean) =>
-    request<AiProvider>(`/ai-providers/${id}/enabled`, { method: 'PUT', body: JSON.stringify({ enabled }) }),
-  updateProviderCapabilities: (id: number, data: ProviderCapabilities) =>
-    request<AiProvider>(`/ai-providers/${id}/capabilities`, { method: 'PUT', body: JSON.stringify(data) }),
-  getProviderCli: (providerId: number) => request<CliStatus>(`/ai-providers/${providerId}/cli`),
-  startLogin: (providerId: number) =>
-    request<{ sessionId: string }>(`/ai-providers/${providerId}/login`, { method: 'POST' }),
-  startInstall: (providerId: number) =>
-    request<{ sessionId: string }>(`/ai-providers/${providerId}/install`, { method: 'POST' }),
+    request<Provider>(`/ai-providers/${id}/enabled`, { method: 'PUT', body: JSON.stringify({ enabled }) }),
+  updateProviderCapabilities: (id: number, data: Capabilities) =>
+    request<Provider>(`/ai-providers/${id}/capabilities`, { method: 'PUT', body: JSON.stringify(data) }),
+  getProviderCli: (id: number) => request<CliStatus>(`/ai-providers/${id}/cli`),
+  startLogin: (providerId: number) => request<{ sessionId: string }>(`/ai-providers/${providerId}/login`, { method: 'POST' }),
+  startInstall: (providerId: number) => request<{ sessionId: string }>(`/ai-providers/${providerId}/install`, { method: 'POST' }),
   sendSessionInput: (sessionId: string, text: string) =>
     request<void>(`/ai-providers/command-sessions/${sessionId}/input`, {
       method: 'POST',
       body: JSON.stringify({ text }),
     }),
-  stopSession: (sessionId: string) =>
-    request<void>(`/ai-providers/command-sessions/${sessionId}`, { method: 'DELETE' }),
+  stopSession: (sessionId: string) => request<void>(`/ai-providers/command-sessions/${sessionId}`, { method: 'DELETE' }),
 
   listWorkspaces: () => request<Workspace[]>('/workspaces'),
   createWorkspace: (data: { name: string; path: string; description?: string }) =>
     request<Workspace>('/workspaces', { method: 'POST', body: JSON.stringify(data) }),
   browseWorkspace: (path?: string) =>
     request<WorkspaceBrowseResult>(`/workspaces/browse${path ? `?path=${encodeURIComponent(path)}` : ''}`),
+  listWorkspaceFiles: (workspaceId: number) => request<string[]>(`/workspaces/${workspaceId}/files`),
+  uploadAttachments: async (workspaceId: number, files: File[]): Promise<Attachment[]> => {
+    const form = new FormData();
+    files.forEach((file) => form.append('files', file, file.name));
+    const res = await fetch(`${API_BASE}/workspaces/${workspaceId}/attachments`, { method: 'POST', body: form });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`${res.status} ${res.statusText}: ${body}`);
+    }
+    return (await res.json()) as Attachment[];
+  },
   listWorkspaceRuntimes: (workspaceId: number) => request<WorkspaceRuntime[]>(`/workspaces/${workspaceId}/runtimes`),
   checkWorkspaceRuntime: (workspaceId: number, providerId: number) =>
     request<WorkspaceRuntime>(`/workspaces/${workspaceId}/runtimes/${providerId}/check`, { method: 'POST' }),
 
-  listProjects: () => request<Project[]>('/projects'),
-  createProject: (data: { name: string; workspaceId?: number; description?: string }) =>
-    request<Project>('/projects', { method: 'POST', body: JSON.stringify(data) }),
-  assignProjectWorkspace: (projectId: number, workspaceId: number, isDefault = false) =>
-    request<Project>(`/projects/${projectId}/workspaces`, {
-      method: 'POST',
-      body: JSON.stringify({ workspaceId, isDefault }),
-    }),
-  removeProjectWorkspace: (projectId: number, workspaceId: number) =>
-    request<void>(`/projects/${projectId}/workspaces/${workspaceId}`, { method: 'DELETE' }),
-
-  listGroups: (projectId?: number) =>
-    request<AgentGroup[]>(`/groups${projectId ? `?projectId=${projectId}` : ''}`),
-  createGroup: (data: { projectId: number; name: string; description?: string; leaderAgentId?: number }) =>
-    request<AgentGroup>('/groups', { method: 'POST', body: JSON.stringify(data) }),
-  updateGroup: (id: number, data: { name: string; description?: string; leaderAgentId?: number | null }) =>
-    request<AgentGroup>(`/groups/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  addGroupMember: (groupId: number, agentId: number) =>
-    request<AgentGroup>(`/groups/${groupId}/members`, { method: 'POST', body: JSON.stringify({ agentId }) }),
-  removeGroupMember: (groupId: number, agentId: number) =>
-    request<AgentGroup>(`/groups/${groupId}/members/${agentId}`, { method: 'DELETE' }),
-
-  listTasks: (projectId?: number, groupId?: number) => {
-    const params = new URLSearchParams();
-    if (projectId) params.set('projectId', String(projectId));
-    if (groupId) params.set('groupId', String(groupId));
-    const query = params.toString();
-    return request<Task[]>(`/tasks${query ? `?${query}` : ''}`);
-  },
-  createTask: (data: { projectId: number; title: string; prompt: string; groupId?: number; agentId?: number }) =>
-    request<Task>('/tasks', { method: 'POST', body: JSON.stringify(data) }),
-  runTask: (id: number) => request<Execution>(`/tasks/${id}/run`, { method: 'POST' }),
-
-  listAgents: () => request<Agent[]>('/agents'),
-  assignAgentProvider: (agentId: number, providerId: number) =>
-    request<Agent>(`/agents/${agentId}/provider`, { method: 'PUT', body: JSON.stringify({ providerId }) }),
-  createAgent: (data: Record<string, unknown>) =>
-    request<Agent>('/agents', { method: 'POST', body: JSON.stringify(data) }),
-
-  createExecution: (data: { agentId: number; projectId: number; prompt: string }) =>
-    request<Execution>('/executions', { method: 'POST', body: JSON.stringify(data) }),
-  getExecution: (id: number | string) => request<Execution>(`/executions/${id}`),
+  listRoles: () => request<AgentRole[]>('/roles'),
+  listPermissionProfiles: () => request<PermissionProfile[]>('/permission-profiles'),
 };

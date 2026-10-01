@@ -14,7 +14,7 @@
 
 Command Code처럼 위 세 파일 중 아무것도 자동으로 읽지 않는 툴을 쓸 경우, 그 툴의 system prompt/설정에 "작업 전에 `agents/CONVENTIONS.md`를 읽어라"를 직접 지정한다.
 
-진행 상태와 다음 작업은 [`agents/HANDOVER.md`](./HANDOVER.md) 를 본다(현재는 **목업 단계**). 이 문서는 규칙·구조의 기준이고, HANDOVER 는 "지금 어디까지 됐고 다음에 뭘 할지"의 스냅샷이다. 목업 이전의 백엔드/프론트 구현 단계 인수인계(일시 중단)는 [`agents/HANDOVER-implementation.md`](./HANDOVER-implementation.md) 에 보관한다.
+진행 상태와 다음 작업은 [`agents/HANDOVER.md`](./HANDOVER.md) 를 본다(현재는 **1차 구현 — 위임 코어와 프로젝트 상세**). 이 문서는 규칙·구조의 기준이고, HANDOVER 는 "지금 어디까지 됐고 다음에 뭘 할지"의 스냅샷이다. 목업 이전의 백엔드/프론트 구현 단계 인수인계(일시 중단)는 [`agents/HANDOVER-implementation.md`](./HANDOVER-implementation.md) 에 보관한다.
 
 ## 기술 스택
 
@@ -50,9 +50,13 @@ Command Code처럼 위 세 파일 중 아무것도 자동으로 읽지 않는 �
 
 Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 이후 Stage(2~4)에서 확장한다.
 
-## 목업 (`apps/mockup`) — 진행 중
+## 화면 설계 기준 (목업에서 확정 → `apps/frontend` 에 이식 중)
 
-구현을 멈추고 목업을 먼저 만드는 중이다(`mockup` 브랜치). 목업이 확정되면 그것이 이후 개발의 기준이 된다. 설계는 `docs/superpowers/specs/2026-09-30-mockup-prototype-design.md`, 새로 쓰는 기획서/설계서는 `docs/planning/` 에 둔다.
+**프론트엔드 폴더 규칙(기능 우선)**: `apps/frontend/src` 는 `components/`(공용 컴포넌트) · `lib/`(api·storage·표시 유틸) · `store/`(전역 컨텍스트) · `styles/`(토큰·공용 CSS 모듈) · `features/<도메인>/` 으로 나눈다. 화면과 그 화면 전용 컴포넌트·CSS 는 **해당 도메인 폴더 안에** 둔다(`features/project/ProjectDetail.tsx`, `features/execution/TerminalWindow.tsx`). 새 화면은 만들어질 때 그 도메인 폴더에 넣고, 다른 도메인 것을 가져다 쓸 때만 `../<도메인>/X` 로 참조한다.
+
+`apps/mockup`(독립 앱, 포트 3040)에서 화면·UX 를 먼저 확정했고, 그 **디자인 시스템과 화면 구조를 `apps/frontend` 로 옮기는 중**이다. 목업은 기준 화면으로 계속 남겨 둔다(수정하지 않는다 — 값을 비교할 때만 본다). 아래 규칙은 이제 **`apps/frontend` 에도 그대로 적용된다**: `src/styles/tokens.css`, `src/styles/glass.module.css`, `src/styles/shared.module.css`, `src/styles/modal.module.css`, `src/styles/execution.module.css`, `src/styles/terminal.module.css`, `src/components/Sidebar.tsx`, `src/store/ThemeContext.tsx`, `src/lib/storage.ts`(테마 키 `agentdock-theme`)가 이식됐고, 프로젝트 상세는 `src/features/project/ProjectDetail.tsx`(+ `src/features/execution/ExecutionTreeModal.tsx`, `.../TerminalWindow.tsx`)다. 목업에만 있는 화면(구성도 캔버스, 첨부, 현실성 점검, 설정 안쪽 메뉴)은 다음 단계다.
+
+목업 단계는 끝났다(`mockup` 브랜치 → `dev` 로 머지됨, `[Feat] 목업: … (#6)`). 목업을 만들면서 확정한 화면·규칙이 이후 개발의 기준이고, 기획서/설계서는 `docs/planning/` 에 쓴다(설계 근거: `docs/superpowers/specs/2026-09-30-mockup-prototype-design.md`).
 
 - 독립 Vite + React + TypeScript 앱(포트 **3040**, `npm run dev:mockup`). `apps/frontend`/`apps/backend` 는 건드리지 않는다.
 - 백엔드/DB 없음. 테스트 데이터는 `src/store/seed.ts`, 상태는 `src/store/MockStore.tsx`(메모리, 새로고침하면 초기화). `localStorage` 는 **UI 설정만** 저장한다: 테마 선택, 사이드바 펼침 여부(키는 `src/lib/storage.ts` 의 `STORAGE_KEYS`, 접근은 그 파일의 `readStorage`/`writeStorage` 로만 한다. 테마는 첫 화면 깜빡임 방지용 초기 적용 스크립트가 `index.html` 에 있으며 키를 같게 유지한다). 그 밖의 데이터는 저장하지 않는다.
@@ -78,25 +82,52 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
 - **구성도 캔버스**: 그룹은 상자, 에이전트는 노드로 그리고 그룹 안에서 리더가 위, 멤버가 아래에서 선으로 이어진다(배치는 `lib/canvasLayout.ts` 의 순수 함수). **에이전트는 그룹에 속하지 않아도 되며** 속하지 않은 에이전트는 "그룹 없음" 같은 이름표나 상자 없이 노드만 놓인다. 왼쪽 목록의 **에이전트 카드**와 **그룹 멤버 칩**은 **HTML5 DnD**(`lib/dnd.ts`)로 그룹 상자/그룹 카드에 넣거나 뺄 수 있고, **에이전트 카드를 캔버스 빈 곳에 놓으면 그 자리에 배치된다**(미배치는 배치되고, 그룹에 있던 것은 그룹에서 빠진다 — 캔버스의 드롭 처리가 `setAgentPlaced` + `setAgentPosition` 을 한다). **구성도 노드는 포인터로 끌어** 옮긴다(HTML5 DnD 를 쓰지 않는다). 배경 드래그로 이동, 휠로 확대/축소하고, **아래 가운데 뜬 도구**(−/+·배율·맞춤·위치 초기화)로 화면에 맞춘다(왼쪽·오른쪽 패널을 뺀 빈 곳의 가운데에 온다). **노드를 끌어 자유 위치로 옮길 수 있다**(그룹에 속하지 않은 노드만 자유 위치를 갖는다): 그룹 상자 위에 놓으면 그 그룹으로 들어가고, 빈 곳에 놓으면 그룹에서 빠져 그 자리에 선다. 자유 위치는 스토어의 `nodePositions` 에 쌓이고 `canvasLayout` 이 그 좌표를 쓴다(맞춤 크기에도 포함). **그룹 상자도 머리말을 끌어 통째로 옮긴다**(그 안의 노드·선도 함께, `groupPositions`). 그룹 상자 머리말의 **`⋮` 메뉴**에서 프롬프트 편집·삭제를 한다(왼쪽 그룹 카드와 같다). 손으로 옮긴 것은 **제자리를 차지한 채 좌표만 바뀌어** 다른 노드·그룹이 밀리지 않는다. 좌표는 **음수도 될 수 있어 캔버스 왼쪽·위까지 쓸 수 있고**, 맞춤은 경계 상자(`layout.minX`·`minY`)를 기준으로 한다. **위치 초기화** 버튼이 모두 지워 자동 배치로 되돌리고, 손으로 옮기기 시작하면 자동 맞춤은 멈춘다(`touchedRef`). 첫 멤버는 자동으로 리더가 되고, 한 에이전트는 여러 그룹에 속할 수 있다. 위치/크기는 CSS 변수(`--x`, `--y`, `--w`, `--h`, `--vx`, `--vy`, `--vs`)로만 넘기고 모양은 CSS 파일이 정한다.
 - 현재 화면: Dashboard, 프로젝트(`/projects`, `/projects/:id`), 현실성 점검(`/reality-check`), 설정. 나머지 화면은 순서대로 추가한다.
 
+## 실행(위임) 흐름 — 구현됨 (1차)
+
+명령 하나가 **실행 트리 하나**다. 판단이 필요한 실행(마스터·그룹 리더)은 출력 끝에 **계약(JSON)** 을 남기고, 계약이 `delegate` 면 자식 실행을 만들어 결과를 기다렸다가 그 결과를 붙여 **다시 판단**한다. `done` 이 나오면 끝난다.
+
+- **계약(출력 계약)**: 판단 실행은 `{"action":"delegate","targets":[{"agentId":9,"prompt":"…","expects":"…"}]}` 또는 `{"action":"done","summary":"…"}`, 작업 실행은 `{"summary":"…","changedFiles":["…"]}`. 스키마는 `delegation/ContractSchemas` 에 있고 **프롬프트 본문에 그대로 적어 준다**.
+- **계약 처리 실패**: 파싱 실패 → **1회 재시도**(스키마를 다시 일러 준다) → **규칙 라우터**(팀 이름 토큰이 요청에 걸리면 그 팀 리더) → 그래도 안 되면 사람에게 넘긴다(`ExecutionService.markEscalated`, 실행은 `FAILED`).
+- **상한**(`application.yaml` 의 `agentdock.delegation.*`, 코드에 박지 않는다): 깊이 3 · 트리당 실행 20건 · 실행당 판단 4회 · 한 번에 대상 4건 · **동시 CLI 4개**(공정 세마포어) · 트리 예산 5달러(스텝별 `--max-budget-usd` 로도 걸린다). 순환 위임(조상에게 되돌리기)은 거부하고 사유를 실행 로그(system)에 남긴다.
+- **프롬프트 계층**: `project.masterPrompt` → `agent_group.prompt` → `agent.persona` 를 빈 줄로 이어 붙여 `--append-system-prompt` 로 넘긴다(`agent/PromptLayers`). 그룹 프롬프트는 그 에이전트가 **리더인 그룹 → 없으면 속한 첫 그룹** 것을 쓴다.
+- **상태 표시**: 한 실행이 여러 스텝으로 이어지면 스텝이 끝나도 `SUCCEEDED` 로 두지 않는다 — `markRunning` 으로 되돌리고, 자식을 기다리는 동안은 `WAITING_CHILD`, 마지막에만 `markSucceeded`/`markEscalated`. **위임한 실행은 마지막 계약이 마무리여도 위임 대상(`delegatedTargetAgentId`)이 남는다**(누구에게 맡겼는지 화면에 남긴다).
+- **위임한 트리의 Task 상태**는 트리가 전부 끝났을 때 **한 번만** `ExecutionFinishedEvent` 로 알린다(스텝마다 알리면 Task 가 일찍 끝난 것으로 표시된다).
+
+### CLI 출력을 다루는 법 (실측으로 확인한 사실 — 추측 금지)
+
+- `--output-format stream-json`(+`--verbose`)으로 실행하고 **JSONL 한 줄씩** 받아 로그로 바꾼다(`runtime/ClaudeStreamJson`). `assistant` 이벤트의 content 블록(thinking/text/tool_use)이 로그 줄이 되고, 마지막 `result` 이벤트에서 결과 텍스트와 계측값을 꺼낸다(`usage`·`total_cost_usd`·`duration_ms`·`num_turns`·`session_id`·`is_error`).
+- **프롬프트는 인자가 아니라 표준입력(UTF-8)으로 넘긴다**(`-p` 뒤에 값을 붙이지 않는다). 인자로 넘기면 JSON·따옴표·긴 문장이 CLI 에 온전히 전달되지 않는다.
+- **`--json-schema` 는 쓰지 않는다.** Java 의 Windows 인자 인용 때문에 따옴표가 든 JSON 문자열이 전달되지 않는다(파일 경로로 넘기는 것도 거부된다). 계약 강제는 프롬프트로 하고, 결과 텍스트에서 JSON 객체를 찾아 파싱한다(코드블록·앞뒤 설명이 섞여도 찾아낸다).
+- 계측값은 **CLI 가 준 값만** 저장한다(추정 금지). 값이 없으면 화면에 `-` 로 둔다.
+- 실행의 최종 텍스트는 `execution.result_text`, Handoff 는 `execution.handoff`(JSONB)에 남긴다. 로그는 여전히 `execution_log` 에 줄 단위로 쌓고, 우리 쪽 안내(스텝 경계·위임 진행·거부 사유)는 **`LogStream.SYSTEM`** 으로 남긴다.
+- SSE(`GET /executions/{id}/stream`)는 구독할 때 **지금까지의 로그를 먼저 재생**하고(메모리 버퍼, 넘치면 그 사실을 SYSTEM 줄로 알린다) 이어서 라이브로 보낸다. 실행이 끝나면 **`exit` 이름의 이벤트**(`{status, exitCode}`)를 보내고 닫는다 — 터미널 창을 나중에 열어도 전체가 보인다.
+
 ## Backend 모듈 (`apps/backend/src/main/java/com/agent/dock`)
 
-- `common/` — `GlobalExceptionHandler`(400/403/404/409), `BadRequestException`/`NotFoundException`/`ForbiddenException`/`ConflictException`, `WebConfig`(CORS), `QueryDslConfig`
-- `provider/` — AiProvider(**논리 삭제** `deleted_at`, **on/off** `enabled`, 부분 유니크 인덱스 `ai_provider_key_active`). `PUT /ai-providers/{id}/enabled` 토글, `capabilities` 편집(`PUT /ai-providers/{id}/capabilities`). 런타임 CLI 실행 파일 조회(`AiRuntimeCli`/`CliRegistry`/`CliStatusService`, `GET /ai-providers/{id}/cli`)와 런타임별 probe(`AiRuntimeProbe`/`ProbeRegistry`/`ClaudeCodeProbe`), 로그인 세션(`provider/login`: `AiLoginCommand`/`LoginCommandRegistry`/`LoginProcess`/`LoginSessionService`) — 로그인은 **런타임 전역**
-- `agent/` — Agent CRUD(프로젝트 소속, 페르소나) + `AgentAvailability`(사용 가능 여부 파생 판정). 목록 조회는 QueryDSL fetch join(`AgentRepositoryImpl`)
-- `role/`, `permission/` — Role, PermissionProfile. `PermissionService.isAllowed(profile, action)` 가 enforcement primitive
-- `workspace/` — Workspace CRUD, 폴더 브라우징(`GET /workspaces/browse`), UNC 차단(`WorkspaceFs`), 드라이브 루트 워밍, **폴더별 런타임 상태**(`WorkspaceRuntimeStatus`): `GET /workspaces/{id}/runtimes`, `POST /workspaces/{id}/runtimes/{providerId}/check`(cwd = 그 폴더)
-- `project/` — Project CRUD + `ProjectWorkspace`(N:N, 기본 1개): `POST /projects/{id}/workspaces`, `DELETE /projects/{id}/workspaces/{workspaceId}`, `ProjectService.defaultWorkspace(projectId)`
-- `group/` — `AgentGroup`(리더/멤버) 관리 API
-- `task/` — `Task` CRUD와 실행(`POST /tasks/{id}/run`). 실행 종료 이벤트(`ExecutionFinishedEvent`)로 상태 갱신
-- `process/` — `ProcessService`: `ProcessBuilder` 래퍼, 실행 중 프로세스 관리/취소
-- `runtime/` — `AgentRuntime`, `ClaudeCodeRuntime`, `RuntimeRegistry`. CLI 인자 조립은 `buildArgs(request)` 한 곳에서
-- `execution/` — Execution 생성/조회, ExecutionLog 저장, SSE(`GET /executions/{id}/stream`), 취소, **실행 가드**
+**폴더 규칙(도메인 우선 + 계층 분해)**: 도메인을 먼저 두고 그 안을 계층으로 나눈다 — `domain/ · controller/ · service/ · repository/ · dto/ · util/`. **인터페이스(포트)는 그 도메인의 `interfaces/`** 에 모으고, 구현은 `service/` 등에 둔다(폴더 이름을 `interface` 로 쓸 수 없다 — Java 예약어다). Spring Data 리포지토리 인터페이스는 `repository/` 에 구현과 함께 둔다. 없는 계층 폴더는 만들지 않고, 도메인 안에 하위 도메인이 있으면(`provider/login`) 같은 규칙을 반복한다. **테스트는 대상 클래스와 같은 패키지**에 둔다(package-private 멤버 검증 유지).
+
+- `common/` — `config/`(CORS·QueryDSL), `exception/`(400/403/404/409 예외 + `GlobalExceptionHandler`)
+- `provider/` — `domain/`(AiProvider, ProviderKey, ConnectionStatus) · `controller/` · `service/`(AiProviderService, CliStatusService, CliRegistry, ProbeRegistry, ClaudeCodeCli, ClaudeCodeProbe, CommandCodeCli, CommandCodeProbe) · `repository/` · `dto/`(응답·요청·capabilities·CLI 상태·probe 결과) · `interfaces/`(AiRuntimeCli, AiRuntimeProbe). `provider/login/` 하위 도메인도 같은 규칙 — `controller/` · `service/`(LoginSessionService, LoginProcessFactory, PipeLoginProcess, LoginSession, LoginCommandRegistry, ClaudeCodeLoginCommand, CommandCodeLoginCommand) · `domain/`(SessionKind) · `dto/` · `interfaces/`(AiLoginCommand, LoginProcess) · `util/`(CommandShell)
+- `agent/` — `domain/` Agent(프로젝트 소속, 페르소나) · `service/` AgentService + `AgentAvailability` · `util/` `PromptLayers`(프롬프트 계층 조립) · `repository/`(QueryDSL fetch join) · `dto/`
+- `role/`, `permission/` — Role, PermissionProfile(도메인/서비스/리포지토리/DTO). `PermissionService.isAllowed(profile, action)` 가 enforcement primitive
+- `workspace/` — `domain/`(Workspace, WorkspaceRuntimeStatus) · `service/`(WorkspaceService, WorkspaceRuntimeService) · `util/` `WorkspaceFs`(폴더 브라우징·UNC 차단) · `repository/` · `dto/`
+- `project/` — `domain/`(Project, ProjectWorkspace) · `service/` ProjectService(`defaultWorkspace`, `updateMaster` — 기본 워크스페이스를 바꿀 때는 기존 기본을 먼저 내려야 부분 유니크 인덱스를 위반하지 않는다) · `repository/` · `dto/`
+- `group/` — `domain/`(AgentGroup, AgentGroupMember) · `service/` GroupService · `repository/` · `dto/`
+- `task/` — `domain/`(Task, TaskStatus) · `service/` TaskService(작업 실행·채팅 명령) · `repository/` · `dto/`
+- `process/` — `service/` `ProcessService`(ProcessBuilder 래퍼) · `util/` `Executables`(PATH/PATHEXT 해석)
+- `runtime/` — `interfaces/` `AgentRuntime` · `service/`(ClaudeCodeRuntime, CommandCodeRuntime, RuntimeRegistry) · `dto/`(AgentExecutionRequest/Result, ExecutionMetrics) · `util/` `ClaudeStreamJson`(stream-json → 로그·계측) · `CommandCodeStreamJson`(cmdc NDJSON → 로그·계측) · `JsonObjects`(결과 텍스트에서 JSON 객체 찾기 — Claude/Command Code 공용)
+- `execution/` — `domain/`(Execution, ExecutionStatus, ExecutionDecision, ExecutionLog, LogStream) · `controller/` · `service/`(ExecutionService, ExecutionGuard, ExecutionFactory, ExecutionRunner, ExecutionStreamHub) · `repository/` · `dto/`(응답·트리·이벤트 등)
+- `delegation/` — `controller/`(ProjectCommandController) · `service/`(DelegationService, RuleRouter) · `dto/`(DelegationContract) · `util/`(ContractSchemas, DelegationPrompts)
 
 ## DB 스키마
 
-단일 진실은 **Flyway 마이그레이션**(`apps/backend/src/main/resources/db/migration/`, 현재 V1~V8)이며 컬럼명은 snake_case다. JPA는 `ddl-auto: validate` 로 일치만 검증한다.
+단일 진실은 **Flyway 마이그레이션**(`apps/backend/src/main/resources/db/migration/`, 현재 V1~V10)이며 컬럼명은 snake_case다. JPA는 `ddl-auto: validate` 로 일치만 검증한다.
 
 테이블: `ai_provider`, `agent_role`, `permission_profile`, `workspace`, `workspace_runtime_status`, `project`, `project_workspace`, `agent_group`, `agent_group_member`, `agent`, `task`, `execution`, `execution_log`.
+
+- `project.master_agent_id` / `project.master_prompt`, `agent_group.prompt`(V10): 프롬프트 계층(마스터 → 그룹 → 에이전트). 마스터는 프로젝트의 에이전트여야 하고, 응답에 이름을 함께 보여 주려고 `masterAgent` 관계는 즉시 로딩한다.
+- `execution`(V10): `parent_execution_id`/`root_execution_id`(트리. **루트는 `root_execution_id` 가 비어 있다**), `decision`(`DELEGATE`/`DONE`), `delegated_target_agent_id`(마지막 계약이 마무리여도 남는다), `result_text`, `handoff`(JSONB), `input_tokens`/`output_tokens`/`cache_read_tokens`/`cache_creation_tokens`/`cost_usd`/`duration_ms`/`num_turns`/`session_id`(CLI 실측값), 인덱스 `idx_execution_root`/`idx_execution_parent`. 상태에 `WAITING_CHILD` 추가(제약은 없다 — 컬럼은 `VARCHAR(32)`).
+- `execution.status` 값: `PENDING`(화면 "대기") · `RUNNING` · `WAITING_CHILD`(하위 대기) · `SUCCEEDED`(완료) · `FAILED` · `CANCELLED`.
 
 - `ai_provider.enabled`(V6): 런타임 on/off. 시드는 `CLAUDE_CODE = true`.
 - `workspace_runtime_status`(V6): `(workspace_id, provider_id)` 유니크. **폴더별** 런타임 상태(`CONNECTED`/`DISCONNECTED`/`ERROR`) + `last_checked_at`/`last_error`. Provider 단위 Connection 을 대체한다.
@@ -109,9 +140,9 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
 ## 런타임 연결과 자격증명
 
 - 자격증명은 **CLI 의 기존 로그인 세션을 그대로 사용**한다(스펙 6장 우선순위 1). 앱은 토큰/키를 저장하지 않는다(Connection 계열 컬럼은 V8 에서 제거).
-- 실행 바이너리는 환경변수 override: `CLAUDE_CODE_BIN`(기본 `claude`). probe 와 로그인 명령이 같은 변수를 쓴다.
+- 실행 바이너리는 환경변수 override: `CLAUDE_CODE_BIN`(기본 `claude`), `COMMAND_CODE_BIN`(기본 `cmdc`). probe 와 로그인 명령이 같은 변수를 쓴다.
 - **폴더별 상태 확인(probe)**: `POST /workspaces/{id}/runtimes/{providerId}/check` 가 **그 폴더를 작업 디렉터리로** CLI 를 짧은 프롬프트로 한 번 실행해(최대 30초) `status`/`last_error`/`last_checked_at` 을 저장한다. 로그인은 전역이지만 "이 폴더에서 실제로 실행되는가"는 폴더마다 다를 수 있어 이렇게 확인한다.
-- probe 구현체는 런타임별 하나이고 `ProbeRegistry` 에 자동 등록된다. 현재는 `ClaudeCodeProbe`(CLAUDE_CODE)만 있다. 다른 런타임은 목록에 표시되고 확인 시 ERROR("이 런타임은 아직 확인을 지원하지 않습니다") 가 된다.
+- probe 구현체는 런타임별 하나이고 `ProbeRegistry` 에 자동 등록된다. 현재는 `ClaudeCodeProbe`(CLAUDE_CODE)와 `CommandCodeProbe`(COMMAND_CODE)가 있다. 나머지 런타임은 목록에 표시되고 확인 시 ERROR("이 런타임은 아직 확인을 지원하지 않습니다") 가 된다.
 - **웹 로그인 패널**: `POST /ai-providers/{id}/login` 이 서버 고정 로그인 명령(현재 `claude auth login`)을 실행하고 `GET /ai-providers/command-sessions/{sessionId}/stream`(SSE)으로 출력을, `POST .../input` 으로 stdin 입력을 전달한다. 런타임당 활성 세션 1개(로그인/설치 별개), 유휴 5분이면 종료. 로그인 명령은 사용자 입력으로 만들지 않는다.
 
 ### CLI 설치와 실행 파일 해석
@@ -126,9 +157,18 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
 ### 모델과 모드 (`capabilities`)
 
 - 런타임별 지원 모델/모드 목록은 **코드가 아니라 데이터**다(`ai_provider.capabilities`). 화면("에이전트 설정" 카드의 "모델/모드 편집")에서 갱신한다(정규화: trim·빈값·중복 제거, 다른 키 보존).
-- CLI 는 모델 목록을 알려주는 명령을 주지 않는다(`claude models` 는 프롬프트로 처리된다). 자동 수집 불가 → 수동 편집. V5 가 `claude --help` 에 나온 alias(`opus`/`sonnet`/`fable`)와 `--permission-mode` 6종을 시드한다(추측 금지 원칙).
+- Claude CLI 는 모델 목록을 알려주는 명령을 주지 않는다(`claude models` 는 프롬프트로 처리된다). 자동 수집 불가 → 수동 편집. **Command Code 는 `cmdc --list-models` 가 모델 목록을, `cmdc --help` 의 `--permission-mode` 가 모드 4종(standard·plan·accept-edits·yolo)을 준다.** V5 가 `claude --help` 에 나온 alias(`opus`/`sonnet`/`fable`)와 `--permission-mode` 6종을 시드한다(추측 금지 원칙).
 - `Agent.model` → `--model`, `Agent.mode` → `--permission-mode`, `Agent.persona` → **`--append-system-prompt`**(기본 시스템 프롬프트에 덧붙임). 값이 없으면 플래그를 붙이지 않는다.
 - 목록에 없는 값도 막지 않는다(최종 판단은 CLI). 화면은 datalist 로 제안하고 경고만 표시한다.
+
+### Command Code(`cmdc`) 런타임
+
+Claude Code 외에 처음 추가한 **두 번째 런타임**이다(2026-10-01, Command Code v1.73.2 실측). 같은 인터페이스를 구현하고 `@Component` 로만 등록한다(`ClaudeCodeRuntime` 과 동형) — 런타임 `CommandCodeRuntime`(COMMAND_CODE) · probe `CommandCodeProbe` · 로그인 `CommandCodeLoginCommand`(`cmdc login`) · CLI `CommandCodeCli`.
+
+- 비대화형은 `-p --output-format json` — **NDJSON 이벤트 스트림 + 마지막 result 한 줄**이다. 프롬프트는 표준입력(UTF-8)으로 넘긴다(`-p` 뒤에 값을 붙이지 않으면 stdin 을 읽는다).
+- 런타임 인자는 `-p --output-format json -t` + (있으면) `--model`·`--permission-mode`. **`-t`(프로젝트 자동 신뢰)는 항상 붙인다** — 무인 실행이 첫 권한 프롬프트에서 멈추지 않게(probe 도 같다).
+- result 줄은 **camelCase** — `sessionId`·`usage.inputTokens/outputTokens/cacheReadTokens/cacheWriteTokens`·`durationMs`·`stopReason`·`finalText`. **비용 필드가 없다 → `costUsd` 는 null(추정 금지).** 로그로 남기는 이벤트는 `model_request_start`(system)·`thinking_end`·`message_end` 의 text 블록이고, delta·중복 이벤트는 버린다(`CommandCodeStreamJson`).
+- 확인된 플래그(`cmdc --help`): `-p/--print [query]` · `--output-format text|json` · `-t/--trust` · `-m/--model` · `--permission-mode standard|plan|accept-edits|yolo` · `--list-models` · `--effort` · `--max-turns` · `--tools-all` · `--config key=value` · `--local-only` · `-w/--worktree` · `-r/--resume` · `-c/--continue` · `--session` · `--no-session` · `-n/--name` · `--skip-onboarding` · `--no-auto-update`. **시스템 프롬프트/예산 플래그는 확인되지 않아 붙이지 않는다** — 페르소나 계층은 프롬프트 본문으로만 전달된다.
 
 ## Permission Enforcement
 

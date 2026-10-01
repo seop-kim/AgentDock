@@ -1,0 +1,118 @@
+.layout {
+  display: flex;
+  gap: var(--spacing-lg);
+  align-items: flex-start;
+}
+
+.menu {
+  width: 200px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: var(--spacing-md);
+  border-right: 1px solid var(--color-border);
+}
+
+.menuTitle {
+  margin: 0 0 var(--spacing-sm);
+  padding: 0 12px;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.menuItem {
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  color: var(--color-muted);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.menuItem:hover {
+  background: var(--color-code-bg);
+  color: var(--color-text);
+}
+
+.menuItemActive,
+.menuItemActive:hover {
+  background: var(--color-code-bg);
+  color: var(--color-text);
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+}
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.themeOptions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+}
+
+.themeOption {
+  composes: glass from '../../styles/glass.module.css';
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+}
+
+.themeOption:hover {
+  border-color: var(--color-border-strong);
+}
+
+.themeOptionActive,
+.themeOptionActive:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary), var(--shadow-float);
+}
+
+.themeOption input {
+  padding: 0;
+}
+
+.themeLabel {
+  min-width: 56px;
+  font-weight: 600;
+}
+
+.card {
+  composes: glass from '../../styles/glass.module.css';
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+  margin-top: var(--spacing-md);
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cardTitle {
+  margin-top: 0;
+  margin-bottom: var(--spacing-sm);
+}
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.editor textarea,
+.editor input {
+  width: 100%;
+}

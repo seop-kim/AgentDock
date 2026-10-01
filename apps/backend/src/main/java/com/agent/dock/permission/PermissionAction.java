@@ -1,7 +1,0 @@
-package com.agent.dock.permission;
-
-public enum PermissionAction {
-    FILE_READ, FILE_WRITE, TERMINAL_EXECUTE, GIT_STATUS, GIT_DIFF,
-    GIT_COMMIT, GIT_PUSH, DB_READ, DB_WRITE, DB_SCHEMA_CHANGE,
-    DEPLOY, EXTERNAL_NETWORK_ACCESS
-}

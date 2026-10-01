@@ -1,0 +1,92 @@
+.list {
+  list-style: none;
+  margin: 0 0 var(--spacing-md);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.defaultMark {
+  color: var(--color-primary);
+}
+
+.defaultMarkOff {
+  color: var(--color-border-strong);
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.name {
+  font-weight: 600;
+}
+
+.path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.assignRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+/* "+ 폴더 등록" 줄: 경로를 직접 입력해 워크스페이스로 등록한다. */
+.registerRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+}
+
+.registerRow input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 워크스페이스 행의 (폴더, 런타임) 상태 배지 묶음(연결됨 / 확인 필요 / 오류). */
+.runtimeStatus {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.assignRow select {
+  flex: 1;
+  min-width: 0;
+}
+
+.checkLabel {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.checkLabel input {
+  padding: 0;
+}
+
+.addButton {
+  align-self: flex-start;
+}

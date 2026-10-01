@@ -1,0 +1,54 @@
+/* 새 창으로 띄운 에이전트 터미널. 창 전체가 터미널이다. */
+
+.page {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  height: 100vh;
+  padding: var(--spacing-md);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.state {
+  padding: 1px 8px;
+  border: 1px solid var(--color-primary);
+  border-radius: 999px;
+  color: var(--color-primary);
+  font-size: 11px;
+}
+
+.cwd {
+  margin: 0;
+  color: var(--color-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  word-break: break-all;
+}
+
+/* 터미널이 남는 높이를 모두 쓴다 */
+.terminal {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.note {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.empty {
+  padding: var(--spacing-lg);
+  color: var(--color-muted);
+}
