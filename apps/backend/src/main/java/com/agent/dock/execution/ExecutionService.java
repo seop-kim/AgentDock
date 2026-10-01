@@ -1,37 +1,29 @@
 package com.agent.dock.execution;
 
 import com.agent.dock.agent.Agent;
-import com.agent.dock.agent.AgentAvailability;
 import com.agent.dock.agent.AgentRepository;
-import com.agent.dock.common.ConflictException;
-import com.agent.dock.common.ForbiddenException;
 import com.agent.dock.common.NotFoundException;
-import com.agent.dock.permission.PermissionAction;
-import com.agent.dock.permission.PermissionService;
-import com.agent.dock.project.ProjectRepository;
-import com.agent.dock.project.ProjectService;
-import com.agent.dock.provider.ConnectionStatus;
-import com.agent.dock.runtime.AgentExecutionRequest;
+import com.agent.dock.runtime.AgentExecutionResult;
 import com.agent.dock.runtime.AgentRuntime;
+import com.agent.dock.runtime.ExecutionMetrics;
 import com.agent.dock.runtime.RuntimeRegistry;
-import com.agent.dock.workspace.Workspace;
-import com.agent.dock.workspace.WorkspaceRuntimeStatus;
-import com.agent.dock.workspace.WorkspaceRuntimeStatusRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 
+/**
+ * 실행의 생성·조회·취소와 상태/결과 저장을 맡는다.
+ * 스텝을 실제로 돌리는 일은 {@link ExecutionRunner}, 위임 루프는 delegation 패키지가 맡는다.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -39,14 +31,13 @@ public class ExecutionService {
     private final ExecutionRepository executionRepository;
     private final ExecutionLogRepository logRepository;
     private final AgentRepository agentRepository;
-    private final ProjectRepository projectRepository;
-    private final ProjectService projectService;
+    private final ExecutionGuard guard;
+    private final ExecutionFactory factory;
+    private final ExecutionRunner runner;
+    private final ExecutionStreamHub streamHub;
     private final RuntimeRegistry runtimeRegistry;
-    private final PermissionService permissionService;
-    private final WorkspaceRuntimeStatusRepository runtimeStatusRepository;
     private final ApplicationEventPublisher eventPublisher;
 
-    private final Map<String, List<SseEmitter>> streams = new ConcurrentHashMap<>();
     private final ExecutorService executor = Executors.newCachedThreadPool();
 
     public ExecutionResponse findOne(Long id) {
@@ -65,54 +56,93 @@ public class ExecutionService {
     }
 
     public ExecutionResponse create(Long agentId, Long projectId, String prompt, Long taskId) {
-        Agent agent = agentRepository.findByIdWithRelations(agentId)
-                .orElseThrow(() -> new NotFoundException("Agent %d not found".formatted(agentId)));
-        projectRepository.findById(projectId)
-                .orElseThrow(() -> new NotFoundException("Project %d not found".formatted(projectId)));
+        ExecutionGuard.Target target = guard.prepare(agentId, projectId, null);
+        Execution execution = factory.createRoot(target, prompt, taskId);
+        executor.submit(() -> runSingle(execution.getId(), target, prompt, taskId));
+        return ExecutionResponse.from(execution);
+    }
 
-        // Permission Enforcement: Prompt 설명이 아니라 실행 전 Backend에서 실제로 차단한다.
-        if (!permissionService.isAllowed(agent.getPermissionProfile(), PermissionAction.TERMINAL_EXECUTE)) {
-            throw new ForbiddenException("Agent permission profile does not allow TERMINAL_EXECUTE");
+    /** 위임 실행의 루트 실행을 만든다(스텝은 오케스트레이터가 돌린다). */
+    public Started startRoot(Long agentId, Long projectId, Long groupId, String prompt, Long taskId) {
+        ExecutionGuard.Target target = guard.prepare(agentId, projectId, groupId);
+        return new Started(factory.createRoot(target, prompt, taskId), target);
+    }
+
+    public record Started(Execution execution, ExecutionGuard.Target target) {
+    }
+
+    public void markRunning(Long executionId) {
+        update(executionId, execution -> {
+            execution.setStatus(ExecutionStatus.RUNNING);
+            if (execution.getStartedAt() == null) {
+                execution.setStartedAt(Instant.now());
+            }
+        });
+    }
+
+    public void markWaitingChild(Long executionId) {
+        update(executionId, execution -> execution.setStatus(ExecutionStatus.WAITING_CHILD));
+    }
+
+    public void markFailed(Long executionId, Throwable cause) {
+        update(executionId, execution -> {
+            execution.setStatus(ExecutionStatus.FAILED);
+            execution.setFinishedAt(Instant.now());
+            execution.setErrorMessage(String.valueOf(cause));
+        });
+    }
+
+    /** 위임 판단 결과(계약)를 남긴다. 위임한 실행은 DELEGATE 로 남고 완료로 덮지 않는다. */
+    public void recordDecision(Long executionId, ExecutionDecision decision, Long targetAgentId) {
+        update(executionId, execution -> {
+            execution.setDecision(decision);
+            if (targetAgentId != null) {
+                execution.setDelegatedTargetAgent(agentRepository.getReferenceById(targetAgentId));
+            }
+        });
+    }
+
+    /** 다음 실행으로 넘길 Handoff(요약·변경 파일). */
+    public void recordHandoff(Long executionId, Map<String, Object> handoff) {
+        update(executionId, execution -> execution.setHandoff(handoff));
+    }
+
+    /** 한 스텝의 결과(텍스트·계측값)를 저장하고 최종 상태를 돌려준다. */
+    public ExecutionStatus applyResult(Long executionId, AgentExecutionResult result) {
+        ExecutionStatus status = result.succeeded() ? ExecutionStatus.SUCCEEDED : ExecutionStatus.FAILED;
+        update(executionId, execution -> {
+            ExecutionMetrics metrics = result.metrics();
+            execution.setResultText(result.resultText());
+            execution.setExitCode(result.exitCode());
+            execution.setStatus(status);
+            execution.setFinishedAt(Instant.now());
+            if (metrics != null) {
+                execution.setInputTokens(metrics.inputTokens());
+                execution.setOutputTokens(metrics.outputTokens());
+                execution.setCacheReadTokens(metrics.cacheReadTokens());
+                execution.setCacheCreationTokens(metrics.cacheCreationTokens());
+                execution.setCostUsd(metrics.costUsd());
+                execution.setDurationMs(metrics.durationMs());
+                execution.setNumTurns(metrics.numTurns());
+                execution.setSessionId(metrics.sessionId());
+            }
+            if (!result.succeeded() && result.exitCode() != 0) {
+                execution.setErrorMessage("exit code %d".formatted(result.exitCode()));
+            }
+        });
+        return status;
+    }
+
+    /** Task 상태를 갱신하도록 알린다(위임 실행은 트리가 전부 끝났을 때 한 번만 부른다). */
+    public void publishFinished(Long executionId, Long taskId, ExecutionStatus status) {
+        if (taskId == null) {
+            return;
         }
-
-        // 작업 디렉터리는 프로젝트의 기본 워크스페이스다. 할당된 워크스페이스가 없으면 실행할 수 없다.
-        Workspace workspace = projectService.defaultWorkspace(projectId);
-
-        // 런타임이 꺼져 있거나 그 폴더에서 확인되지 않았으면 Runtime 을 호출하지 않고 즉시 거부한다(새 실행만 차단).
-        ConnectionStatus workspaceStatus = runtimeStatusRepository
-                .findByWorkspaceIdAndProviderId(workspace.getId(), agent.getProvider().getId())
-                .map(WorkspaceRuntimeStatus::getStatus)
-                .orElse(ConnectionStatus.DISCONNECTED);
-        var availability = AgentAvailability.evaluate(
-                agent.getProvider().getDeletedAt() != null, agent.getProvider().isEnabled(), workspaceStatus);
-        if (!availability.available()) {
-            throw new ConflictException(availability.message());
-        }
-
-        Execution execution = new Execution();
-        execution.setAgent(agent);
-        execution.setWorkspace(workspace);
-        execution.setTaskId(taskId);
-        execution.setPrompt(prompt);
-        execution.setStatus(ExecutionStatus.PENDING);
-        Execution saved = executionRepository.save(execution);
-
-        executor.submit(() -> run(saved.getId(), agent, workspace.getPath(), prompt, taskId));
-
-        return ExecutionResponse.from(saved);
+        eventPublisher.publishEvent(new ExecutionFinishedEvent(executionId, taskId, status));
     }
 
     public SseEmitter streamLogs(String executionId) {
-        List<SseEmitter> emitters = streams.get(executionId);
-        SseEmitter emitter = new SseEmitter(0L);
-        if (emitters == null) {
-            emitter.complete();
-            return emitter;
-        }
-        emitters.add(emitter);
-        emitter.onCompletion(() -> emitters.remove(emitter));
-        emitter.onTimeout(() -> emitters.remove(emitter));
-        return emitter;
+        return streamHub.subscribe(Long.parseLong(executionId));
     }
 
     public Map<String, Boolean> cancel(Long id) {
@@ -125,70 +155,31 @@ public class ExecutionService {
         return Map.of("cancelled", true);
     }
 
-    private void run(Long id, Agent agent, String workspacePath, String prompt, Long taskId) {
-        String streamKey = String.valueOf(id);
-        streams.put(streamKey, new CopyOnWriteArrayList<>());
-
-        updateStatus(id, ExecutionStatus.RUNNING, Instant.now(), null, null, null);
-
+    private void runSingle(Long executionId, ExecutionGuard.Target target, String prompt, Long taskId) {
+        streamHub.open(executionId);
+        ExecutionStatus status = ExecutionStatus.FAILED;
+        Integer exitCode = null;
         try {
-            AgentRuntime runtime = runtimeRegistry.resolve(agent.getProvider().getKey().name());
-            var result = runtime.execute(new AgentExecutionRequest(
-                    streamKey, prompt, workspacePath, agent.getPersona(), agent.getModel(), agent.getMode(),
-                    (chunk, stream) -> {
-                        broadcast(streamKey, stream, chunk);
-                        persistLog(id, stream, chunk);
-                    }
-            ));
-            ExecutionStatus finalStatus = result.exitCode() == 0 ? ExecutionStatus.SUCCEEDED : ExecutionStatus.FAILED;
-            updateStatus(id, finalStatus, null, Instant.now(), result.exitCode(), null);
-            publishFinished(id, taskId, finalStatus);
+            markRunning(executionId);
+            Agent agent = agentRepository.findByIdWithRelations(target.agentId()).orElseThrow();
+            AgentExecutionResult result = runner.runStep(executionId, agent, target.workspacePath(),
+                    target.systemPrompt(), prompt, null, null);
+            status = applyResult(executionId, result);
+            exitCode = result.exitCode();
+            publishFinished(executionId, taskId, status);
         } catch (Exception ex) {
-            log.error("execution {} failed", id, ex);
-            updateStatus(id, ExecutionStatus.FAILED, null, Instant.now(), null, String.valueOf(ex));
-            publishFinished(id, taskId, ExecutionStatus.FAILED);
+            log.error("execution {} failed", executionId, ex);
+            markFailed(executionId, ex);
+            publishFinished(executionId, taskId, ExecutionStatus.FAILED);
         } finally {
-            List<SseEmitter> emitters = streams.remove(streamKey);
-            if (emitters != null) {
-                emitters.forEach(SseEmitter::complete);
-            }
+            streamHub.close(executionId, status, exitCode);
         }
     }
 
-    private void updateStatus(Long id, ExecutionStatus status, Instant startedAt, Instant finishedAt, Integer exitCode, String errorMessage) {
-        Execution execution = executionRepository.findById(id).orElseThrow();
-        execution.setStatus(status);
-        if (startedAt != null) execution.setStartedAt(startedAt);
-        if (finishedAt != null) execution.setFinishedAt(finishedAt);
-        if (exitCode != null) execution.setExitCode(exitCode);
-        if (errorMessage != null) execution.setErrorMessage(errorMessage);
+    private void update(Long executionId, Consumer<Execution> change) {
+        Execution execution = executionRepository.findById(executionId)
+                .orElseThrow(() -> new NotFoundException("Execution %d not found".formatted(executionId)));
+        change.accept(execution);
         executionRepository.save(execution);
-    }
-
-    private void publishFinished(Long executionId, Long taskId, ExecutionStatus status) {
-        if (taskId == null) {
-            return;
-        }
-        eventPublisher.publishEvent(new ExecutionFinishedEvent(executionId, taskId, status));
-    }
-
-    private void broadcast(String streamKey, String stream, String content) {
-        List<SseEmitter> emitters = streams.get(streamKey);
-        if (emitters == null) return;
-        for (SseEmitter emitter : emitters) {
-            try {
-                emitter.send(SseEmitter.event().data(Map.of("stream", stream, "content", content)));
-            } catch (IOException ex) {
-                emitters.remove(emitter);
-            }
-        }
-    }
-
-    private void persistLog(Long executionId, String stream, String content) {
-        ExecutionLog logEntry = new ExecutionLog();
-        logEntry.setExecution(executionRepository.getReferenceById(executionId));
-        logEntry.setStream(stream.equalsIgnoreCase("stderr") ? LogStream.STDERR : LogStream.STDOUT);
-        logEntry.setContent(content);
-        logRepository.save(logEntry);
     }
 }

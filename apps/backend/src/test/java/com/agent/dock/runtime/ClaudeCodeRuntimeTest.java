@@ -2,6 +2,7 @@ package com.agent.dock.runtime;
 
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -9,43 +10,56 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ClaudeCodeRuntimeTest {
     private final ClaudeCodeRuntime runtime = new ClaudeCodeRuntime(null);
 
-    private AgentExecutionRequest request(String persona, String model, String mode) {
-        return new AgentExecutionRequest("exec-1", "prompt", "C:\\Temp", persona, model, mode, (chunk, stream) -> { });
+    private AgentExecutionRequest request(String systemPrompt, String model, String mode, String contract, BigDecimal budget) {
+        return new AgentExecutionRequest("exec-1", "prompt", "C:\\Temp", systemPrompt, model, mode, contract, budget,
+                (chunk, stream) -> { });
     }
 
     @Test
-    void alwaysPassesPromptAndOutputFormat() {
-        List<String> args = runtime.buildArgs(request(null, null, null));
+    void alwaysPassesPromptAndStreamJson() {
+        List<String> args = runtime.buildArgs(request(null, null, null, null, null));
 
-        assertThat(args).containsExactly("-p", "prompt", "--output-format", "text");
+        assertThat(args).containsExactly("-p", "prompt", "--output-format", "stream-json", "--verbose");
     }
 
     @Test
-    void passesPersonaAsAppendedSystemPrompt() {
-        List<String> args = runtime.buildArgs(request("You are a careful reviewer.", null, null));
+    void passesSystemPromptAsAppendedSystemPrompt() {
+        List<String> args = runtime.buildArgs(request("마스터 규칙\n\n내 역할", null, null, null, null));
 
-        assertThat(args).containsSequence("--append-system-prompt", "You are a careful reviewer.");
+        assertThat(args).containsSequence("--append-system-prompt", "마스터 규칙\n\n내 역할");
     }
 
     @Test
     void passesModelAndModeAsCliFlags() {
-        List<String> args = runtime.buildArgs(request(null, "opus", "plan"));
+        List<String> args = runtime.buildArgs(request(null, "opus", "plan", null, null));
 
         assertThat(args).containsSequence("--model", "opus");
         assertThat(args).containsSequence("--permission-mode", "plan");
     }
 
     @Test
-    void omitsFlagsWhenValuesAreMissing() {
-        List<String> args = runtime.buildArgs(request(null, null, null));
+    void passesContractSchemaAndBudgetForJudgementSteps() {
+        String schema = "{\"type\":\"object\"}";
 
-        assertThat(args).doesNotContain("--model", "--permission-mode", "--append-system-prompt");
+        List<String> args = runtime.buildArgs(request(null, null, null, schema, new BigDecimal("5")));
+
+        assertThat(args).containsSequence("--json-schema", schema);
+        assertThat(args).containsSequence("--max-budget-usd", "5");
+    }
+
+    @Test
+    void omitsFlagsWhenValuesAreMissing() {
+        List<String> args = runtime.buildArgs(request(null, null, null, null, null));
+
+        assertThat(args).doesNotContain("--model", "--permission-mode", "--append-system-prompt", "--json-schema",
+                "--max-budget-usd");
     }
 
     @Test
     void omitsFlagsWhenValuesAreBlank() {
-        List<String> args = runtime.buildArgs(request("   ", " ", ""));
+        List<String> args = runtime.buildArgs(request("   ", " ", "", "  ", null));
 
-        assertThat(args).doesNotContain("--model", "--permission-mode", "--append-system-prompt");
+        assertThat(args).doesNotContain("--model", "--permission-mode", "--append-system-prompt", "--json-schema",
+                "--max-budget-usd");
     }
 }
