@@ -8,6 +8,12 @@
       "port": 3031
     },
     {
+      "name": "mockup",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:mockup"],
+      "port": 3040
+    },
+    {
       "name": "backend",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev:backend:test"],

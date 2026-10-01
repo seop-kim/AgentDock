@@ -1,0 +1,129 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+  font-family: system-ui, -apple-system, 'Segoe UI', 'Pretendard', sans-serif;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+  background: var(--app-bg);
+  background-attachment: fixed;
+}
+
+a {
+  color: inherit;
+}
+
+h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0 0 var(--spacing-md);
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+  padding: 7px 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius);
+  outline: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, background 0.12s ease, transform 0.12s ease,
+    filter 0.12s ease;
+}
+
+input,
+select,
+textarea {
+  background: var(--color-input-bg);
+  color: var(--color-text);
+}
+
+/* 셀렉트: OS 기본 화살표 대신 모드에 맞는 화살표를 쓴다(색은 tokens.css 의 --select-arrow). */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 32px;
+  background-image: var(--select-arrow);
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 14px 14px;
+  cursor: pointer;
+}
+
+/* 펼친 목록도 모드에 맞춘다(운영체제가 무시하는 경우가 있어 배경·글자색을 함께 지정한다). */
+select option {
+  background: var(--color-sidebar);
+  color: var(--color-text);
+}
+
+select:disabled {
+  cursor: not-allowed;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-muted);
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-code-bg);
+}
+
+/* 기본 버튼은 강조(그라데이션). 보조 버튼은 각 모듈에서 background: transparent 로 덮어쓴다. */
+button {
+  background: var(--gradient-accent);
+  color: var(--color-on-primary);
+  border-color: transparent;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+button:hover {
+  filter: brightness(1.08);
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+button:focus-visible {
+  box-shadow: 0 0 0 3px var(--color-code-bg);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: none;
+}
+
+code {
+  background: var(--color-code-bg);
+  padding: 2px 5px;
+  border-radius: 6px;
+  font-size: 0.9em;
+}
+
+/* 공용 유틸 클래스 */
+
+.errorText {
+  color: var(--color-error);
+  background: var(--color-error-bg);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius);
+  margin-bottom: var(--spacing-md);
+}

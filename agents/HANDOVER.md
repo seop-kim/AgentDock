@@ -1,96 +1,145 @@
-# 인수인계 문서 (2026-09-29)
+# 인수인계 문서 — 목업 단계 (2026-09-30)
 
-이 문서는 다음 작업을 이어받는 에이전트(Claude Code 등)를 위한 현재 상태 스냅샷이다. 작업 방식·구조·규칙은 [`agents/CONVENTIONS.md`](./CONVENTIONS.md)가 기준 문서이므로 그것을 먼저 읽고, 이 문서는 "지금 어디까지 됐고 다음에 뭘 할지"만 다룬다.
+이 문서는 다음 작업을 이어받는 에이전트(Claude Code, Codex 등)를 위한 현재 상태 스냅샷이다. 작업 방식·구조·규칙의 기준은 [`agents/CONVENTIONS.md`](./CONVENTIONS.md)이고, 이 문서는 "지금 어디까지 됐고 다음에 뭘 할지"만 다룬다. **CONVENTIONS.md 를 먼저 읽는다.**
 
-## 0. 지금 바로 이어서 할 일 (가장 먼저 볼 것)
+목업을 시작하기 전의 백엔드/프론트 구현 단계 인수인계는 [`HANDOVER-implementation.md`](./HANDOVER-implementation.md)에 그대로 보관한다(일시 중단 상태).
 
-1. **Stage 2 — 화면 재배치** (아래 §3). 사용자가 바로 요청했던 **CLI 확인 창은 완료**했다(§2 (C)).
-2. 그다음 Stage 3~4 (아래 §3).
+## 1. 지금 상황 한눈에
 
-## 1. 먼저 읽을 문서 (순서대로)
-
-1. `agents/CONVENTIONS.md` — 스택, 도메인 구조, 모듈, DB 스키마, 실행 방법, 포트 규칙, 브랜치/커밋 규칙의 기준 문서
-2. `docs/superpowers/plans/2026-09-29-workspace-runtime-restructure.md` — 현재 작업(Stage 1) 계획 + Stage 2~4 예고
-3. `docs/superpowers/plans/2026-09-29-agent-model-mode-capabilities.md` — PR #4(모델/모드 capabilities) 계획
-4. `docs/superpowers/plans/2026-09-29-agent-connection-settings.md`, `docs/superpowers/specs/2026-09-29-agent-connection-settings-design.md` — PR #3 설계/계획
-5. `.superpowers/sdd/2026-09-28-java-spring-react-migration/progress.md` — 스택 전환기 장부(로컬 전용, gitignore)
-6. 이 저장소를 만든 최초 이슈 본문(Multi-Agent Organization Platform) — 전체 제품 스펙
-
-## 2. 브랜치와 현재 상태
-
-브랜치 흐름은 `기능 브랜치 → dev → test → release`. **병합이 끝난 기능 브랜치는 로컬·원격 모두 삭제한다.**
-
-| 구분 | 내용 |
+| 항목 | 내용 |
 | --- | --- |
-| `dev` | `e28bf4f` — PR #4 까지 squash 병합 |
-| `feat/workspace-runtime` | **현재 작업 브랜치**. Stage 1(워크스페이스 중심 재편) + CLI 설치 흐름. PR 미생성 |
+| 방침 | **실제 구현(Stage 2~4)을 잠시 멈추고 목업부터 만든다.** 목업이 확정되면 그것을 기준으로 개발을 다시 진행하고, 목업을 만들면서 **기획서/설계서를 새로 쓴다.** |
+| 작업 브랜치 | `mockup` (기준 브랜치 `dev`). `dev` 위에 커밋이 20개 넘게 쌓여 있다. PR 은 아직 만들지 않았다. |
+| 목업 위치 | `apps/mockup` (독립 Vite 5 + React 18 + Router 6 + TypeScript + CSS Modules 앱). `apps/frontend`, `apps/backend` 는 **건드리지 않았다**. |
+| 기획서/설계서 위치 | `docs/planning/` — 지금은 `README.md` 만 있다. **본문은 아직 없다.** |
+| 설계 스펙 | `docs/superpowers/specs/2026-09-30-mockup-prototype-design.md` (1차 범위·결정사항. 이후 사용자 요청으로 화면이 많이 바뀌었으니 **코드와 CONVENTIONS.md 가 더 최신**이다) |
+| 기획의 출처 | **사용자가 채팅으로 하나씩 준다.** 최초 GitHub 이슈("Multi-Agent Organization Platform")는 이 환경에서 볼 수 없다(`gh` 없음). 사용자가 "기획은 내가 다 줄게"라고 했다. 추측으로 기능을 늘리지 말고 요청받은 것만 만든다. |
+| 미커밋 | 없음. `.commandcode/` 는 다른 도구의 산출물이라 추적 대상이 아니다. 건드리지 않는다. |
 
-병합된 PR: #1 스택 전환 / #2 Project·Group·Task / #3 Agent 연결 설정 재구성 / #4 모델·모드 capabilities.
+## 2. 실행과 검증
 
-### 이 브랜치에서 한 작업
+```
+npm install
+npm run dev:mockup                       # http://localhost:3040
+npm run build --workspace=apps/mockup    # tsc --noEmit && vite build (커밋 전에 항상 통과시킬 것)
+```
 
-**(A) Stage 1 — 워크스페이스 중심 재편** (커밋 `05b44ee`, `3b6e5c8`, `d100ae0`, `580b48c`, `cf8bda9`, `6c047c0`, `489032c`)
+- 포트: 사용자 앱 3030/8080, 에이전트 검증용 3031/8081, **목업은 3040**. `.claude/launch.json` 에 `mockup` 서버가 등록되어 있다.
+- 3040 을 이미 다른 프로세스(이전 dev 서버)가 쓰고 있으면 `preview_start` 가 실패한다. 그때는 그 주소로 `navigate` 해서 이 앱인지 확인하고 그대로 쓴다.
+- **화면 검증 요령** (브라우저 도구):
+  - `screenshot` 이 "Screenshot timed out" 으로 자주 실패한다. **한 번 더 호출하면 대개 성공**한다. 계속 실패하면 `javascript_tool` 로 DOM/계산 스타일을 확인한다.
+  - 내장 브라우저 창이 좁다(약 517px). 데스크톱 배치를 보려면 `resize_window` 로 1200x700 정도를 준 뒤 **끝나면 `preset: desktop` 으로 되돌린다.** 다크/라이트는 `colorScheme` 로 바꾼다.
+  - **드래그앤드롭(HTML5 DnD) 검증**: CDP 로 DnD 를 합성할 때, `transform: scale()` 안에 있는 요소(구성도의 상자·노드)는 기본 합성 드래그로 **드롭이 조용히 안 먹는** 경우가 있다(같은 도구의 `--human` 옵션으로 하면 된다 — agent-browser 기준). 또 대상 요소의 **중앙이 다른 요소(노드 등)에 가려져 있으면 도구가 드롭을 거부**하니, 가려지지 않은 부분(예: 상자 제목)을 대상으로 잡는다.
+  - 버튼/드래그 동작은 `javascript_tool` 로 이벤트를 쏴서 검증했다. 드래그 앤 드롭은 `new DataTransfer()` 를 만들어 `dragstart → dragover → drop → dragend` 를 순서대로 dispatch 한다(`lib/dnd.ts` 가 `dataTransfer` 의 커스텀 MIME 을 읽는다). React 입력은 네이티브 `value` setter 로 값을 넣고 `input`/`change` 이벤트를 dispatch 한다.
+  - **`agent-browser` 로 검증할 때**(이 환경에서 실제로 쓴 도구): `agent-browser snapshot` 출력 파일은 **UTF-16** 이라 `Get-Content` 로는 깨진다(`[System.IO.File]::ReadAllText` 로 읽는다). **화면을 다시 열면 ref 가 전부 바뀐다**(`✗ Unknown ref`) → ref 가 필요하면 **그 시점의 스냅샷을 떠서 정규식으로 뽑아** 쓴다(`[regex]::Match($t, 'textbox "명령 입력" \[[^\]]*ref=(e\d+)')`). PowerShell 이 `@e28` 을 splatting 으로 해석하므로 ref 는 `'@e285'` 처럼 **따옴표로 감싼다**. 한국어 입력은 `agent-browser type '@eN' '문장'` 이 그대로 통한다.
+  - **`agent-browser eval` 은 쓸 수 있다**(한때 막혔으나 지금은 된다). 다만 **인자에 큰따옴표(`"`)를 넣으면 그대로 사라져** JS 가 깨진다(`"section"` → `section` → ReferenceError). 그래서 **바깥은 PowerShell 큰따옴표, JS 문자열은 작은따옴표**로 쓴다: `agent-browser eval "(()=>{const s=[...document.querySelectorAll('section')].find(x=>x.querySelector('form'));return s?'found':'none';})()"`. DOM 이벤트 검증에 요긴하다(예: `new DataTransfer()` 에 `new File(...)` 을 담아 `dragover`/`drop` 을 dispatch → 파일 드롭 동작을 실제 이벤트로 확인).
+- 스크린샷으로 **직접 확인하지 못한 것**(사용자가 눈으로 봐야 한다): 라이트 모드의 호버 정보 창·선택 강조·채팅 창, 900px 이하 좁은 화면의 프로젝트 상세 배치, 그룹이 많아 줄바꿈되는 캔버스 배치.
 
-- 스키마 V6(`ai_provider.enabled`, `workspace_runtime_status`) / V7(`project_workspace` N:N + `agent.project_id`·`persona`, `project.workspace_id` 제거) / V8(`agent.connection_id`·`ai_connection` 제거)
-- 런타임 on/off(`PUT /ai-providers/{id}/enabled`), 폴더별 런타임 상태(`GET /workspaces/{id}/runtimes`, `POST /workspaces/{id}/runtimes/{providerId}/check`, probe 는 **cwd=폴더**)
-- 프로젝트↔워크스페이스 N:N(기본 1개), 에이전트는 프로젝트 소속 + 페르소나(`--append-system-prompt` 로 전달)
-- 실행 가드: 런타임 살아있음 + enabled + 프로젝트 기본 워크스페이스에서 `CONNECTED` → 아니면 409
-- E2E 검증: 폴더별 상태 분리 기록, 페르소나가 CLI 까지 전달(로그에 `BANANA`), 런타임 off 시 409
+## 3. 목업에 있는 화면과 기능
 
-**(B) CLI 설치 흐름 + 실행 파일 해석** (이번 커밋들)
+라우트: `/` Dashboard, `/projects` 프로젝트 카드 목록, `/projects/:id` 프로젝트 상세, `/settings`(→ `/settings/agents`), `/settings/agents` 에이전트 연결 설정, `/settings/theme` 테마.
 
-- **실행 파일 해석**(`process/Executables.java`): Java 는 `npm` 처럼 확장자 없이 쓰는 이름을 `npm.cmd` 로 찾지 못한다(`CreateProcess error=2`). PATH/PATHEXT 를 직접 훑어 실제 파일을 찾아 실행한다 → `ProcessService`(에이전트 실행)와 `ClaudeCodeProbe` 에 적용. **셸을 경유하지 않으므로 프롬프트가 셸로 새지 않는다.**
-- **CLI 없음 감지**: `ProbeResult.cliMissing` + `workspace_runtime_status.cli_missing`(V9). 화면에서 "CLI 설치" 버튼을 띄우는 근거.
-- **설치 계획(데이터)**: `capabilities` 에 `install`(단계 배열), `installRequire`(먼저 있어야 하는 실행 파일, 예: npm), `installPrerequisite`(없을 때 먼저 실행할 단계, 예: `nvm install lts`). V9 가 4종 런타임에 시드(설치 계획이 없거나 예전 문자열 형식일 때만 변환).
-- **설치/로그인 세션**: `POST /ai-providers/{id}/install`(+`/login`), `GET|POST|DELETE /ai-providers/command-sessions/{sessionId}/...`(SSE). `LoginSessionService` 가 단계 목록을 만들어 순서대로 실행하고, 필수 도구가 없으면 **선행 단계를 먼저** 실행한다. 각 단계는 `CommandShell`(`cmd.exe /c`, 그 외 `sh -c`)로 감싼다 — 설치만 셸을 쓴다.
-- 화면: 에이전트 설정 카드에 ON/OFF + **CLI 설치** + 로그인 + 설치 계획 편집(모델/모드/설치 단계/필수 도구), 워크스페이스 런타임 행에 **CLI 설치(또는 설치/재설치)** 버튼과 출력 패널(성공 시 자동 재확인). `LoginPanel` → **`CommandPanel`**(로그인/설치 공용)로 일반화.
-- E2E 검증: `npm view @openai/codex version` → `0.159.0` exit 0(셸 경유로 npm 실행됨), 필수 도구가 없을 때 `prerequisite-ran` → `install-step-ran` 순서로 실행되고 exit 0. JUnit 54건, 프론트 tsc+build 통과.
+| 화면 | 동작 |
+| --- | --- |
+| **레이아웃** | 왼쪽 **아이콘 사이드바**(Dashboard, 프로젝트, 설정). 기본 접힘(56px), 위 ☰ 로 펼침(200px). 펼침 여부는 localStorage 에 저장. 사이드바는 **평평한 기본 디자인**(글래스 아님). 내용 영역은 사이드바를 뺀 **전체 폭**. |
+| **Dashboard** | 안내 링크 목록. 아직 없는 화면은 "준비 중". |
+| **프로젝트 목록** | **카드 뷰**: 이름, 워크스페이스(★ 기본 + "외 N개"), 에이전트 수, 총 Task 수. 카드를 누르면 상세. 상단 입력으로 프로젝트 등록. |
+| **프로젝트 상세** | **구성도 캔버스가 사이드바를 뺀 화면 전체**를 채우고, 그 위에 요소가 떠 있다(아래). 프로젝트에는 **마스터 에이전트**(최상위 리더)가 하나 있고, 그룹/에이전트는 그 아래다. |
+| 상세 › 헤더 카드 | 프로젝트 이름, 이름 줄 오른쪽 끝 **설정(톱니) 아이콘**, 기본 워크스페이스, 에이전트/그룹/총 Task 수. |
+| 상세 › 접기/펴기 | **각 상자 안 상단 중앙에 얇은 화살표 손잡이**(⌃ 펼침 / ⌄ 접힘)가 있고, **머리말 줄을 눌러도 같은 동작**을 한다(따로 접고 편다, 기본은 둘 다 열림). 접고 펼 때 **높이가 부드럽게 바뀐다**(패널 `flex-grow` 전환 + 몸통 `grid-template-rows` 1fr↔0fr, 0.22s. 접었을 때 높이 = 화살표+머리말, `min-height: 69px`. 상자 안쪽 여백은 위 3px·좌우·아래 10px). 머리말 오른쪽 `+` 는 `stopPropagation` 으로 창만 연다. 둘 다 접으면 구성도가 화면 전체를 쓴다. |
+| 상세 › 에이전트 패널 | **이름 + 역할만 보이는 작은 카드**(44px). 카드를 **캔버스로 끌어다 놓으면 그 자리에 배치된다**(미배치 해소). 오른쪽에 **상태 배지**(미배치 / 작업 중 / 작업 대기중 / 작업 없음)와, 마스터면 **마스터** 배지. 카드 오른쪽 **"⋮" 메뉴**(상세 설정 / 구성도에서 빼기·놓기 / 삭제). **+ 아이콘**은 이름·역할·런타임·모델/모드를 받는 **창**(`AgentFormModal`)을 띄운다(왼쪽 패널에 갇히지 않게 body 포털). **마우스 오버**하면 이름·역할·런타임/모델/모드·소속 그룹·연결된 에이전트(같은 그룹의 다른 멤버, 리더 ★)·프롬프트(persona)가 정보 창으로 뜬다. **누르면 선택**(카드 강조 + 캔버스가 그 노드로 부드럽게 이동 + 캔버스 노드에 "선택됨" 이름표와 고리). **선택된 카드를 다시 누르면 해제**. |
+| 상세 › 그룹 패널 | 에이전트 패널 아래. 그룹 카드(멤버 칩, 리더 ★, **⋮ 메뉴**: 프롬프트 편집 / 삭제). **+ 아이콘**으로 새 그룹(이름을 받는 **창** `GroupFormModal` 이 뜬다). **그룹 프롬프트**는 마스터 프롬프트 아래, 에이전트 프롬프트 위에 겹쳐 적용된다(`GroupPromptModal`). 에이전트 카드를 그룹 카드로 **드래그 앤 드롭**하면 멤버. 카드를 누르면 채팅 대상이 된다. |
+| 상세 › 구성도 캔버스 | **놓인(`placed`) 에이전트만** 그린다(빼 둔 에이전트는 목록에만). 그룹은 상자, 에이전트는 노드. 그룹 안에서 리더가 위, 멤버가 아래에 선으로 이어진다. **그룹에 속하지 않은 에이전트는 이름표·상자 없이 노드만** 놓인다. 배경 드래그로 이동, 휠로 확대/축소, **아래 가운데 뜬 도구**에서 −/+/맞춤/**위치 초기화**(왼쪽·오른쪽 패널을 뺀 빈 곳의 가운데에 온다). **왼쪽 목록의 에이전트 카드를 캔버스로 끌어다 놓으면 그 자리에 배치된다**(미배치가 배치되고, 그룹에 있던 것은 그룹에서 빠진다). **노드를 끌어 자유 위치로 옮긴다**(그룹에 속하지 않은 노드만): 그룹 상자 위에 놓으면 그 그룹으로, 빈 곳에 놓으면 그룹에서 빠져 그 자리에 선다. **그룹 상자도 머리말을 끌어 통째로 옮긴다**(노드·선 포함). 그룹 상자 머리말의 **`⋮` 메뉴**(프롬프트 편집 / 삭제)로 상자를 지우거나 프롬프트를 고친다. 자유 위치는 `MockStore` 의 `nodePositions`·`groupPositions` 에 쌓이고 맞춤 크기에도 포함되며, 옮긴 것은 제자리를 차지한 채 좌표만 바뀌어 다른 것이 밀리지 않는다. 좌표는 음수도 될 수 있어 **캔버스 왼쪽·위까지 놓을 수 있고**, 맞춤은 경계 상자(`layout.minX`·`minY`)를 기준으로 한다. 왼쪽 목록의 카드·멤버 칩은 HTML5 DnD 로 그룹에 넣거나 뺀다. **노드에는 버튼을 늘어놓지 않고 `⋮` 메뉴 하나만** 둔다(`AgentNodeMenu`: 리더로 지정 / 그룹에서 제거 / 구성도에서 빼기). 리더는 노드에 **★** 로만 표시. 구성도에서 빼면 **그룹에서도 빠지고** 에이전트 목록에만 남는다(다시 놓으면 그룹 없이 노드만). |
+| 상세 › 채팅(명령) 창 | 구성도 **오른쪽에 세로로 붙는 패널**(너비 360, 위/아래 여백 16). **왼쪽 테두리 안쪽에 얇은 화살표**(세로 가운데에 `‹` 하나만 보이고 **클릭 범위는 왼쪽 세로 전체** — 위아래 16px 만 비운다. 누르면 왼쪽 패널 옆부터 창 오른쪽까지 넓어지고 `›` 원래 크기로 — 팝업이 아니라 같은 패널이라 쓰던 글·첨부가 그대로 남는다. 패널 왼쪽 여백은 14px). 머리말 왼쪽의 접기 버튼을 누르면 머리말만 남고 기록 수만 보이며(접으면 크게 보기도 함께 풀린다) 구성도가 그 폭을 되찾는다. **기본 대상은 마스터**(`Master (마스터)`)이고 그룹/에이전트도 고를 수 있다. 명령을 보내면 **실행 트리**가 만들어지고(라우팅 규칙 → 실행 계획), Task 수가 늘며, 응답은 계획이 다 끝난 뒤에 온다. 리더가 없거나 실행 불가면 시스템 메시지로 사유를 알린다. **기록 영역은 남는 높이를 다 쓰고 길면 안에서 스크롤**한다(내용이 길어져도 창이 커지지 않는다). **입력줄(📎 + 입력 + 보내기)은 상자들과 같은 형태로 한 칸에 묶여 있다**(둥근 테두리 한 칸, 입력은 그 안에서 테두리 없이). |
+| 상세 › 실행(위임) 흐름 | 명령을 보내면 실행 트리가 **실제 순서대로** 돈다: 마스터 `RUNNING` → 계약 `delegate`(`WAITING_CHILD`) → 하위 실행 `RUNNING` → 끝나면 부모가 다시 `RUNNING` → `done`. **라우팅은 규칙 먼저**: 요청에 팀 키워드가 걸리면 그 팀 리더에게, 걸리는 팀이 없으면 마스터가 직접 처리(실행 1회). 리더는 팀이 크면(비리더 멤버 2명 이상) 하위 한 명에게 한 번 더 넘기고, 작으면 직접 처리한다. 채팅 응답 아래 **실행 요약 카드**(상태 · 실행 N회 · 위임 N건 · 비용 · 소요 + 실행별 한 줄)가 붙고, **실행 트리 보기**로 창(`ExecutionTreeModal`)을 열면 실행별 상태·계약·Handoff 요약·변경 파일·토큰·비용·시간·세션 id 를 본다. 값은 전부 **모의**(재생도 압축)이고 창 아래에 그 사실과 실제 값의 출처(CLI `-p --output-format json`)를 적어 둔다. |
+| 상세 › 파일 첨부 | 두 가지 길이 있다. ① 입력줄 왼쪽 **📎 버튼** → **파일 첨부 창**(`AttachFilesModal`): 프로젝트 **워크스페이스 폴더 안의 파일**을 폴더별로 묶어 체크박스로 고른다(워크스페이스가 2개 이상이면 셀렉트, shop = shop-web ★ / shop-api). ② **채팅 창에 아무 파일이나 끌어다 놓기**(**폴더는 받지 않는다 — 파일만**): 창 밖 파일은 **프로젝트 안 폴더 `.agentdock/attachments` 로 복사한 것으로 치고** 그 사본을 첨부로 단다(에이전트가 읽을 수 있는 곳이 거기뿐이다). **저장 이름은 `<uuid 앞 8자>-원래이름`**(`storedName`)이라 같은 이름을 여러 번 붙여도 충돌하지 않고, 첨부 칩에는 **원래 이름**·파일 목록에는 **저장 이름**이 보인다(`displayName`). 복사된 파일은 워크스페이스 파일 목록(`workspaceFiles`)에 더해져 첨부 창에도 나타난다. 끌어오는 동안 창에 점선 테두리와 "여기에 놓으면 프로젝트 폴더로 복사해 붙입니다" 안내가 뜬다. **경로·확장자로도 팀이 정해진다**(문장에 키워드가 없어도 `.tsx` → Frontend, `.java` → Backend, `.pdf` → 어느 팀도 아님). 파일만 붙이고 보내면 지시는 "첨부한 파일을 확인해줘". |
+| 상세 › 에이전트 터미널(새 창) | 에이전트 카드/노드 `⋮` → **터미널 보기** → 그 에이전트의 실행 출력이 **새 창**으로 뜬다(`/terminal/:agentId` — 사이드바 없는 별도 라우트, 메뉴 클릭에서 `window.open`). 제목·상태 배지(`실행 중`/`완료`/`작업 없음`)·실행 폴더 경로 + 어두운 터미널이 창을 채우고, 진행 중이면 0.9초마다 줄이 늘며 커서가 깜빡인다. 메인 창이 상태를 넘겨주고(`lib/windowSync.ts` — localStorage + BroadcastChannel), 실제 구현은 새 창이 로그 SSE 를 직접 구독하면 된다. 출력은 모의다. |
+| 상세 › 프로젝트 설정 창 | 이름 변경, **마스터 에이전트 지정 + 마스터 프롬프트**(미지정이면 경고), **워크스페이스 할당/해제/기본 지정**(할당은 여기서만), 프로젝트 삭제(에이전트·그룹·Task·실행 기록도 함께 삭제). |
+| **현실성 점검** (`/reality-check`) | 실제 구현으로 갈 때 막히는 지점 9가지를 **흐름도**(사용자 → 마스터 → 그룹 리더 → 하위 에이전트, 리더는 필수 경로가 아니라고 명시) + **위험 카드**(문제 / 지금 / **결정** / 할 일)로 정리. 위에 **확인된 사실**(`VERIFIED`: CLI `--help` 와 실측 1회로 확인한 세션 재개 · `--json-schema` · 계측값 · 호출 고정비 · 내장 서브에이전트)을 함께 둔다. 내용은 `pages/RealityCheck.tsx` 의 `RISKS`·`VERIFIED` 배열(데이터). |
+| **설정 › 에이전트 연결 설정** | 런타임 카드(ON/OFF, 삭제, 추가 모달, 모델/모드/설치 계획 편집, CLI 확인 창에서 로그인·설치 가짜 로그). |
+| **설정 › 테마** | 시스템/라이트/다크 선택. localStorage 에 저장. |
 
-**(C) CLI 확인 창** (이번 커밋들)
+초기 시드 데이터(`store/seed.ts`): 런타임 2개(Claude Code, Command Code 켜짐; Codex, Gemini 는 삭제 상태라 추가 모달에서 고를 수 있음), 워크스페이스 3개, 프로젝트 3개(`test` 1개 워크스페이스·에이전트 1, `shop` 2개 워크스페이스·**에이전트 30·그룹 5**, `blog` 비어 있음). 워크스페이스마다 **파일 목록**(`SEED_FILES`)이 있어 첨부 창에서 고를 수 있다. `shop` 은 **마스터 1**(`Master`, 그룹 없이 배치) + **그룹 소속 20**(Backend Team 6 / Frontend Team 5 / QA Team 4 / DevOps Team 3 / Docs Team 2, 각 그룹 첫 멤버가 리더) + **그룹 없이 배치 5**(Reviewer A~C, Planner A·B) + **미배치 4**(Reviewer D·E, Planner D·E)로 나뉜다. 프로젝트마다 **마스터 프롬프트**가 있고 그룹 5개에는 **그룹 프롬프트**가 들어 있다. 에이전트마다 맡은 Task 상태가 달라 카드에 **작업 중 6 / 작업 대기중 4 / 작업 없음 16 / 미배치 4** 가 골고루 보인다. 완료된 위임 1건(`재고 조회 API 응답 지연 조사`: 마스터 → Backend Team 리더 → Backend Dev B, 결과 요약·변경 파일·지표 포함)을 **실행 예시**(`SEED_EXECUTIONS`)로 넣어 두어, 화면을 처음 열어도 실행 트리를 볼 수 있다.
 
-- **CLI 상태 API**: `GET /ai-providers/{id}/cli` → `{resolvedPath, version, runnable, detail}`. `Executables.locate`(PATH/PATHEXT 로 실제 파일 경로, 없으면 null)로 찾고, 있으면 `<실행 파일> --version` 을 10초 제한으로 실행해 첫 줄을 읽는다(`CliStatusService`, 셸 미경유, 저장 안 함). 런타임별 `AiRuntimeCli`/`CliRegistry` 구현이 등록된 런타임만 경로/버전을 보여 준다(현재 Claude 만; 나머지는 "CLI 정보를 확인할 수 없습니다").
-- **CLI 확인 창**(`CliPanel.tsx`): CLI 를 쓰는 모든 자리(에이전트 설정 카드 · 워크스페이스 런타임 행 · 에이전트 목록)에서 `CLI 확인` 버튼 **하나**로 연다. 창에서 경로/버전/실행 가능 여부 + 이 폴더에서 확인(probe) + 로그인 + 설치를 모두 하고, 출력은 기존 `CommandPanel`(SSE)을 재사용한다. 각 자리에 흩어져 있던 인라인 버튼(로그인/CLI 설치/이 폴더에서 확인)은 창 안으로 모았다.
-- E2E 검증: `GET /ai-providers/12/cli` → `C:\Users\chey.kim\.local\bin\claude.exe`, `2.1.227 (Claude Code)`, `runnable=true`. COMMAND_CODE → "CLI 정보를 확인할 수 없습니다", 없는 id → 404. 화면 3곳에서 창이 열리고, 창의 "이 폴더에서 확인"이 표(상태 CONNECTED, 마지막 확인 갱신)를 다시 읽는다. JUnit 59건, 프론트 tsc+build 통과.
-  - **미실행(의도)**: 로그인/설치 버튼의 실제 실행은 인증 상태·전역 설치를 건드려 이번 검증에서 누르지 않았다. `CommandPanel` 자체는 변경하지 않았고(부모만 교체), 직전 커밋에서 검증된 코드다.
+## 4. 코드 구조 (`apps/mockup/src`)
 
-## 3. 다음에 할 일 (우선순위)
+```
+main.tsx, App.tsx, layout.module.css      진입점, 라우트(프로젝트 상세는 useMatch 로 여백 없는 전체 화면), 레이아웃
+components/  Sidebar, icons(인라인 SVG), TerminalView(터미널 몸통: 줄 목록 + 진행 중이면 늘어나는 출력)
+lib/         storage(localStorage 헬퍼 + 목업 창끼리 넘기는 키), dnd(드래그 페이로드), useGroupDrop(그룹 드롭 공통 처리),
+             canvasLayout(순수 함수: 에이전트/그룹 → 좌표), agentAvailability(실행 불가 사유),
+             agentStatus(상태: 미배치 / 작업 중 / 작업 대기중 / 작업 없음),
+             attachments(첨부 복사 폴더 규칙: ATTACHMENT_FOLDER = '.agentdock/attachments' · attachmentPath),
+             executionSim(실행 계획: 규칙 라우팅(문장 키워드 + 첨부 경로·확장자) · 상태 타임라인 · 모의 지표),
+             executions(실행 트리 조회·표시: treeOrder · summarize · formatCost/Duration/Tokens),
+             terminal(터미널 줄 만들기 + 상태: terminalState · currentExecution · currentTask · tailLine),
+             windowSync(터미널을 새 창으로 띄우고 상태 넘기기: openTerminalWindow · publishSnapshot · subscribeSnapshot)
+store/       MockStore(전체 메모리 상태 + reducer + sendCommand + workspaceFiles + 새 창으로 상태 넘기기), ThemeContext, seed(테스트 데이터 + 실행 예시 + 파일 목록)
+styles/      tokens.css(색 토큰: 라이트/다크), globals.css, glass.module.css, modal.module.css, menu.module.css(⋮ 메뉴 공용),
+             execution.module.css(실행 배지·요약 카드·실행 트리 창), attachment.module.css(첨부 창·칩),
+             terminal.module.css(터미널: 어두운 출력 + 커서), shared.module.css
+pages/Projects/   Projects, ProjectDetail, AgentList, AgentCardMenu(카드 ⋮ 메뉴: 상세 설정 / 터미널 보기 / …),
+                  AgentNodeMenu(노드 ⋮ 메뉴: 터미널 보기 / 리더로 지정 / …),
+                  AgentHoverCard, AgentFormModal(생성/수정 겸용, 창), GroupList, GroupCardMenu(그룹 ⋮ 메뉴),
+                  GroupFormModal(새 그룹, 창), GroupPromptModal(그룹 프롬프트, 창), GroupCanvas, ChatPanel,
+                  AttachFilesModal(파일 첨부 창), ExecutionTree(실행 요약 카드 + 실행 트리 창),
+                  ProjectSettingsModal(마스터 지정·프롬프트 포함), ProjectWorkspaces (+ 각각의 *.module.css)
+pages/            Dashboard, TerminalWindow(에이전트 터미널 새 창, 레이아웃 없이),
+                  RealityCheck(현실성 점검: 확인된 사실 + 흐름도 + 위험 카드, 내용은 VERIFIED·RISKS 배열)
+pages/Settings/   Settings(안쪽 왼쪽 메뉴), AgentConnectionSettings, ThemeSettings, RuntimeCard, AddRuntimeModal, CliPanel, CommandPanel
+```
 
-1. **Stage 2 — 화면 재배치**: "에이전트 설정" 라우트/파일 정리, Agents 는 읽기 목록 중심 + 생성은 프로젝트 상세로 이동, 그리고 **모델/권한을 CLI 목록에서 고르는 UI**(`~/.claude.json` 의 `additionalModelOptionsCache` = `/model` 이 보여주는 라벨·설명·disabled, `claude --help` 의 `--permission-mode` 6종) 를 흡수. 사용자가 "텍스트로 주면 쓰이는지 알 수 없다"고 한 지적의 해결책.
-2. **Stage 3 — 프로젝트 상세 채팅(자동 라우팅)**: 채팅 입력 → 그룹 리더/에이전트로 라우팅 → Task/Execution + SSE. 에이전트가 여러 개일 때 규칙 확정. 필요하면 `task.workspace_id` 추가.
-3. **Stage 4 — Tasks 통합 화면**: 전 프로젝트 진행/종료 작업 + 필터.
-4. **다른 런타임(CODEX/GEMINI/COMMAND_CODE) probe/Runtime/로그인 명령** — CLI 미설치로 실검증 불가. 설치 흐름으로 설치한 뒤 문서 확인해서 구현(플래그 추측 금지). CLI 상태 조회도 `AiRuntimeCli` 구현을 추가하면 자동으로 잡힌다.
-5. 메뉴형 CLI 가 필요해지면 `LoginProcess` PTY 구현, (선택) OS Credential Store.
+- **상태**: `store/MockStore.tsx` 의 `useReducer` 한 곳. 데이터는 새로고침하면 `seed.ts` 로 초기화된다(백엔드/DB 없음). 화면은 `useMockStore()` 로 읽고 쓴다. 채팅 응답 타이머는 화면이 사라져도 이어지도록 스토어(Provider)에서 돌린다.
+- **저장하는 것은 UI 설정 둘뿐**: 테마, 사이드바 펼침(`lib/storage.ts` 의 `STORAGE_KEYS`). 테마는 첫 화면 깜빡임을 막으려고 `index.html` 에 초기 적용 스크립트가 있다(키를 같게 유지).
+- **선택/이동 흐름**: `ProjectDetail` 이 `selectedAgentId` 와 `focusSeq` 를 갖는다. 왼쪽 카드를 누르면 선택 + `focusSeq` 증가(→ `GroupCanvas` 가 그 노드로 이동), 캔버스 노드를 누르면 선택만(이동 없음). 같은 에이전트를 다시 누르면 해제하고, 채팅 대상이 그 에이전트였다면 대상도 비운다. 선택은 채팅 대상도 겸한다.
+- **도메인 가정을 화면에 구현한 규칙**(백엔드 규칙을 흉내): 첫 워크스페이스 할당은 자동 기본, "기본으로"는 기존 기본 대체, 기본을 해제하면 남은 첫 워크스페이스가 이어받음, 첫 그룹 멤버는 자동 리더, 리더를 빼거나 에이전트를 삭제하면 남은 첫 멤버가 리더, 한 에이전트는 여러 그룹 가능, 런타임 꺼짐/삭제 또는 프로젝트에 기본 워크스페이스 없음 → 실행 불가(`agentAvailability.ts`).
 
-## 4. 이 환경에서 작업할 때 (실측값)
+## 5. 반드시 지킬 규칙 (사용자 요구)
 
-- JDK 25: `C:\Users\chey.kim\.jdks\openjdk-25.0.2` (PATH 밖) → `$env:JAVA_HOME` 지정 후 `gradlew.bat`.
-- DB: PostgreSQL 17, `AGENT_DOCK`, `postgres`, 비밀번호 없음. `psql` 전체 경로 `C:\Program Files\PostgreSQL\17\bin\psql.exe`.
-- 검증 포트: 백엔드 8081 / 프론트 3031 (사용자 포트 8080/3030 금지). 프론트는 `VITE_API_BASE=http://localhost:8081`.
-- **사용자는 자기 앱을 8080/3030 으로 띄워 둔다.** 코드를 바꾸면 그 앱을 **재시작해야** 반영된다(V9 마이그레이션도 그때 적용).
-- 이 머신의 CLI: `claude` = `C:\Users\chey.kim\.local\bin\claude.exe`, `node` = `C:\nvm4w\nodejs\node.exe`, `npm` = `C:\nvm4w\nodejs\npm.cmd`(+`npm.ps1`), `nvm` 1.2.2(있음), `cmdc`/`codex`/`gemini` 없음, **`winget` 없음**.
-- `agent-browser`(0.38.1 + Chrome) 있음. `open`/`eval`/`snapshot` 이 자주 멈추니 **스크린샷 + 이미지 확인** 위주로.
-- `gh` CLI 없음 → PR 생성/병합은 GitHub 웹.
-- 현재 DB: Flyway **v1~v9**, `ai_provider` 4종(CLAUDE_CODE·COMMAND_CODE enabled=true, CODEX/GEMINI 는 논리 삭제). 테스트용으로 workspace(`agentDock`)·project(`test`, 기본 워크스페이스 1개)·agent(`test`, CLAUDE_CODE) 1건이 있다.
-- 검증 정리 SQL(순서 중요): `execution_log → task → execution → agent_group_member → agent_group → agent → project_workspace → project → workspace → permission_profile → agent_role`.
+1. **CSS 는 전부 파일로 분리한다.** 인라인 `style` 은 위치/크기 같은 **동적 값을 CSS 변수(`--x`, `--y`, `--inset`, `--vx` …)로 넘길 때만** 쓴다. 색·모양은 `*.module.css` 가 정한다.
+2. **색은 `styles/tokens.css` 의 토큰만** 쓴다. **라이트/다크 값은 세 곳**(라이트 기본 `:root`, `:root[data-theme='dark']`, `@media (prefers-color-scheme: dark)` 의 `:root:not([data-theme='light'])`)에 똑같이 유지한다. 새 색이 필요하면 셋 다 고친다.
+3. **다크 모드는 무채색**이다. 남색·보라 톤으로 물들이지 않는다. 배경은 너무 어둡지 않게(#161616) 두고, **위에 떠 있는 것들(패널·채팅·그룹 상자·노드)은 배경보다 확실히 밝은 회색**이라 구분되어야 한다. (사용자가 "다 너무 어두워서 구분이 안 간다"고 지적했다.)
+4. **글래스 스타일**: 떠 있는 패널은 `glass.module.css` 의 `glass`/`glassStrong` 를 `composes` 로 가져다 쓴다. `composes` 를 쓴 클래스에서는 배경/테두리/그림자를 다시 선언하지 않는다(덮어쓴다).
+5. **왼쪽 사이드바는 항상 있고, 평평한 기본 디자인을 유지한다**(글래스로 바꾸지 않는다). 메뉴는 아이콘만 보이는 접이식이다.
+6. **추가 버튼은 색·글자 없는 `+` 아이콘**(`shared.addButton`). 프로젝트 목록의 "+ 프로젝트 등록", 설정의 "+ 런타임 추가"는 아직 글자 버튼이다(사용자가 지적하지 않아 그대로 뒀다).
+7. **캔버스에 점 격자 배경을 넣지 않는다. "그룹 없음" 영역/이름표를 표시하지 않는다**(그룹 없는 에이전트는 노드만).
+8. **설정 항목 구분은 탭이 아니라 설정 화면 안쪽 왼쪽 메뉴**이고, 사이드바에는 "설정" 아이콘 하나만 둔다.
+9. 워크스페이스 할당은 **프로젝트 상세의 설정 창**에서만 한다(목록에서 하지 않는다).
+10. **모달·메뉴·정보 창 같은 떠 있는 팝업은 `createPortal` 로 `document.body` 에 그린다.** 조상에 `backdrop-filter`(글래스)가 있으면 `position: fixed` 가 그 조상 기준이 되어 잘리거나 어긋난다(에이전트·그룹 만들기 창이 왼쪽 글래스 패널에 갇혔던 문제가 여기 해당했다).
+11. 사용자 노출 문구는 한국어, 코드·식별자는 영어. 새 규칙을 만들면 `CONVENTIONS.md` 에 함께 적는다.
+12. 에이전트는 구성도에서 **뺄 수 있고**, 빼면 **그룹에서도 빠져 에이전트 목록에만** 남는다. 에이전트 목록 카드에는 상태(**미배치 / 작업 중 / 작업 대기중 / 작업 없음**)를 보여 준다. 카드 아래 안내 문구(설명)와 앞쪽 그립(⋮⋮)은 두지 않고, 카드·노드의 메뉴는 **세로 `⋮`** 로 둔다(가로 `…` 아님). 노드·그룹 상자에는 버튼을 늘어놓지 않고 `⋮` 하나로 모은다(그룹 삭제도 그 안에). 에이전트 패널과 그룹 패널 접기는 따로 둔다.
+13. **프로젝트마다 마스터 에이전트가 하나 있고**(최상위 리더) **그룹에 속하지 않는다**. 설정에서 기존 에이전트 중 하나를 마스터로 **지정**한다(별도 마스터 에이전트를 새로 두지 않는다). **마스터는 구성도에서 뺄 수 없고 삭제도 안 된다**(변경만 가능 — 설정에서 다른 에이전트로 바꾼 뒤에야 그 에이전트를 지울 수 있다). 프롬프트는 **마스터 → 그룹 → 에이전트** 순서로 겹친다: 마스터 프롬프트는 프로젝트 설정 창, 그룹 프롬프트는 그룹 카드 `⋮` → 프롬프트 편집, 에이전트 프롬프트는 에이전트 창. 채팅은 **마스터가 기본 대상**이고, 마스터에게 보내면 팀 리더들에게 나눠 맡긴다.
+14. **구성도의 배치는 손으로 조정할 수 있다.** 노드를 끌어 옮기고(그룹 상자 위에 놓으면 그 그룹으로), **그룹 상자도 머리말을 끌어** 옮기며, **위치 초기화**로 자동 배치로 되돌린다. 캔버스 어디든(왼쪽·위 포함, 좌표 음수 허용) 놓을 수 있다. 셀렉트는 모드에 맞는 토큰 화살표로 그린다(`--select-arrow`).
+15. **실행(위임) 흐름은 모의지만 순서는 실제와 같게 둔다.** 명령 하나가 실행 트리 하나(`Execution`, `parentExecutionId`)이고, 상태는 `QUEUED → RUNNING → WAITING_CHILD → RUNNING → DONE`. 판단이 필요한 실행(마스터·리더)은 계약(`delegate` | `done`)을 남기고 **위임 대상이 화면에 남는다**. 라우팅은 **규칙 먼저**(팀 키워드 → 없으면 마스터 직접). **계약·지표·세션 id 는 모의 값**이고, 화면에 모의임을 밝히고 실제 출처(CLI `-p --output-format json` 의 usage / total_cost_usd / duration_ms / session_id)를 함께 적는다(사용자에게 실제 구현처럼 보이게 두지 않는다).
+16. **명령에 파일을 붙일 수 있다.** 길은 둘이다 — **📎 버튼**(워크스페이스 폴더 안의 파일 고르기)과 **채팅 창에 끌어다 놓기**(창 밖의 아무 파일, **폴더는 안 됨**). **끌어온 파일은 프로젝트 안 폴더 `.agentdock/attachments` 로 복사한 것으로 친다** — 에이전트는 워크스페이스 폴더 밖을 볼 수 없으므로 그래야 읽힌다(실제 구현도 같은 순서여야 한다: 복사 → 그 경로를 실행에 넘김). **저장 이름은 `<uuid 앞 8자>-원래이름`** 으로 붙여 같은 이름을 여러 번 붙여도 충돌하지 않게 한다(실제 구현은 이 id 를 첨부 레코드의 키로 두고 원래 이름은 메타데이터로 보관한다). 화면에는 첨부 칩 = 원래 이름, 파일 목록 = 저장 이름. 복사된 파일은 워크스페이스 파일 목록(`workspaceFiles`)에 더해져 첨부 창에도 나타난다. 붙인 파일은 **라우팅에도 쓰인다**: 문장에 팀 키워드가 없어도 경로·확장자로 팀이 정해지고(`FILE_ROUTES`), 실행 지시에는 ` · 첨부: 원래이름` 이 붙어 하위 실행까지 내려간다. 파일 목록은 모의값(시드 `SEED_FILES`)이며, 목록이 실제 폴더를 읽는 것처럼 보이게 두지 않는다(실제 제품은 `GET /workspaces/browse`).
 
-## 5. 반복해서 밟은 함정 (중요)
+## 6. 사용자와 일하는 방식
 
-- **`gradlew bootRun` 이 실패해도 BUILD SUCCESSFUL 처럼 보인다**(devtools `RestartLauncher`). 기동 로그(`Started AgentDockApplication`)나 HTTP 응답으로 확인한다.
-- **`spring.jpa.open-in-view: false`**: 트랜잭션 밖 LAZY 접근은 `LazyInitializationException`. fetch join 사용. 오래 걸리는 작업(probe/세션)에 `@Transactional` 금지.
-- **Java 는 `npm`(확장자 없는 이름)을 직접 실행하지 못한다.** `Cannot run program "npm": CreateProcess error=2`. 반면 **전체 경로 `npm.cmd` 는 실행된다.** 그래서 `Executables.resolve` 로 PATH/PATHEXT 를 훑어 실제 파일을 찾는다. 셸로 감싸는 방법도 되지만(`cmd.exe /c`) 그건 설치 단계에만 쓴다(프롬프트가 흐르는 실행 경로는 셸 금지).
-- **이미 적용된 Flyway 마이그레이션 파일을 수정하면 체크섬 불일치로 기동이 실패한다**(`Migration checksum mismatch for migration version 9`). 이번에 실제로 밟았다. 해결: ① 그 마이그레이션을 **멱등하게** 다시 쓴다(`ADD COLUMN IF NOT EXISTS`, 조건부 UPDATE), ② `DELETE FROM flyway_schema_history WHERE version='9';` 로 이력을 지우고 재기동.
-- **`agent` 테이블에 행이 있으면 V7 이 실패**한다(`project_id NOT NULL`). 이관 전에 비워야 한다.
-- **`Project.workspace` 제거 후 남은 JPQL**(`TaskRepository.RELATIONS` 의 `join fetch p.workspace`, `where p.id`)을 함께 고쳐야 한다. 엔티티만 고치면 기동 시 `UnknownPathException`.
-- **cmd 의 코드페이지 때문에 한글 `echo` 출력이 SSE 에서 깨진다.** 설치 단계의 안내 문구는 ASCII 로 쓴다.
-- shadow FK 필드는 저장 직후 비어 있다(생성 응답은 관계로 보완 또는 커밋 후 재조회). 응답 DTO 는 엔티티 대신 record. POST 201, 삭제 204(프론트 `request()` 가 204 처리).
-- probe 는 출력을 별도 스레드에서 읽고 `waitFor(30초)` 로 종료 판정(먼저 다 읽으면 타임아웃이 동작하지 않음). 로그인/설치 세션은 `Process.onExit()` 로 종료 감지.
-- **PowerShell**: `psql` 에 한글 리터럴을 넘기면 인코딩 오류 → UTF-8 파일 + `psql -f`. `Invoke-WebRequest` 는 UTF-8 JSON 을 깨져 보여줄 수 있음(데이터 문제 아님, DB 는 psql 로 확인). 명령이 너무 길면 "입력이 너무 깁니다"로 잘리니 E2E 는 단계로 나눈다.
-- 편집 도구가 "파일이 수정됐다"고 거부하면(OneDrive 동기화 등) 다시 읽고 전체 내용을 쓴다.
+- 사용자는 **화면을 보며 조금씩 고쳐 달라고 요청**한다. 요청 하나가 끝나면 무엇을 바꿨고 무엇을 확인/미확인했는지 짧게 보고하고 "다음에 만들 화면"을 묻는다. 모호한 요청(예: "메뉴로 만들도록 해", "왼쪽 메뉴바는 항상 존재")은 **가장 그럴듯한 해석으로 진행하되 어떻게 해석했는지 밝히고**, 틀렸다면 알려 달라고 한다. 이번 작업에서 두 번 해석이 갈렸다(설정 항목 구분 위치, 다크 색감).
+- **존댓말만 쓴다**(반말 금지).
+- **커밋 메시지에 `Co-Authored-By:` 를 붙이지 않는다**(사용자 지침이 도구 기본 지침보다 우선). 기능 브랜치는 Conventional Commits(`feat(mockup): …`, `style(mockup): …`, `docs: …`), 소단위로 나눈다. `dev` 로는 squash merge + `[Type] 제목`.
+- 구조/규칙을 바꾸면 `agents/CONVENTIONS.md` 를 같이 고친다(이번 작업 내내 그렇게 했다).
+- 기획 내용을 임의로 늘리지 않는다. 범위 밖: Workflow/Shared Context/Message/Artifact/Review/Decision 같은 Stage 2~4 신규 개념, 실제 API 연동.
 
-## 6. 작업 방식 (기존 관례)
+## 7. 다음에 할 일 (사용자가 아직 요청하지 않은 것 — 순서를 정하지 말고 **사용자에게 묻는다**)
 
-- 기능 브랜치 커밋은 Conventional Commits, `dev` 는 squash merge + `[Type] 제목`. `Co-Authored-By:` 금지. **소단위 커밋**으로 나눈다. 병합 후 브랜치 정리.
-- 구조/컨벤션을 바꾸면 `agents/CONVENTIONS.md` 도 함께 갱신한다.
-- 권한(403)·런타임 enabled·폴더 상태(409)는 백엔드에서 강제한다.
-- Agent(논리적 직원)와 Runtime(실행 엔진)은 분리한다. 새 Runtime/Probe/로그인 명령은 인터페이스만 구현하고 등록한다.
-- **자주 바뀌는 값은 코드에 넣지 않는다.** 모델/모드 목록과 설치 계획은 데이터(화면 편집)로 두고 최종 판단은 CLI 에 위임한다.
+1. **다음에 만들 화면**: 지금 목업에 없는 기존 화면 — Workspaces(폴더 선택 `WorkspacePicker`, 폴더별 런타임 상태·CLI 확인), Agents 전체 목록, Tasks(진행/종료 목록), ExecutionDetail(로그 스트림), Groups 단독 화면(프로젝트 상세로 흡수했으니 **없앨지** 확인), Dashboard 실제 내용.
+2. **Task/실행을 프로젝트 밖에서 볼 방법이 없다.** 채팅 응답에 **실행 트리**가 붙어 위임 흐름은 볼 수 있지만, **Task 목록 화면**(대기·진행·완료·실패)과 **실행 로그(SSE) 화면**은 아직 없다. 목록을 어디에 둘지(Tasks 단독 화면 vs 프로젝트 상세 안) 사용자에게 묻는다.
+3. **채팅 규칙 미정**: 그룹에 보낼 때 리더 이후의 분배, 여러 에이전트 동시 명령, 실패 시나리오(지금은 항상 성공한다), 실행 중 취소. 현재는 대상 필수 + **규칙 라우팅**(팀 키워드가 걸리면 그 팀, 없으면 마스터 직접) + 모의 응답이다.
+4. **Role / Permission Profile 관리**: 지금은 `seed.ts` 의 고정 목록에서 고르기만 한다(원래 화면의 "+ Role", "+ Profile" 빠른 생성은 뺐다).
+5. **구성도 기능 후보**(요청 없음): 노드 검색/필터, 미니맵, 그룹 간 연결선, 그룹 상자 크기 조절. (배치·이동은 이미 손으로 조정할 수 있다.)
+6. **기획서/설계서 본문 작성**(`docs/planning/`): 화면/흐름이 확정된 부분부터 문서로 옮기기 시작할 수 있다. 사용자가 내용을 주는 대로 쓴다.
+7. **좁은 화면(모바일/태블릿) 대응**: 프로젝트 상세는 900px 이하에서 패널이 캔버스를 많이 가린다. 미확인.
+8. 목업이 확정되면: `dev` 로 PR(squash, `[Feat] …`) → 그 목업을 기준으로 실제 구현 재개(`HANDOVER-implementation.md` 의 Stage 2~4 계획을 목업에 맞춰 다시 쓴다).
+9. **첨부 관리 화면은 대기 중**(사용자가 "3번은 아직 대기"라고 했다). 프로젝트의 `.agentdock/attachments` 에 쌓인 첨부를 지우거나 미리보기하는 화면은 요청이 오면 만든다.
+
+## 8. 알려진 함정 / 메모
+
+- **Windows 에서 셸/파이썬 heredoc 로 역슬래시를 쓰면 이스케이프가 사라진다.** `seed.ts` 의 경로 문자열(`'C:\\Users\\mock\\…'`)이 한 번 깨졌다. 역슬래시가 들어간 코드는 편집 도구로 직접 쓰고, 결과를 grep 으로 확인한다. 긴 문서를 셸 heredoc 로 쓰다가 실패한 적도 있으니 파일 도구를 쓴다.
+- 편집 도구가 "파일이 수정됐다"고 거부하면 다시 읽고 전체를 쓴다. 파이썬 다중 치환 스크립트는 **assert 로 대상 문자열이 있는지 확인**하고, 실패하면 아무것도 쓰기 전에 멈추게 했다. 스크립트가 중간에 실패하면 일부 파일만 적용된 상태일 수 있으니 `git status`/`grep` 으로 확인한다.
+- `git commit` 시 "LF will be replaced by CRLF" 경고는 무시해도 된다.
+- CSS 모듈 클래스 이름은 해시가 붙는다. DOM 으로 검증할 때 `[class*=nodeSelected]` 처럼 부분 일치를 쓰되, `card` 처럼 흔한 접두어는 `cardTop` 등에도 걸리니 주의한다.
+- **글래스(`backdrop-filter`) 요소에 `overflow` 를 주면 안 된다.** 크롬이 blur 를 모서리 밖으로 **네모나게** 그려 둥근 모서리 바깥에 색이 새어 보인다(사용자가 "모서리 밖에 색이 이상하다"고 지적한 원인). 자르기가 필요하면 안쪽의 **블러가 없는** 요소(`.cards` 등)에서 한다. 왼쪽 패널은 그래서 `.panel`·`.list` 에 `overflow` 를 두지 않고 스크롤을 `.cards` 가 맡는다.
+- React StrictMode 라 개발 중 effect 가 두 번 돈다. 타이머를 쓰는 effect 는 반드시 cleanup 을 둔다(`CommandPanel`, `ProjectDetail` 의 알림, `AgentList` 의 호버 지연, `GroupCanvas` 의 이동 애니메이션).
+- 캔버스 "맞춤"은 사용자가 이동/확대하기 전까지(`touchedRef`)만 내용 변경에 따라 자동으로 다시 맞춘다. 패널이 가리는 영역(`insetLeft`·`insetRight`·`insetBottom` prop, 상수 `INSET_TOP`)을 비켜서 맞추고, **아래 가운데 도구도 같은 값(`--inset-left`·`--inset-right`)으로 가운데를 잡는다**. 떠 있는 요소의 크기를 바꾸면 `ProjectDetail.tsx` 의 `AGENT_PANEL_INSET`·`CHAT_PANEL_INSET` 도 같이 조정한다.
+- 목업의 모든 데이터 상태는 메모리라 새로고침하면 시드 값으로 돌아간다. 사용자가 "저장이 안 된다"고 하면 의도된 동작임을 알리고, 저장이 필요하면 무엇을 저장할지 먼저 묻는다(지금까지 저장 요청은 테마와 사이드바 펼침뿐이었다).

@@ -1,0 +1,110 @@
+/* 구성도가 화면 전체를 채우고 나머지는 그 위에 떠 있다. */
+.stage {
+  position: relative;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.notFound {
+  padding: var(--spacing-lg);
+}
+
+/* 왼쪽 위부터 아래까지: 헤더 카드 + 에이전트 패널. 빈 곳은 구성도 조작이 통과하도록 클릭을 막지 않는다. */
+.leftColumn {
+  position: absolute;
+  top: var(--spacing-md);
+  bottom: var(--spacing-md);
+  left: var(--spacing-md);
+  width: 320px;
+  max-width: calc(100% - var(--spacing-md) * 2);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.leftColumn > * {
+  pointer-events: auto;
+}
+
+.header {
+  composes: glass from '../../styles/glass.module.css';
+  padding: 12px var(--spacing-md);
+  border-radius: var(--radius-lg);
+}
+
+.back {
+  display: inline-block;
+  margin-bottom: 4px;
+  color: var(--color-muted);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.back:hover {
+  color: var(--color-text);
+}
+
+.title {
+  min-width: 0;
+  margin: 0;
+  font-size: 1.25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--spacing-md);
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.workspace {
+  color: var(--color-text);
+}
+
+.stat strong {
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 프로젝트 이름 줄: 이름은 왼쪽, 설정 버튼은 그 줄 오른쪽 끝 */
+.titleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  margin-bottom: 6px;
+}
+
+.settingsButton {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 4px 6px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-muted);
+}
+
+.settingsButton:hover {
+  background: var(--color-code-bg);
+  color: var(--color-text);
+}
+
+/* 위쪽 가운데에 잠깐 뜨는 안내 */
+.notice {
+  position: absolute;
+  top: var(--spacing-md);
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  max-width: calc(100% - 160px);
+  border: 1px solid var(--color-error);
+  box-shadow: var(--shadow-float);
+}

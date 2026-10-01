@@ -1,0 +1,222 @@
+/* 패널 한 벌: 상자 + 상자 안 상단 화살표 손잡이. 접으면 손잡이와 머리말만 남는다. */
+.panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  /* 손잡이 영역(22) + 머리말 + 상자 여백: 접었을 때 이만큼만 남는다 */
+  min-height: 69px;
+  /* overflow 를 두지 않는다: 글래스 상자의 blur 가 모서리 밖으로 네모나게 그려진다 */
+  transition: flex-grow 0.22s ease;
+}
+
+.panelCollapsed {
+  flex-grow: 0;
+}
+
+/* 상자 **안** 상단 중앙에 놓는 얇은 화살표 손잡이(⌃ 펼침 / ⌄ 접힘). 누르면 접히고 펴진다. */
+.tab {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 얇은 화살표지만 누를 수 있는 넓이는 남긴다(머리말 줄도 같은 동작) */
+  padding: 2px 16px;
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+  line-height: 0;
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: var(--color-text);
+}
+
+.tab svg {
+  width: 18px;
+  height: 18px;
+}
+
+.list {
+  composes: glass from '../../styles/glass.module.css';
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  /* 위는 화살표 손잡이가 상단에 가까이 붙도록 3px, 좌우·아래는 10px */
+  padding: 3px 10px 10px;
+  border-radius: var(--radius-lg);
+  /* 모서리 밖으로 색이 새지 않게 overflow 를 두지 않는다(스크롤은 몸통 .cards 가 맡는다) */
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.titleGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* 그룹 멤버 칩을 끌어 왔을 때(=그룹에서 빼기) */
+.dropActive {
+  border-color: var(--color-primary);
+  background: var(--color-code-bg);
+}
+
+/* 머리말 줄 전체도 접기/펴기 버튼이다(탭과 같은 동작) */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+  cursor: pointer;
+  user-select: none;
+}
+
+/* 몸통: grid 행을 1fr ↔ 0fr 로 바꿔 안쪽을 접는다. */
+.body {
+  display: grid;
+  grid-template-rows: 1fr;
+  flex: 1 1 0;
+  min-height: 0;
+  transition: grid-template-rows 0.22s ease;
+}
+
+.panelCollapsed .header {
+  margin-bottom: 0;
+}
+
+.panelCollapsed .body {
+  grid-template-rows: 0fr;
+}
+
+.title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* 이름과 역할만 보이는 작은 카드 */
+.card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 6px 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.card:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-code-bg);
+}
+
+/* 선택된 에이전트: 구성도에서도 같은 에이전트가 강조된다 */
+.cardSelected,
+.cardSelected:hover {
+  border-color: var(--color-primary);
+  background: var(--color-code-bg);
+  box-shadow: 0 0 0 1px var(--color-primary);
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.role {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+/* 프로젝트 마스터 표시 */
+.master {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--color-code-bg);
+  color: var(--color-primary);
+  font-size: 10px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+/* 상태 배지: 미배치 / 작업 중 / 작업 대기중 / 작업 없음 */
+.status {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  color: var(--color-muted);
+  font-size: 10px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.statusUnplaced {
+  border-style: dashed;
+  color: var(--color-muted);
+}
+
+.statusWorking {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.statusWaiting {
+  border-color: var(--color-warning);
+  color: var(--color-warning);
+}
+
+.statusIdle {
+  color: var(--color-muted);
+}
+
+.warnDot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-error);
+}
+
+.menuButton {
+  padding: 0 7px 3px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.menuButton:hover {
+  background: var(--color-code-bg);
+  color: var(--color-text);
+  filter: none;
+}
+

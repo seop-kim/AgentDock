@@ -1,0 +1,317 @@
+.canvas {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+/* 아래 가운데에 떠 있는 확대/축소 도구. 왼쪽/오른쪽 패널을 뺀 빈 곳의 가운데에 온다. */
+.zoom {
+  composes: glass from '../../styles/glass.module.css';
+  position: absolute;
+  bottom: var(--spacing-md);
+  left: calc((100% + var(--inset-left, 0px) - var(--inset-right, 0px)) / 2);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border-radius: var(--radius-lg);
+}
+
+.zoom button {
+  white-space: nowrap;
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-text);
+}
+
+.zoom button:hover {
+  background: var(--color-code-bg);
+  filter: none;
+}
+
+.zoomValue {
+  min-width: 44px;
+  text-align: center;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+
+.viewport:active {
+  cursor: grabbing;
+}
+
+.world {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  transform: translate(var(--vx), var(--vy)) scale(var(--vs));
+}
+
+.worldSmooth {
+  transition: transform 0.45s cubic-bezier(0.22, 0.8, 0.3, 1);
+}
+
+.box {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: var(--w);
+  height: var(--h);
+  border: 1px solid var(--canvas-box-border);
+  border-radius: var(--radius-lg);
+  background: var(--canvas-box-bg);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+/* 에이전트를 끌어 왔을 때 놓을 수 있음을 알린다 */
+.boxOver {
+  border-color: var(--color-primary);
+  background: var(--color-code-bg);
+}
+
+/* 그룹 상자 머리말을 끌면 상자(과 그 안의 노드·선)를 통째로 옮긴다 */
+.boxHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+  padding: 10px 12px 0;
+  cursor: grab;
+}
+
+.boxHeader:active {
+  cursor: grabbing;
+}
+
+/* 끌고 있는 그룹 상자 */
+.boxDragging,
+.boxDragging:hover {
+  border-color: var(--color-primary);
+  z-index: 1;
+}
+
+.boxTitles {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.boxTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 그룹 상자의 "⋮" 메뉴 버튼(프롬프트 편집 / 삭제) */
+.boxMenuButton {
+  flex-shrink: 0;
+  padding: 0 6px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.boxMenuButton:hover {
+  background: transparent;
+  color: var(--color-text);
+}
+
+.emptyDrop {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  padding: 18px 8px;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius);
+  color: var(--color-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.edges {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.edge {
+  fill: none;
+  stroke: var(--canvas-edge);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.node {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: 168px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--glass-bg-strong);
+  box-shadow: 0 4px 14px var(--color-shadow), var(--glass-highlight);
+  cursor: grab;
+}
+
+.node:hover {
+  border-color: var(--color-primary);
+}
+
+.node:active {
+  cursor: grabbing;
+}
+
+/* 끌고 있는 노드: 위로 띄우고 살짝 키워 따라오는 느낌을 준다 */
+.nodeDragging,
+.nodeDragging:hover {
+  cursor: grabbing;
+  z-index: 3;
+  border-color: var(--color-primary);
+  box-shadow: 0 10px 26px var(--color-shadow), 0 0 0 1px var(--color-primary);
+}
+
+.nodeLeader {
+  border-color: var(--color-primary);
+  box-shadow: 0 4px 18px var(--color-shadow), 0 0 0 1px var(--color-primary), var(--glass-highlight);
+}
+
+/* 프로젝트 마스터 노드: 최상위 리더라 테두리와 이름표로 구분한다 */
+.nodeMaster {
+  border-color: var(--color-primary);
+  border-width: 2px;
+}
+
+.masterTag {
+  position: absolute;
+  top: -10px;
+  left: 10px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+/* 선택된 에이전트: 강한 테두리 + 바깥 고리 + "선택됨" 이름표로 어디 있는지 바로 알아본다 */
+.nodeSelected,
+.nodeSelected:hover {
+  border-color: var(--color-primary);
+  border-width: 2px;
+  box-shadow: 0 0 0 4px var(--color-code-bg), 0 0 0 5px var(--color-primary), 0 6px 22px var(--color-shadow);
+  z-index: 2;
+}
+
+.selectedTag {
+  position: absolute;
+  top: -10px;
+  right: 10px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.nodeUnavailable {
+  border-style: dashed;
+}
+
+.nodeText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding-left: 4px;
+}
+
+.nodeName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.nodeMeta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.warnDot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-error);
+}
+
+/* 노드의 "⋮" 메뉴 버튼. 리더로 지정 / 그룹에서 제거 / 구성도에서 빼기를 여기에 모은다. */
+.nodeMenuButton {
+  flex-shrink: 0;
+  padding: 0 6px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.nodeMenuButton:hover {
+  background: transparent;
+  color: var(--color-text);
+}
+
+/* 리더 표시(누를 수 있는 버튼이 아니라 이름표) */
+.leaderMark {
+  flex-shrink: 0;
+  padding-left: 4px;
+  color: var(--color-primary);
+  font-size: 12px;
+}
+
+.emptyState {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--color-muted);
+  text-align: center;
+  pointer-events: none;
+}
+
+.emptyState strong {
+  color: var(--color-text);
+}

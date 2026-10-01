@@ -1,0 +1,15 @@
+.shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* 사이드바를 뺀 나머지 화면 전체를 내용 영역으로 쓴다. */
+.main {
+  flex: 1;
+  min-width: 0;
+  padding: 24px;
+}
+
+.mainFull {
+  padding: 0;
+}
