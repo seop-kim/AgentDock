@@ -52,7 +52,9 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
 
 ## 화면 설계 기준 (목업에서 확정 → `apps/frontend` 에 이식 중)
 
-`apps/mockup`(독립 앱, 포트 3040)에서 화면·UX 를 먼저 확정했고, 그 **디자인 시스템과 화면 구조를 `apps/frontend` 로 옮기는 중**이다. 목업은 기준 화면으로 계속 남겨 둔다(수정하지 않는다 — 값을 비교할 때만 본다). 아래 규칙은 이제 **`apps/frontend` 에도 그대로 적용된다**: `src/styles/tokens.css`, `src/styles/glass.module.css`, `src/styles/shared.module.css`, `src/styles/modal.module.css`, `src/styles/execution.module.css`, `src/styles/terminal.module.css`, `src/components/Sidebar.tsx`, `src/store/ThemeContext.tsx`, `src/lib/storage.ts`(테마 키 `agentdock-theme`)가 이식됐고, 프로젝트 상세는 `src/pages/ProjectDetail.tsx`(+ `ExecutionTreeModal.tsx`, `TerminalWindow.tsx`)다. 목업에만 있는 화면(구성도 캔버스, 첨부, 현실성 점검, 설정 안쪽 메뉴)은 다음 단계다.
+**프론트엔드 폴더 규칙(기능 우선)**: `apps/frontend/src` 는 `components/`(공용 컴포넌트) · `lib/`(api·storage·표시 유틸) · `store/`(전역 컨텍스트) · `styles/`(토큰·공용 CSS 모듈) · `features/<도메인>/` 으로 나눈다. 화면과 그 화면 전용 컴포넌트·CSS 는 **해당 도메인 폴더 안에** 둔다(`features/project/ProjectDetail.tsx`, `features/execution/TerminalWindow.tsx`). 새 화면은 만들어질 때 그 도메인 폴더에 넣고, 다른 도메인 것을 가져다 쓸 때만 `../<도메인>/X` 로 참조한다.
+
+`apps/mockup`(독립 앱, 포트 3040)에서 화면·UX 를 먼저 확정했고, 그 **디자인 시스템과 화면 구조를 `apps/frontend` 로 옮기는 중**이다. 목업은 기준 화면으로 계속 남겨 둔다(수정하지 않는다 — 값을 비교할 때만 본다). 아래 규칙은 이제 **`apps/frontend` 에도 그대로 적용된다**: `src/styles/tokens.css`, `src/styles/glass.module.css`, `src/styles/shared.module.css`, `src/styles/modal.module.css`, `src/styles/execution.module.css`, `src/styles/terminal.module.css`, `src/components/Sidebar.tsx`, `src/store/ThemeContext.tsx`, `src/lib/storage.ts`(테마 키 `agentdock-theme`)가 이식됐고, 프로젝트 상세는 `src/features/project/ProjectDetail.tsx`(+ `src/features/execution/ExecutionTreeModal.tsx`, `.../TerminalWindow.tsx`)다. 목업에만 있는 화면(구성도 캔버스, 첨부, 현실성 점검, 설정 안쪽 메뉴)은 다음 단계다.
 
 목업 단계는 끝났다(`mockup` 브랜치 → `dev` 로 머지됨, `[Feat] 목업: … (#6)`). 목업을 만들면서 확정한 화면·규칙이 이후 개발의 기준이고, 기획서/설계서는 `docs/planning/` 에 쓴다(설계 근거: `docs/superpowers/specs/2026-09-30-mockup-prototype-design.md`).
 
@@ -102,18 +104,20 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
 
 ## Backend 모듈 (`apps/backend/src/main/java/com/agent/dock`)
 
-- `common/` — `GlobalExceptionHandler`(400/403/404/409), `BadRequestException`/`NotFoundException`/`ForbiddenException`/`ConflictException`, `WebConfig`(CORS), `QueryDslConfig`
-- `provider/` — AiProvider(**논리 삭제** `deleted_at`, **on/off** `enabled`, 부분 유니크 인덱스 `ai_provider_key_active`). `PUT /ai-providers/{id}/enabled` 토글, `capabilities` 편집(`PUT /ai-providers/{id}/capabilities`). 런타임 CLI 실행 파일 조회(`AiRuntimeCli`/`CliRegistry`/`CliStatusService`, `GET /ai-providers/{id}/cli`)와 런타임별 probe(`AiRuntimeProbe`/`ProbeRegistry`/`ClaudeCodeProbe`), 로그인 세션(`provider/login`: `AiLoginCommand`/`LoginCommandRegistry`/`LoginProcess`/`LoginSessionService`) — 로그인은 **런타임 전역**
-- `agent/` — Agent CRUD(프로젝트 소속, 페르소나) + `AgentAvailability`(사용 가능 여부 파생 판정). 목록 조회는 QueryDSL fetch join(`AgentRepositoryImpl`)
-- `role/`, `permission/` — Role, PermissionProfile. `PermissionService.isAllowed(profile, action)` 가 enforcement primitive
-- `workspace/` — Workspace CRUD, 폴더 브라우징(`GET /workspaces/browse`), UNC 차단(`WorkspaceFs`), 드라이브 루트 워밍, **폴더별 런타임 상태**(`WorkspaceRuntimeStatus`): `GET /workspaces/{id}/runtimes`, `POST /workspaces/{id}/runtimes/{providerId}/check`(cwd = 그 폴더)
-- `project/` — Project CRUD + `ProjectWorkspace`(N:N, 기본 1개): `POST /projects/{id}/workspaces`, `DELETE /projects/{id}/workspaces/{workspaceId}`, `ProjectService.defaultWorkspace(projectId)`, **마스터 지정/프롬프트**(`PUT /projects/{id}/master` → `{agentId, masterPrompt}`)
-- `group/` — `AgentGroup`(리더/멤버/프롬프트) 관리 API. `PUT /groups/{id}` 는 전체 교체라 **`prompt` 도 함께 보낸다**
-- `task/` — `Task` CRUD와 실행(`POST /tasks/{id}/run`, 위임 경로를 탄다). **채팅 명령**(`POST /projects/{id}/commands` → `{taskId, rootExecutionId}`): Task 를 만들고 실행 트리를 시작한다(대상 없으면 마스터, 그룹을 주면 그 리더). 채팅 기록은 **Task 로 표현**한다(사용자 말풍선 = `title`, 응답 = 루트 실행의 `result_text`)
-- `process/` — `ProcessService`: `ProcessBuilder` 래퍼, 실행 중 프로세스 관리/취소
-- `runtime/` — `AgentRuntime`, `ClaudeCodeRuntime`, `RuntimeRegistry`, `ClaudeStreamJson`(stream-json → 로그·계측), `AgentExecutionRequest`/`AgentExecutionResult`/`ExecutionMetrics`. CLI 인자 조립은 `buildArgs(request)` 한 곳에서
-- `execution/` — Execution 생성/조회/상태 저장(`ExecutionService`), 실행 전 가드(`ExecutionGuard`), 실행 행 생성(`ExecutionFactory`), 한 스텝 실행(`ExecutionRunner`), SSE 허브(`ExecutionStreamHub`), 트리 조회(`GET /executions/{id}/tree`), 취소
-- `delegation/` — 위임 오케스트레이터(`DelegationService`), 계약(`DelegationContract`/`ContractSchemas`), 프롬프트(`DelegationPrompts`), 규칙 라우터(`RuleRouter`), 명령 API(`ProjectCommandController`)
+**폴더 규칙(도메인 우선 + 계층 분해)**: 도메인을 먼저 두고 그 안을 계층으로 나눈다 — `domain/ · controller/ · service/ · repository/ · dto/ · util/`. **인터페이스(포트)는 그 도메인의 `interfaces/`** 에 모으고, 구현은 `service/` 등에 둔다(폴더 이름을 `interface` 로 쓸 수 없다 — Java 예약어다). Spring Data 리포지토리 인터페이스는 `repository/` 에 구현과 함께 둔다. 없는 계층 폴더는 만들지 않고, 도메인 안에 하위 도메인이 있으면(`provider/login`) 같은 규칙을 반복한다. **테스트는 대상 클래스와 같은 패키지**에 둔다(package-private 멤버 검증 유지).
+
+- `common/` — `config/`(CORS·QueryDSL), `exception/`(400/403/404/409 예외 + `GlobalExceptionHandler`)
+- `provider/` — `domain/`(AiProvider, ProviderKey, ConnectionStatus) · `controller/` · `service/`(AiProviderService, CliStatusService, CliRegistry, ProbeRegistry, ClaudeCodeCli, ClaudeCodeProbe) · `repository/` · `dto/`(응답·요청·capabilities·CLI 상태·probe 결과) · `interfaces/`(AiRuntimeCli, AiRuntimeProbe). `provider/login/` 하위 도메인도 같은 규칙 — `controller/` · `service/`(LoginSessionService, LoginProcessFactory, PipeLoginProcess, LoginSession, LoginCommandRegistry, ClaudeCodeLoginCommand) · `domain/`(SessionKind) · `dto/` · `interfaces/`(AiLoginCommand, LoginProcess) · `util/`(CommandShell)
+- `agent/` — `domain/` Agent(프로젝트 소속, 페르소나) · `service/` AgentService + `AgentAvailability` · `util/` `PromptLayers`(프롬프트 계층 조립) · `repository/`(QueryDSL fetch join) · `dto/`
+- `role/`, `permission/` — Role, PermissionProfile(도메인/서비스/리포지토리/DTO). `PermissionService.isAllowed(profile, action)` 가 enforcement primitive
+- `workspace/` — `domain/`(Workspace, WorkspaceRuntimeStatus) · `service/`(WorkspaceService, WorkspaceRuntimeService) · `util/` `WorkspaceFs`(폴더 브라우징·UNC 차단) · `repository/` · `dto/`
+- `project/` — `domain/`(Project, ProjectWorkspace) · `service/` ProjectService(`defaultWorkspace`, `updateMaster` — 기본 워크스페이스를 바꿀 때는 기존 기본을 먼저 내려야 부분 유니크 인덱스를 위반하지 않는다) · `repository/` · `dto/`
+- `group/` — `domain/`(AgentGroup, AgentGroupMember) · `service/` GroupService · `repository/` · `dto/`
+- `task/` — `domain/`(Task, TaskStatus) · `service/` TaskService(작업 실행·채팅 명령) · `repository/` · `dto/`
+- `process/` — `service/` `ProcessService`(ProcessBuilder 래퍼) · `util/` `Executables`(PATH/PATHEXT 해석)
+- `runtime/` — `interfaces/` `AgentRuntime` · `service/`(ClaudeCodeRuntime, RuntimeRegistry) · `dto/`(AgentExecutionRequest/Result, ExecutionMetrics) · `util/` `ClaudeStreamJson`(stream-json → 로그·계측)
+- `execution/` — `domain/`(Execution, ExecutionStatus, ExecutionDecision, ExecutionLog, LogStream) · `controller/` · `service/`(ExecutionService, ExecutionGuard, ExecutionFactory, ExecutionRunner, ExecutionStreamHub) · `repository/` · `dto/`(응답·트리·이벤트 등)
+- `delegation/` — `controller/`(ProjectCommandController) · `service/`(DelegationService, RuleRouter) · `dto/`(DelegationContract) · `util/`(ContractSchemas, DelegationPrompts)
 
 ## DB 스키마
 

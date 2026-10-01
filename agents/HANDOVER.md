@@ -33,6 +33,12 @@
 - 기존 화면(Providers/Workspaces/Agents/Groups/Tasks/ExecutionDetail)은 그대로 살렸고, 새 토큰/사이드바 레이아웃을 입었다. 프로젝트 목록에서 상세로 들어가는 링크를 추가했다.
 - 캔버스·첨부는 **자리만 비워 뒀다**: 왼쪽 열 + 오른쪽 패널 구조가 목업과 같아서 그대로 끼워 넣으면 된다.
 
+**폴더 정리(같은 브랜치에서 이어서)** — 규칙은 CONVENTIONS 의 "Backend 모듈"·"프론트엔드 폴더 규칙"에 있다.
+
+- 백엔드: 도메인 우선 + 계층 분해(`agent/{domain,controller,service,repository,dto,util}`, 인터페이스는 `interfaces/` — `interface` 는 Java 예약어라 못 쓴다). Spring Data 리포지토리 인터페이스는 `repository/` 에 함께. 158개 파일 이동, 테스트는 대상 클래스와 같은 패키지로.
+- 프론트엔드: `features/<도메인>/{…}` (project·execution·agent·runtime·workspace·task·dashboard) + 공용 `components/`·`lib/`·`store/`·`styles/`. 31개 파일 이동.
+- 둘 다 **동작 변경 없음**: JUnit 90건 통과, 프론트 tsc+vite 빌드 통과, 프로젝트 상세 화면(라이트) 브라우저 확인.
+
 ## 3. 실측으로 확인한 사실 (추측 금지 — 이걸 어기면 다시 깨진다)
 
 1. **프롬프트는 표준입력(UTF-8)으로 넘긴다.** `-p` 인자로 넘기면 JSON·따옴표가 섞인 긴 문장이 CLI 에 온전히 전달되지 않는다(모델이 "요청 내용 없음"이라고 답했다).
