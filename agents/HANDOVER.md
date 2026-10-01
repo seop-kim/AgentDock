@@ -47,6 +47,9 @@
 4. `--max-budget-usd` 로 스텝 예산을 CLI 쪽에서도 막을 수 있다.
 5. 한 실행이 여러 스텝으로 이어질 때 **스텝이 끝나도 `SUCCEEDED` 로 두면 화면이 "완료"로 잘못 보인다**(재시도 중에 실제로 겪었다). 판단 중에는 `RUNNING`/`WAITING_CHILD` 로 유지한다.
 6. **기본 워크스페이스를 바꿀 때 부분 유니크 인덱스를 잠깐 위반**해 500 이 났다(새 기본을 넣기 전에 기존 기본을 내려야 한다 — `ProjectService.assignWorkspace` 에서 수정).
+7. **Command Code(`cmdc`) 프롬프트도 표준입력(UTF-8)으로 넘긴다.** `-p --output-format json`(v1.73.2 실측)은 **NDJSON 이벤트 스트림 + 마지막 result 한 줄**이다. result 줄은 camelCase — `sessionId`·`usage.inputTokens/outputTokens/cacheReadTokens/cacheWriteTokens`·`durationMs`·`stopReason`·`finalText` 이고 **비용 필드는 없다(→ `costUsd` 는 null, 추정 금지)**.
+8. **Command Code 무인 실행에는 `-t`(프로젝트 자동 신뢰)가 필요하다.** 없으면 처음 보는 폴더에서 권한 프롬프트에 멈출 수 있다. `--permission-mode` 값은 standard·plan·accept-edits·yolo(`cmdc --help`).
+9. **Command Code 모델 목록은 `cmdc --list-models` 로 자동 수집된다**(v1.73.2 기준 86개). Claude 와 달리 CLI 가 목록을 준다. 확인된 플래그 전체는 `agents/CONVENTIONS.md` 의 "Command Code(`cmdc`) 런타임" 절에 있다.
 
 ## 4. 실행과 검증 방법
 

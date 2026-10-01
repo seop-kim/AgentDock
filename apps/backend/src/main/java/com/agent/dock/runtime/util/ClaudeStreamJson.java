@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 /**
  * Claude Code CLI 의 `--output-format stream-json` 한 줄을 로그 줄과 계측값으로 바꾼다.
@@ -22,7 +21,6 @@ import tools.jackson.databind.ObjectMapper;
  */
 public final class ClaudeStreamJson {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final int SUMMARY_LIMIT = 120;
     private static final String[] SUMMARY_KEYS = {"command", "file_path", "path", "pattern", "url", "query", "prompt"};
 
@@ -38,7 +36,7 @@ public final class ClaudeStreamJson {
 
     /** 한 줄을 로그로 바꾼다. JSON 이 아니거나 우리가 다루지 않는 이벤트는 원문을 그대로 남긴다. */
     public static List<LogLine> render(String line) {
-        Optional<JsonNode> parsed = parse(line);
+        Optional<JsonNode> parsed = JsonObjects.parse(line);
         if (parsed.isEmpty()) {
             return List.of(new LogLine("stdout", line + "\n"));
         }
@@ -58,7 +56,7 @@ public final class ClaudeStreamJson {
 
     /** result 이벤트면 계측값/결과를 돌려준다. 그 밖의 줄은 비어 있다. */
     public static Optional<Outcome> outcome(String line) {
-        Optional<JsonNode> parsed = parse(line);
+        Optional<JsonNode> parsed = JsonObjects.parse(line);
         if (parsed.isEmpty() || !"result".equals(parsed.get().path("type").asText(""))) {
             return Optional.empty();
         }
@@ -162,34 +160,9 @@ public final class ClaudeStreamJson {
     private static Map<String, Object> structuredOf(JsonNode event, String resultText) {
         JsonNode structured = event.path("structured_output");
         if (structured.isObject()) {
-            return toMap(structured);
+            return JsonObjects.toMap(structured);
         }
-        return jsonObjectIn(resultText);
-    }
-
-    /**
-     * 결과 텍스트에서 JSON 객체 하나를 찾는다. 모델이 코드블록(```json … ```)이나 앞뒤 설명을
-     * 섞어 내도 동작하도록 첫 '{' 부터 마지막 '}' 까지를 파싱하고, 실패하면 끝을 하나씩 줄여 다시 시도한다.
-     */
-    private static Map<String, Object> jsonObjectIn(String text) {
-        if (text == null) {
-            return null;
-        }
-        int start = text.indexOf('{');
-        int end = text.lastIndexOf('}');
-        while (start >= 0 && end > start) {
-            Optional<JsonNode> parsed = parse(text.substring(start, end + 1));
-            if (parsed.isPresent() && parsed.get().isObject()) {
-                return toMap(parsed.get());
-            }
-            end = text.lastIndexOf('}', end - 1);
-        }
-        return null;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> toMap(JsonNode node) {
-        return MAPPER.convertValue(node, Map.class);
+        return JsonObjects.objectIn(resultText);
     }
 
     private static ExecutionMetrics metricsOf(JsonNode event) {
@@ -207,17 +180,5 @@ public final class ClaudeStreamJson {
 
     private static Integer intOrNull(JsonNode node, String field) {
         return node.path(field).isNumber() ? node.path(field).asInt() : null;
-    }
-
-    private static Optional<JsonNode> parse(String line) {
-        String trimmed = line == null ? "" : line.trim();
-        if (!trimmed.startsWith("{")) {
-            return Optional.empty();
-        }
-        try {
-            return Optional.of(MAPPER.readTree(trimmed));
-        } catch (Exception ex) {
-            return Optional.empty();
-        }
     }
 }

@@ -107,7 +107,7 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
 **폴더 규칙(도메인 우선 + 계층 분해)**: 도메인을 먼저 두고 그 안을 계층으로 나눈다 — `domain/ · controller/ · service/ · repository/ · dto/ · util/`. **인터페이스(포트)는 그 도메인의 `interfaces/`** 에 모으고, 구현은 `service/` 등에 둔다(폴더 이름을 `interface` 로 쓸 수 없다 — Java 예약어다). Spring Data 리포지토리 인터페이스는 `repository/` 에 구현과 함께 둔다. 없는 계층 폴더는 만들지 않고, 도메인 안에 하위 도메인이 있으면(`provider/login`) 같은 규칙을 반복한다. **테스트는 대상 클래스와 같은 패키지**에 둔다(package-private 멤버 검증 유지).
 
 - `common/` — `config/`(CORS·QueryDSL), `exception/`(400/403/404/409 예외 + `GlobalExceptionHandler`)
-- `provider/` — `domain/`(AiProvider, ProviderKey, ConnectionStatus) · `controller/` · `service/`(AiProviderService, CliStatusService, CliRegistry, ProbeRegistry, ClaudeCodeCli, ClaudeCodeProbe) · `repository/` · `dto/`(응답·요청·capabilities·CLI 상태·probe 결과) · `interfaces/`(AiRuntimeCli, AiRuntimeProbe). `provider/login/` 하위 도메인도 같은 규칙 — `controller/` · `service/`(LoginSessionService, LoginProcessFactory, PipeLoginProcess, LoginSession, LoginCommandRegistry, ClaudeCodeLoginCommand) · `domain/`(SessionKind) · `dto/` · `interfaces/`(AiLoginCommand, LoginProcess) · `util/`(CommandShell)
+- `provider/` — `domain/`(AiProvider, ProviderKey, ConnectionStatus) · `controller/` · `service/`(AiProviderService, CliStatusService, CliRegistry, ProbeRegistry, ClaudeCodeCli, ClaudeCodeProbe, CommandCodeCli, CommandCodeProbe) · `repository/` · `dto/`(응답·요청·capabilities·CLI 상태·probe 결과) · `interfaces/`(AiRuntimeCli, AiRuntimeProbe). `provider/login/` 하위 도메인도 같은 규칙 — `controller/` · `service/`(LoginSessionService, LoginProcessFactory, PipeLoginProcess, LoginSession, LoginCommandRegistry, ClaudeCodeLoginCommand, CommandCodeLoginCommand) · `domain/`(SessionKind) · `dto/` · `interfaces/`(AiLoginCommand, LoginProcess) · `util/`(CommandShell)
 - `agent/` — `domain/` Agent(프로젝트 소속, 페르소나) · `service/` AgentService + `AgentAvailability` · `util/` `PromptLayers`(프롬프트 계층 조립) · `repository/`(QueryDSL fetch join) · `dto/`
 - `role/`, `permission/` — Role, PermissionProfile(도메인/서비스/리포지토리/DTO). `PermissionService.isAllowed(profile, action)` 가 enforcement primitive
 - `workspace/` — `domain/`(Workspace, WorkspaceRuntimeStatus) · `service/`(WorkspaceService, WorkspaceRuntimeService) · `util/` `WorkspaceFs`(폴더 브라우징·UNC 차단) · `repository/` · `dto/`
@@ -115,7 +115,7 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
 - `group/` — `domain/`(AgentGroup, AgentGroupMember) · `service/` GroupService · `repository/` · `dto/`
 - `task/` — `domain/`(Task, TaskStatus) · `service/` TaskService(작업 실행·채팅 명령) · `repository/` · `dto/`
 - `process/` — `service/` `ProcessService`(ProcessBuilder 래퍼) · `util/` `Executables`(PATH/PATHEXT 해석)
-- `runtime/` — `interfaces/` `AgentRuntime` · `service/`(ClaudeCodeRuntime, RuntimeRegistry) · `dto/`(AgentExecutionRequest/Result, ExecutionMetrics) · `util/` `ClaudeStreamJson`(stream-json → 로그·계측)
+- `runtime/` — `interfaces/` `AgentRuntime` · `service/`(ClaudeCodeRuntime, CommandCodeRuntime, RuntimeRegistry) · `dto/`(AgentExecutionRequest/Result, ExecutionMetrics) · `util/` `ClaudeStreamJson`(stream-json → 로그·계측) · `CommandCodeStreamJson`(cmdc NDJSON → 로그·계측) · `JsonObjects`(결과 텍스트에서 JSON 객체 찾기 — Claude/Command Code 공용)
 - `execution/` — `domain/`(Execution, ExecutionStatus, ExecutionDecision, ExecutionLog, LogStream) · `controller/` · `service/`(ExecutionService, ExecutionGuard, ExecutionFactory, ExecutionRunner, ExecutionStreamHub) · `repository/` · `dto/`(응답·트리·이벤트 등)
 - `delegation/` — `controller/`(ProjectCommandController) · `service/`(DelegationService, RuleRouter) · `dto/`(DelegationContract) · `util/`(ContractSchemas, DelegationPrompts)
 
@@ -140,9 +140,9 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
 ## 런타임 연결과 자격증명
 
 - 자격증명은 **CLI 의 기존 로그인 세션을 그대로 사용**한다(스펙 6장 우선순위 1). 앱은 토큰/키를 저장하지 않는다(Connection 계열 컬럼은 V8 에서 제거).
-- 실행 바이너리는 환경변수 override: `CLAUDE_CODE_BIN`(기본 `claude`). probe 와 로그인 명령이 같은 변수를 쓴다.
+- 실행 바이너리는 환경변수 override: `CLAUDE_CODE_BIN`(기본 `claude`), `COMMAND_CODE_BIN`(기본 `cmdc`). probe 와 로그인 명령이 같은 변수를 쓴다.
 - **폴더별 상태 확인(probe)**: `POST /workspaces/{id}/runtimes/{providerId}/check` 가 **그 폴더를 작업 디렉터리로** CLI 를 짧은 프롬프트로 한 번 실행해(최대 30초) `status`/`last_error`/`last_checked_at` 을 저장한다. 로그인은 전역이지만 "이 폴더에서 실제로 실행되는가"는 폴더마다 다를 수 있어 이렇게 확인한다.
-- probe 구현체는 런타임별 하나이고 `ProbeRegistry` 에 자동 등록된다. 현재는 `ClaudeCodeProbe`(CLAUDE_CODE)만 있다. 다른 런타임은 목록에 표시되고 확인 시 ERROR("이 런타임은 아직 확인을 지원하지 않습니다") 가 된다.
+- probe 구현체는 런타임별 하나이고 `ProbeRegistry` 에 자동 등록된다. 현재는 `ClaudeCodeProbe`(CLAUDE_CODE)와 `CommandCodeProbe`(COMMAND_CODE)가 있다. 나머지 런타임은 목록에 표시되고 확인 시 ERROR("이 런타임은 아직 확인을 지원하지 않습니다") 가 된다.
 - **웹 로그인 패널**: `POST /ai-providers/{id}/login` 이 서버 고정 로그인 명령(현재 `claude auth login`)을 실행하고 `GET /ai-providers/command-sessions/{sessionId}/stream`(SSE)으로 출력을, `POST .../input` 으로 stdin 입력을 전달한다. 런타임당 활성 세션 1개(로그인/설치 별개), 유휴 5분이면 종료. 로그인 명령은 사용자 입력으로 만들지 않는다.
 
 ### CLI 설치와 실행 파일 해석
@@ -157,9 +157,18 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
 ### 모델과 모드 (`capabilities`)
 
 - 런타임별 지원 모델/모드 목록은 **코드가 아니라 데이터**다(`ai_provider.capabilities`). 화면("에이전트 설정" 카드의 "모델/모드 편집")에서 갱신한다(정규화: trim·빈값·중복 제거, 다른 키 보존).
-- CLI 는 모델 목록을 알려주는 명령을 주지 않는다(`claude models` 는 프롬프트로 처리된다). 자동 수집 불가 → 수동 편집. V5 가 `claude --help` 에 나온 alias(`opus`/`sonnet`/`fable`)와 `--permission-mode` 6종을 시드한다(추측 금지 원칙).
+- Claude CLI 는 모델 목록을 알려주는 명령을 주지 않는다(`claude models` 는 프롬프트로 처리된다). 자동 수집 불가 → 수동 편집. **Command Code 는 `cmdc --list-models` 가 모델 목록을, `cmdc --help` 의 `--permission-mode` 가 모드 4종(standard·plan·accept-edits·yolo)을 준다.** V5 가 `claude --help` 에 나온 alias(`opus`/`sonnet`/`fable`)와 `--permission-mode` 6종을 시드한다(추측 금지 원칙).
 - `Agent.model` → `--model`, `Agent.mode` → `--permission-mode`, `Agent.persona` → **`--append-system-prompt`**(기본 시스템 프롬프트에 덧붙임). 값이 없으면 플래그를 붙이지 않는다.
 - 목록에 없는 값도 막지 않는다(최종 판단은 CLI). 화면은 datalist 로 제안하고 경고만 표시한다.
+
+### Command Code(`cmdc`) 런타임
+
+Claude Code 외에 처음 추가한 **두 번째 런타임**이다(2026-10-01, Command Code v1.73.2 실측). 같은 인터페이스를 구현하고 `@Component` 로만 등록한다(`ClaudeCodeRuntime` 과 동형) — 런타임 `CommandCodeRuntime`(COMMAND_CODE) · probe `CommandCodeProbe` · 로그인 `CommandCodeLoginCommand`(`cmdc login`) · CLI `CommandCodeCli`.
+
+- 비대화형은 `-p --output-format json` — **NDJSON 이벤트 스트림 + 마지막 result 한 줄**이다. 프롬프트는 표준입력(UTF-8)으로 넘긴다(`-p` 뒤에 값을 붙이지 않으면 stdin 을 읽는다).
+- 런타임 인자는 `-p --output-format json -t` + (있으면) `--model`·`--permission-mode`. **`-t`(프로젝트 자동 신뢰)는 항상 붙인다** — 무인 실행이 첫 권한 프롬프트에서 멈추지 않게(probe 도 같다).
+- result 줄은 **camelCase** — `sessionId`·`usage.inputTokens/outputTokens/cacheReadTokens/cacheWriteTokens`·`durationMs`·`stopReason`·`finalText`. **비용 필드가 없다 → `costUsd` 는 null(추정 금지).** 로그로 남기는 이벤트는 `model_request_start`(system)·`thinking_end`·`message_end` 의 text 블록이고, delta·중복 이벤트는 버린다(`CommandCodeStreamJson`).
+- 확인된 플래그(`cmdc --help`): `-p/--print [query]` · `--output-format text|json` · `-t/--trust` · `-m/--model` · `--permission-mode standard|plan|accept-edits|yolo` · `--list-models` · `--effort` · `--max-turns` · `--tools-all` · `--config key=value` · `--local-only` · `-w/--worktree` · `-r/--resume` · `-c/--continue` · `--session` · `--no-session` · `-n/--name` · `--skip-onboarding` · `--no-auto-update`. **시스템 프롬프트/예산 플래그는 확인되지 않아 붙이지 않는다** — 페르소나 계층은 프롬프트 본문으로만 전달된다.
 
 ## Permission Enforcement
 
