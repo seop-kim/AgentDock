@@ -204,13 +204,14 @@ public class ExecutionService {
     }
 
     /**
-     * 판단 실행이 사람에게 물어 보고 멈춘다(실행은 끝나지 않는다). 질문을 저장하고 상태를 `WAITING_INPUT` 으로 둔다.
-     * 답이 오면(`answer`) 같은 실행의 판단 루프를 이어서 돈다.
+     * 판단 실행이 사람에게 물어 보고 멈춘다(실행은 끝나지 않는다). 질문(과 보기)을 저장하고 상태를 `WAITING_INPUT` 으로 둔다.
+     * 답이 오면(`answer`) 같은 실행의 판단 루프를 이어서 돈다. `options` 는 비어 있어도 된다(보기 없는 질문).
      */
-    public void markWaitingInput(Long executionId, String question) {
+    public void markWaitingInput(Long executionId, String question, List<String> options) {
         update(executionId, execution -> {
             execution.setStatus(ExecutionStatus.WAITING_INPUT);
             execution.setQuestion(question);
+            execution.setQuestionOptions(options == null ? List.of() : options);
             // 판단이 끝난 것이 아니므로 완료 시각을 남기지 않는다(화면이 "완료"로 보이면 안 된다).
             execution.setFinishedAt(null);
         });

@@ -115,6 +115,11 @@ public class Execution {
     @Column(columnDefinition = "text")
     private String answer;
 
+    /** `ask` 계약이 질문과 함께 준 보기(options). 화면이 답을 버튼으로 고르게 한다. 없으면 비어 있다. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "question_options", columnDefinition = "jsonb")
+    private List<String> questionOptions;
+
     /** 다음 실행으로 넘기는 최소 Handoff(요약·변경 파일 등). */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")

@@ -384,7 +384,7 @@ public class DelegationService {
             if (decided.action() == ExecutionDecision.ASK) {
                 String question = decided.question().isBlank() ? request.strip() : decided.question().strip();
                 executionService.recordDecision(id, ExecutionDecision.ASK, null);
-                executionService.markWaitingInput(id, question);
+                executionService.markWaitingInput(id, question, decided.options());
                 streamHub.system(id, "⎿ 질문: " + question);
                 if (!decided.options().isEmpty()) {
                     streamHub.system(id, "⎿ 보기: " + String.join(" / ", decided.options()));
@@ -409,7 +409,7 @@ public class DelegationService {
                     .findFirst();
             if (waiting.isPresent()) {
                 String question = waiting.get().note().isBlank() ? request.strip() : waiting.get().note();
-                executionService.markWaitingInput(id, question);
+                executionService.markWaitingInput(id, question, waiting.get().options());
                 streamHub.system(id, "⎿ 하위 실행이 사람의 입력을 기다립니다");
                 return ExecutionStatus.WAITING_INPUT;
             }
@@ -473,8 +473,9 @@ public class DelegationService {
                 : List.of();
         boolean waiting = status == ExecutionStatus.WAITING_INPUT;
         String note = waiting && execution.getQuestion() != null ? execution.getQuestion() : "";
+        List<String> options = waiting && execution.getQuestionOptions() != null ? execution.getQuestionOptions() : List.of();
         return new DelegationPrompts.ChildOutcome(agentName(agentId), agentId, statusLabel(status), summary,
-                changedFiles, note, waiting);
+                changedFiles, note, options, waiting);
     }
 
     // ── 가드 ─────────────────────────────────────────────────────────────────────

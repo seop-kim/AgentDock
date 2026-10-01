@@ -17,7 +17,8 @@ public record ExecutionResponse(
         String worktreePath, String worktreeBranch,
         String resultCommit, MergeStatus mergeStatus, String mergeDetail, List<ChangedFile> changedFiles,
         // question/answer: 판단 실행이 사람에게 물은 질문과 그 답(상태가 WAITING_INPUT 이면 답을 기다린다).
-        String question, String answer,
+        // questionOptions: 그 질문에 함께 온 보기(화면이 버튼으로 그린다). 없으면 빈 목록.
+        String question, String answer, List<String> questionOptions,
         Integer inputTokens, Integer outputTokens, Integer cacheReadTokens, Integer cacheCreationTokens,
         BigDecimal costUsd, Long durationMs, Integer numTurns, String sessionId,
         Instant createdAt, Instant updatedAt
@@ -38,6 +39,7 @@ public record ExecutionResponse(
                 e.getResultCommit(), e.getMergeStatus(), e.getMergeDetail(),
                 e.getChangedFiles() == null ? List.of() : e.getChangedFiles(),
                 e.getQuestion(), e.getAnswer(),
+                e.getQuestionOptions() == null ? List.of() : e.getQuestionOptions(),
                 e.getInputTokens(), e.getOutputTokens(), e.getCacheReadTokens(), e.getCacheCreationTokens(),
                 e.getCostUsd(), e.getDurationMs(), e.getNumTurns(), e.getSessionId(),
                 e.getCreatedAt(), e.getUpdatedAt());

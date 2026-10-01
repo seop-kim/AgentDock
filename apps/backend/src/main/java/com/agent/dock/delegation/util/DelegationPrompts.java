@@ -12,14 +12,15 @@ public final class DelegationPrompts {
      *
      * @param waiting 사람의 답을 기다리는 중인지(`ask`). 그러면 그 자식은 끝나지 않았고 부모도 함께 멈춘다
      * @param note    기다리는 이유(질문 문장)나 실패 사유
+     * @param options 자식이 사람에게 물은 질문의 보기(부모가 그대로 물려받아 화면에 다시 그린다). 없으면 빈 목록
      */
     public record ChildOutcome(String agentName, Long agentId, String statusLabel, String summary,
-                              List<String> changedFiles, String note, boolean waiting) {
+                              List<String> changedFiles, String note, List<String> options, boolean waiting) {
 
         /** 끝나거나 실패한 결과(사람의 입력을 기다리지 않는 보통의 경우). */
         public ChildOutcome(String agentName, Long agentId, String statusLabel, String summary,
                             List<String> changedFiles, String note) {
-            this(agentName, agentId, statusLabel, summary, changedFiles, note, false);
+            this(agentName, agentId, statusLabel, summary, changedFiles, note, List.of(), false);
         }
     }
 
