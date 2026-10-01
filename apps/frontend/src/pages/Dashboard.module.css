@@ -1,0 +1,7 @@
+.list {
+  line-height: 1.9;
+}
+
+.pending {
+  color: var(--color-muted);
+}

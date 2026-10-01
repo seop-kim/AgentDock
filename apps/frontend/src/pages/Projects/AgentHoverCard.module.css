@@ -1,0 +1,78 @@
+.card {
+  composes: glassStrong from '../../styles/glass.module.css';
+  position: fixed;
+  top: var(--top);
+  left: var(--left);
+  z-index: 150;
+  width: 320px;
+  padding: var(--spacing-md);
+  border-radius: var(--radius-lg);
+  color: var(--color-text);
+  font-size: 13px;
+  pointer-events: none;
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+}
+
+.name {
+  font-size: 1rem;
+}
+
+.role {
+  color: var(--color-muted);
+}
+
+.warn {
+  margin: 0 0 var(--spacing-sm);
+  color: var(--color-error);
+  font-size: 12px;
+}
+
+.rows {
+  display: grid;
+  grid-template-columns: 112px 1fr;
+  gap: 6px var(--spacing-sm);
+  margin: 0 0 var(--spacing-sm);
+}
+
+.rows dt {
+  color: var(--color-muted);
+}
+
+.rows dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chip {
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--color-code-bg);
+  font-size: 12px;
+}
+
+.master {
+  margin-left: auto;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--color-code-bg);
+  color: var(--color-primary);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.promptLabel {
+  margin-bottom: 4px;
+  color: var(--color-muted);
+}

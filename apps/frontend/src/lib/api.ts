@@ -1,0 +1,293 @@
+const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080';
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`${res.status} ${res.statusText}: ${body}`);
+  }
+  if (res.status === 204) {
+    return undefined as T;
+  }
+  return res.json() as Promise<T>;
+}
+
+export interface Capabilities {
+  models?: string[] | null;
+  modes?: string[] | null;
+  notes?: string | null;
+  install?: string[] | null;
+  installRequire?: string | null;
+  installPrerequisite?: string[] | null;
+}
+
+export interface Provider {
+  id: number;
+  key: string;
+  name: string;
+  enabled: boolean;
+  capabilities?: Capabilities | null;
+}
+
+export interface CliStatus {
+  resolvedPath: string | null;
+  version: string | null;
+  runnable: boolean;
+  detail: string | null;
+}
+
+export interface Workspace {
+  id: number;
+  name: string;
+  path: string;
+}
+
+export interface WorkspaceRuntime {
+  providerId: number;
+  providerKey: string;
+  name: string;
+  enabled: boolean;
+  status: string;
+  cliMissing: boolean;
+  lastCheckedAt: string | null;
+  lastError: string | null;
+}
+
+export interface ProjectWorkspaceInfo {
+  workspaceId: number;
+  name: string;
+  path: string;
+  isDefault: boolean;
+}
+
+export interface AgentRole {
+  id: number;
+  name: string;
+}
+
+export interface PermissionProfile {
+  id: number;
+  name: string;
+}
+
+export interface AgentSummary {
+  id: number;
+  name: string;
+}
+
+export interface Project {
+  id: number;
+  name: string;
+  description?: string | null;
+  workspaces: ProjectWorkspaceInfo[];
+  masterAgent?: AgentSummary | null;
+  masterPrompt?: string;
+}
+
+export interface Agent {
+  id: number;
+  name: string;
+  projectId: number;
+  role: AgentRole;
+  permissionProfile: PermissionProfile;
+  provider: Provider;
+  providerId: number;
+  persona: string | null;
+  model: string | null;
+  mode: string | null;
+  placed: boolean;
+  nodeX: number | null;
+  nodeY: number | null;
+  available: boolean;
+  unavailableReason: 'PROVIDER_DELETED' | 'RUNTIME_DISABLED' | 'CONNECTION_NOT_CONNECTED' | null;
+}
+
+export interface AgentGroup {
+  id: number;
+  projectId: number;
+  name: string;
+  description?: string | null;
+  prompt: string | null;
+  leader: AgentSummary | null;
+  members: AgentSummary[];
+  nodeX: number | null;
+  nodeY: number | null;
+}
+
+export interface Task {
+  id: number;
+  title: string;
+  prompt: string;
+  status: string;
+  group: AgentSummary | null;
+  agent: AgentSummary | null;
+  latestExecutionId: number | null;
+}
+
+export interface Execution {
+  id: number;
+  agentId: number;
+  taskId: number | null;
+  prompt: string;
+  status: string;
+  exitCode: number | null;
+  errorMessage: string | null;
+  resultText: string | null;
+  decision: 'DELEGATE' | 'DONE' | null;
+  delegatedTargetAgentId: number | null;
+  parentExecutionId: number | null;
+  rootExecutionId: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  costUsd: number | null;
+  durationMs: number | null;
+  numTurns: number | null;
+  sessionId: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+
+export interface ExecutionTreeNode {
+  execution: Execution;
+  depth: number;
+  agentName: string | null;
+  targetAgentName: string | null;
+  logCount: number;
+}
+
+export interface ExecutionTree {
+  rootExecutionId: number;
+  nodes: ExecutionTreeNode[];
+}
+
+export interface ExecutionLogEntry {
+  id: number;
+  stream: string;
+  content: string;
+}
+
+export interface Attachment {
+  id: number;
+  workspaceId: number;
+  taskId: number | null;
+  originalName: string;
+  storedPath: string;
+  sizeBytes: number | null;
+}
+
+export interface WorkspaceBrowseEntry {
+  name: string;
+  path: string;
+}
+
+export interface WorkspaceBrowseResult {
+  path: string | null;
+  parentPath: string | null;
+  entries: WorkspaceBrowseEntry[];
+}
+
+export const api = {
+  base: API_BASE,
+
+  listProjects: () => request<Project[]>('/projects'),
+  getProject: (id: number) => request<Project>(`/projects/${id}`),
+  createProject: (data: { name: string; description?: string }) =>
+    request<Project>('/projects', { method: 'POST', body: JSON.stringify(data) }),
+  updateProject: (id: number, data: { name: string; description?: string }) =>
+    request<Project>(`/projects/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteProject: (id: number) => request<void>(`/projects/${id}`, { method: 'DELETE' }),
+  setProjectMaster: (id: number, data: { agentId: number | null; masterPrompt?: string }) =>
+    request<Project>(`/projects/${id}/master`, { method: 'PUT', body: JSON.stringify(data) }),
+  assignProjectWorkspace: (id: number, workspaceId: number, isDefault = false) =>
+    request<Project>(`/projects/${id}/workspaces`, {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId, isDefault }),
+    }),
+  removeProjectWorkspace: (id: number, workspaceId: number) =>
+    request<void>(`/projects/${id}/workspaces/${workspaceId}`, { method: 'DELETE' }),
+  saveLayout: (
+    id: number,
+    data: {
+      agents: { agentId: number; x: number | null; y: number | null; placed: boolean }[];
+      groups: { groupId: number; x: number | null; y: number | null }[];
+    },
+  ) => request<void>(`/projects/${id}/layout`, { method: 'PUT', body: JSON.stringify(data) }),
+  clearLayout: (id: number) => request<void>(`/projects/${id}/layout`, { method: 'DELETE' }),
+
+  listAgents: () => request<Agent[]>('/agents'),
+  createAgent: (data: Record<string, unknown>) =>
+    request<Agent>('/agents', { method: 'POST', body: JSON.stringify(data) }),
+  updateAgent: (id: number, data: Record<string, unknown>) =>
+    request<Agent>(`/agents/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteAgent: (id: number) => request<void>(`/agents/${id}`, { method: 'DELETE' }),
+
+  listGroups: (projectId: number) => request<AgentGroup[]>(`/groups?projectId=${projectId}`),
+  createGroup: (data: { projectId: number; name: string; description?: string; leaderAgentId?: number }) =>
+    request<AgentGroup>('/groups', { method: 'POST', body: JSON.stringify(data) }),
+  updateGroup: (id: number, data: { name: string; description?: string; prompt?: string; leaderAgentId?: number | null }) =>
+    request<AgentGroup>(`/groups/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteGroup: (id: number) => request<void>(`/groups/${id}`, { method: 'DELETE' }),
+  addGroupMember: (groupId: number, agentId: number) =>
+    request<AgentGroup>(`/groups/${groupId}/members`, { method: 'POST', body: JSON.stringify({ agentId }) }),
+  removeGroupMember: (groupId: number, agentId: number) =>
+    request<AgentGroup>(`/groups/${groupId}/members/${agentId}`, { method: 'DELETE' }),
+
+  listTasks: (projectId: number) => request<Task[]>(`/tasks?projectId=${projectId}`),
+  sendCommand: (
+    projectId: number,
+    data: { text: string; targetAgentId?: number | null; groupId?: number | null; attachmentIds?: number[] },
+  ) => request<{ taskId: number; rootExecutionId: number }>(`/projects/${projectId}/commands`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+
+  getExecution: (id: number) => request<Execution>(`/executions/${id}`),
+  getExecutionTree: (id: number) => request<ExecutionTree>(`/executions/${id}/tree`),
+  getExecutionLogs: (id: number) => request<ExecutionLogEntry[]>(`/executions/${id}/logs`),
+  cancelExecution: (id: number) => request<{ cancelled: boolean }>(`/executions/${id}/cancel`, { method: 'POST' }),
+
+  listProviders: () => request<Provider[]>('/ai-providers'),
+  createProvider: (data: { key: string; name: string }) =>
+    request<Provider>('/ai-providers', { method: 'POST', body: JSON.stringify(data) }),
+  deleteProvider: (id: number) => request<void>(`/ai-providers/${id}`, { method: 'DELETE' }),
+  setProviderEnabled: (id: number, enabled: boolean) =>
+    request<Provider>(`/ai-providers/${id}/enabled`, { method: 'PUT', body: JSON.stringify({ enabled }) }),
+  updateProviderCapabilities: (id: number, data: Capabilities) =>
+    request<Provider>(`/ai-providers/${id}/capabilities`, { method: 'PUT', body: JSON.stringify(data) }),
+  getProviderCli: (id: number) => request<CliStatus>(`/ai-providers/${id}/cli`),
+  startLogin: (providerId: number) => request<{ sessionId: string }>(`/ai-providers/${providerId}/login`, { method: 'POST' }),
+  startInstall: (providerId: number) => request<{ sessionId: string }>(`/ai-providers/${providerId}/install`, { method: 'POST' }),
+  sendSessionInput: (sessionId: string, text: string) =>
+    request<void>(`/ai-providers/command-sessions/${sessionId}/input`, {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    }),
+  stopSession: (sessionId: string) => request<void>(`/ai-providers/command-sessions/${sessionId}`, { method: 'DELETE' }),
+
+  listWorkspaces: () => request<Workspace[]>('/workspaces'),
+  createWorkspace: (data: { name: string; path: string; description?: string }) =>
+    request<Workspace>('/workspaces', { method: 'POST', body: JSON.stringify(data) }),
+  browseWorkspace: (path?: string) =>
+    request<WorkspaceBrowseResult>(`/workspaces/browse${path ? `?path=${encodeURIComponent(path)}` : ''}`),
+  listWorkspaceFiles: (workspaceId: number) => request<string[]>(`/workspaces/${workspaceId}/files`),
+  uploadAttachments: async (workspaceId: number, files: File[]): Promise<Attachment[]> => {
+    const form = new FormData();
+    files.forEach((file) => form.append('files', file, file.name));
+    const res = await fetch(`${API_BASE}/workspaces/${workspaceId}/attachments`, { method: 'POST', body: form });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`${res.status} ${res.statusText}: ${body}`);
+    }
+    return (await res.json()) as Attachment[];
+  },
+  listWorkspaceRuntimes: (workspaceId: number) => request<WorkspaceRuntime[]>(`/workspaces/${workspaceId}/runtimes`),
+  checkWorkspaceRuntime: (workspaceId: number, providerId: number) =>
+    request<WorkspaceRuntime>(`/workspaces/${workspaceId}/runtimes/${providerId}/check`, { method: 'POST' }),
+
+  listRoles: () => request<AgentRole[]>('/roles'),
+  listPermissionProfiles: () => request<PermissionProfile[]>('/permission-profiles'),
+};
