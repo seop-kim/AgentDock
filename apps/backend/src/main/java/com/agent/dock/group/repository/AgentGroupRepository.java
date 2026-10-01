@@ -11,6 +11,9 @@ public interface AgentGroupRepository extends JpaRepository<AgentGroup, Long> {
 
     boolean existsByProjectIdAndName(Long projectId, String name);
 
+    /** 프로젝트의 그룹 전부(구성도 위치 초기화·프로젝트 삭제에 쓴다). */
+    List<AgentGroup> findByProjectId(Long projectId);
+
     @Query("select g from AgentGroup g join fetch g.project left join fetch g.leaderAgent order by g.name asc")
     List<AgentGroup> findAllWithRelations();
 

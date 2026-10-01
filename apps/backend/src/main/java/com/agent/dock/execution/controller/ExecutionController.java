@@ -1,12 +1,10 @@
 package com.agent.dock.execution.controller;
 
 import com.agent.dock.execution.domain.Execution;
-import com.agent.dock.execution.dto.CreateExecutionRequest;
 import com.agent.dock.execution.dto.ExecutionLogResponse;
 import com.agent.dock.execution.dto.ExecutionResponse;
 import com.agent.dock.execution.dto.ExecutionTreeResponse;
 import com.agent.dock.execution.service.ExecutionService;
-import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -20,12 +18,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RequiredArgsConstructor
 public class ExecutionController {
     private final ExecutionService service;
-
-    @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    public ExecutionResponse create(@Valid @RequestBody CreateExecutionRequest request) {
-        return service.create(request.agentId(), request.projectId(), request.prompt());
-    }
 
     @GetMapping("/{id}")
     public ExecutionResponse findOne(@PathVariable Long id) {

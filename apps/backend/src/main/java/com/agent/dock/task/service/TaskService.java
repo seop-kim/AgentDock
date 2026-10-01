@@ -2,6 +2,7 @@ package com.agent.dock.task.service;
 
 import com.agent.dock.agent.domain.Agent;
 import com.agent.dock.agent.repository.AgentRepository;
+import com.agent.dock.attachment.service.AttachmentService;
 import com.agent.dock.common.exception.BadRequestException;
 import com.agent.dock.common.exception.ConflictException;
 import com.agent.dock.common.exception.NotFoundException;
@@ -9,7 +10,6 @@ import com.agent.dock.delegation.service.DelegationService;
 import com.agent.dock.execution.domain.Execution;
 import com.agent.dock.execution.domain.ExecutionStatus;
 import com.agent.dock.execution.dto.ExecutionFinishedEvent;
-import com.agent.dock.execution.dto.ExecutionResponse;
 import com.agent.dock.execution.repository.ExecutionRepository;
 import com.agent.dock.group.domain.AgentGroup;
 import com.agent.dock.group.repository.AgentGroupRepository;
@@ -18,7 +18,6 @@ import com.agent.dock.project.repository.ProjectRepository;
 import com.agent.dock.task.domain.Task;
 import com.agent.dock.task.domain.TaskStatus;
 import com.agent.dock.task.dto.CommandRequest;
-import com.agent.dock.task.dto.CreateTaskRequest;
 import com.agent.dock.task.dto.TaskResponse;
 import com.agent.dock.task.repository.TaskRepository;
 import java.util.List;
@@ -35,6 +34,7 @@ public class TaskService {
     private final AgentRepository agentRepository;
     private final ExecutionRepository executionRepository;
     private final DelegationService delegationService;
+    private final AttachmentService attachmentService;
 
     public List<TaskResponse> findAll(Long projectId, Long groupId) {
         List<Task> tasks;
@@ -54,60 +54,10 @@ public class TaskService {
         return toResponse(task);
     }
 
-    public TaskResponse create(CreateTaskRequest request) {
-        if ((request.groupId() == null) == (request.agentId() == null)) {
-            throw new BadRequestException("exactly one of groupId or agentId is required");
-        }
-        Project project = projectRepository.findById(request.projectId())
-                .orElseThrow(() -> new NotFoundException("Project %d not found".formatted(request.projectId())));
-
-        Task task = new Task();
-        task.setProject(project);
-        task.setTitle(request.title());
-        task.setPrompt(request.prompt());
-        task.setStatus(TaskStatus.CREATED);
-
-        if (request.groupId() != null) {
-            AgentGroup group = groupRepository.findById(request.groupId())
-                    .orElseThrow(() -> new NotFoundException("Group %d not found".formatted(request.groupId())));
-            if (!group.getProject().getId().equals(project.getId())) {
-                throw new BadRequestException("Group does not belong to project");
-            }
-            task.setGroup(group);
-        } else {
-            Agent agent = agentRepository.findById(request.agentId())
-                    .orElseThrow(() -> new NotFoundException("Agent %d not found".formatted(request.agentId())));
-            task.setAgent(agent);
-        }
-
-        Task saved = taskRepository.save(task);
-        return findOne(saved.getId());
-    }
-
-    /** 할당 대상(그룹이면 리더)에게 실행을 맡긴다. 판단이 필요한 대상이면 그 아래로 다시 위임된다. */
-    public ExecutionResponse run(Long id) {
-        Task task = taskRepository.findWithRelations(id)
-                .orElseThrow(() -> new NotFoundException("Task %d not found".formatted(id)));
-
-        Long assigneeAgentId = resolveAssigneeAgentId(task);
-        Long projectId = task.getProject().getId();
-
-        task.setStatus(TaskStatus.IN_PROGRESS);
-        taskRepository.save(task);
-        try {
-            Execution root = delegationService.start(projectId, assigneeAgentId, null, task.getPrompt(), task.getId());
-            return ExecutionResponse.from(root);
-        } catch (RuntimeException ex) {
-            // 실행이 만들어지지 않았으므로 상태를 되돌린다.
-            task.setStatus(TaskStatus.CREATED);
-            taskRepository.save(task);
-            throw ex;
-        }
-    }
-
     /**
      * 프로젝트 채팅 명령: Task 를 만들고 실행 트리를 시작한다. 대상이 없으면 프로젝트 마스터가 받는다.
      * 채팅 기록은 Task 로 표현한다(사용자 말풍선 = title, 마스터 응답 = 루트 실행의 result_text).
+     * 첨부는 Task 에 연결하고, 실행 지시(프롬프트)에는 그 파일 경로를 덧붙인다 — Task 에는 사용자가 쓴 글만 남긴다.
      */
     public Execution command(Long projectId, CommandRequest request) {
         if (request.targetAgentId() != null && request.groupId() != null) {
@@ -135,9 +85,11 @@ public class TaskService {
         }
         Task saved = taskRepository.save(task);
 
+        // 첨부를 Task 에 연결하고, 실행 프롬프트에 붙일 문장(파일 경로 안내)을 받아 온다.
+        String attachmentNote = attachmentService.attachToTask(saved.getId(), request.attachmentIds());
         try {
             Execution root = delegationService.start(projectId, request.targetAgentId(), request.groupId(),
-                    request.text(), saved.getId());
+                    request.text() + attachmentNote, saved.getId());
             saved.setStatus(TaskStatus.IN_PROGRESS);
             taskRepository.save(saved);
             return root;
@@ -175,20 +127,6 @@ public class TaskService {
             task.setStatus(event.status() == ExecutionStatus.SUCCEEDED ? TaskStatus.SUCCEEDED : TaskStatus.FAILED);
             taskRepository.save(task);
         });
-    }
-
-    private Long resolveAssigneeAgentId(Task task) {
-        if (task.getAgent() != null) {
-            return task.getAgent().getId();
-        }
-        AgentGroup group = task.getGroup();
-        if (group == null) {
-            throw new BadRequestException("Task has no assignee");
-        }
-        if (group.getLeaderAgent() == null) {
-            throw new BadRequestException("Group has no leader assigned");
-        }
-        return group.getLeaderAgent().getId();
     }
 
     private TaskResponse toResponse(Task task) {

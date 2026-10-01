@@ -4,6 +4,7 @@ import com.agent.dock.agent.domain.Agent;
 import com.agent.dock.agent.dto.AgentResponse;
 import com.agent.dock.agent.dto.AssignProviderRequest;
 import com.agent.dock.agent.dto.CreateAgentRequest;
+import com.agent.dock.agent.dto.UpdateAgentRequest;
 import com.agent.dock.agent.service.AgentService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -36,5 +37,18 @@ public class AgentController {
     @PutMapping("/{id}/provider")
     public AgentResponse assignProvider(@PathVariable Long id, @Valid @RequestBody AssignProviderRequest request) {
         return service.assignProvider(id, request.providerId());
+    }
+
+    /** 에이전트 수정(이름·역할·권한·런타임·모델·모드·페르소나). */
+    @PutMapping("/{id}")
+    public AgentResponse update(@PathVariable Long id, @Valid @RequestBody UpdateAgentRequest request) {
+        return service.update(id, request);
+    }
+
+    /** 에이전트 삭제. 마스터는 409 로 거부한다. */
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable Long id) {
+        service.delete(id);
     }
 }

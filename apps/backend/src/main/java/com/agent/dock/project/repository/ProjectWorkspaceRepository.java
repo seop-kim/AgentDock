@@ -24,4 +24,7 @@ public interface ProjectWorkspaceRepository extends JpaRepository<ProjectWorkspa
     boolean existsByProjectIdAndWorkspaceId(Long projectId, Long workspaceId);
 
     long countByProjectId(Long projectId);
+
+    /** 프로젝트 삭제 전에 할당을 먼저 지운다. */
+    void deleteByProjectId(Long projectId);
 }

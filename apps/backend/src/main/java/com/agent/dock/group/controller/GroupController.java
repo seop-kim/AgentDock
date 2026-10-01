@@ -48,4 +48,11 @@ public class GroupController {
     public GroupResponse removeMember(@PathVariable Long id, @PathVariable Long agentId) {
         return service.removeMember(id, agentId);
     }
+
+    /** 그룹(팀) 삭제. */
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable Long id) {
+        service.delete(id);
+    }
 }

@@ -16,6 +16,7 @@ public record AgentResponse(
         Long permissionProfileId, PermissionProfileResponse permissionProfile,
         Long providerId, AiProviderSummary provider,
         String persona, String model, String mode, Map<String, Object> profile,
+        boolean placed, Double nodeX, Double nodeY,
         boolean available, String unavailableReason,
         Instant createdAt, Instant updatedAt
 ) {
@@ -27,6 +28,7 @@ public record AgentResponse(
                 a.getPermissionProfileId(), PermissionProfileResponse.from(a.getPermissionProfile()),
                 a.getProviderId(), AiProviderSummary.from(a.getProvider()),
                 a.getPersona(), a.getModel(), a.getMode(), a.getProfile(),
+                a.isPlaced(), a.getNodeX(), a.getNodeY(),
                 availability.available(), availability.reason() == null ? null : availability.reason().name(),
                 a.getCreatedAt(), a.getUpdatedAt()
         );

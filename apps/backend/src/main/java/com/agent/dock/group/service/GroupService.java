@@ -3,8 +3,11 @@ package com.agent.dock.group.service;
 import com.agent.dock.agent.domain.Agent;
 import com.agent.dock.agent.dto.AgentSummary;
 import com.agent.dock.agent.repository.AgentRepository;
+import com.agent.dock.attachment.repository.AttachmentRepository;
 import com.agent.dock.common.exception.ConflictException;
 import com.agent.dock.common.exception.NotFoundException;
+import com.agent.dock.execution.repository.ExecutionLogRepository;
+import com.agent.dock.execution.repository.ExecutionRepository;
 import com.agent.dock.group.domain.AgentGroup;
 import com.agent.dock.group.domain.AgentGroupMember;
 import com.agent.dock.group.dto.CreateGroupRequest;
@@ -14,9 +17,11 @@ import com.agent.dock.group.repository.AgentGroupMemberRepository;
 import com.agent.dock.group.repository.AgentGroupRepository;
 import com.agent.dock.project.domain.Project;
 import com.agent.dock.project.repository.ProjectRepository;
+import com.agent.dock.task.repository.TaskRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -25,6 +30,10 @@ public class GroupService {
     private final AgentGroupMemberRepository memberRepository;
     private final ProjectRepository projectRepository;
     private final AgentRepository agentRepository;
+    private final TaskRepository taskRepository;
+    private final ExecutionRepository executionRepository;
+    private final ExecutionLogRepository executionLogRepository;
+    private final AttachmentRepository attachmentRepository;
 
     public List<GroupResponse> findAll(Long projectId) {
         List<AgentGroup> groups = projectId == null
@@ -92,6 +101,27 @@ public class GroupService {
                 .orElseThrow(() -> new NotFoundException("Agent %d is not a member of group %d".formatted(agentId, groupId)));
         memberRepository.delete(member);
         return findOne(groupId);
+    }
+
+    /**
+     * 그룹(팀) 삭제. FK 안전 순서: 이 그룹을 담당으로 가진 Task 와 그 실행·로그·첨부 → 멤버 → 그룹.
+     */
+    @Transactional
+    public void delete(Long id) {
+        AgentGroup group = groupRepository.findWithRelations(id)
+                .orElseThrow(() -> new NotFoundException("Group %d not found".formatted(id)));
+        List<Long> taskIds = taskRepository.findIdsByGroupId(id);
+        if (!taskIds.isEmpty()) {
+            List<Long> executionIds = executionRepository.findIdsByTaskIdIn(taskIds);
+            if (!executionIds.isEmpty()) {
+                executionLogRepository.deleteByExecutionIdIn(executionIds);
+                executionRepository.deleteAllByIdInBatch(executionIds);
+            }
+            attachmentRepository.deleteByTaskIdIn(taskIds);
+            taskRepository.deleteAllByIdInBatch(taskIds);
+        }
+        memberRepository.deleteByGroupIdIn(List.of(id));
+        groupRepository.delete(group);
     }
 
     private List<AgentSummary> membersOf(Long groupId) {

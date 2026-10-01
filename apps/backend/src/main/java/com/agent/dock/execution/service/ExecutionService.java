@@ -18,13 +18,10 @@ import com.agent.dock.runtime.interfaces.AgentRuntime;
 import com.agent.dock.runtime.service.RuntimeRegistry;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -36,19 +33,15 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  */
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class ExecutionService {
     private final ExecutionRepository executionRepository;
     private final ExecutionLogRepository logRepository;
     private final AgentRepository agentRepository;
     private final ExecutionGuard guard;
     private final ExecutionFactory factory;
-    private final ExecutionRunner runner;
     private final ExecutionStreamHub streamHub;
     private final RuntimeRegistry runtimeRegistry;
     private final ApplicationEventPublisher eventPublisher;
-
-    private final ExecutorService executor = Executors.newCachedThreadPool();
 
     public ExecutionResponse findOne(Long id) {
         Execution execution = executionRepository.findById(id)
@@ -95,19 +88,6 @@ public class ExecutionService {
             return null;
         }
         return agentRepository.findById(agentId).map(Agent::getName).orElse(null);
-    }
-
-    public ExecutionResponse create(Long agentId, Long projectId, String prompt) {
-        return create(agentId, projectId, prompt, null);
-    }
-
-    public ExecutionResponse create(Long agentId, Long projectId, String prompt, Long taskId) {
-        ExecutionGuard.Target target = guard.prepare(agentId, projectId, null);
-        Execution execution = factory.createRoot(target, prompt, taskId);
-        // 응답을 돌려준 뒤 바로 구독할 수 있도록 로그 버퍼를 먼저 연다.
-        streamHub.open(execution.getId());
-        executor.submit(() -> runSingle(execution.getId(), target, prompt, taskId));
-        return ExecutionResponse.from(execution);
     }
 
     /** 위임 실행의 루트 실행을 만든다(스텝은 오케스트레이터가 돌린다). */
@@ -221,26 +201,6 @@ public class ExecutionService {
         AgentRuntime runtime = runtimeRegistry.resolve(agent.getProvider().getKey().name());
         runtime.cancel(String.valueOf(execution.getId()));
         return Map.of("cancelled", true);
-    }
-
-    private void runSingle(Long executionId, ExecutionGuard.Target target, String prompt, Long taskId) {
-        ExecutionStatus status = ExecutionStatus.FAILED;
-        Integer exitCode = null;
-        try {
-            markRunning(executionId);
-            Agent agent = agentRepository.findByIdWithRelations(target.agentId()).orElseThrow();
-            AgentExecutionResult result = runner.runStep(executionId, agent, target.workspacePath(),
-                    target.systemPrompt(), prompt, null);
-            status = applyResult(executionId, result);
-            exitCode = result.exitCode();
-            publishFinished(executionId, taskId, status);
-        } catch (Exception ex) {
-            log.error("execution {} failed", executionId, ex);
-            markFailed(executionId, ex);
-            publishFinished(executionId, taskId, ExecutionStatus.FAILED);
-        } finally {
-            streamHub.close(executionId, status, exitCode);
-        }
     }
 
     private void update(Long executionId, Consumer<Execution> change) {

@@ -2,7 +2,6 @@ package com.agent.dock.permission.service;
 
 import com.agent.dock.permission.domain.PermissionAction;
 import com.agent.dock.permission.domain.PermissionProfile;
-import com.agent.dock.permission.dto.CreatePermissionProfileRequest;
 import com.agent.dock.permission.dto.PermissionProfileResponse;
 import com.agent.dock.permission.repository.PermissionProfileRepository;
 import java.util.List;
@@ -16,24 +15,6 @@ public class PermissionService {
 
     public List<PermissionProfileResponse> findAll() {
         return repository.findAllByOrderByNameAsc().stream().map(PermissionProfileResponse::from).toList();
-    }
-
-    public PermissionProfileResponse create(CreatePermissionProfileRequest request) {
-        PermissionProfile profile = new PermissionProfile();
-        profile.setName(request.name());
-        profile.setFileRead(Boolean.TRUE.equals(request.fileRead()));
-        profile.setFileWrite(Boolean.TRUE.equals(request.fileWrite()));
-        profile.setTerminalExecute(Boolean.TRUE.equals(request.terminalExecute()));
-        profile.setGitStatus(request.gitStatus() == null || request.gitStatus());
-        profile.setGitDiff(Boolean.TRUE.equals(request.gitDiff()));
-        profile.setGitCommit(Boolean.TRUE.equals(request.gitCommit()));
-        profile.setGitPush(Boolean.TRUE.equals(request.gitPush()));
-        profile.setDbRead(Boolean.TRUE.equals(request.dbRead()));
-        profile.setDbWrite(Boolean.TRUE.equals(request.dbWrite()));
-        profile.setDbSchemaChange(Boolean.TRUE.equals(request.dbSchemaChange()));
-        profile.setDeploy(Boolean.TRUE.equals(request.deploy()));
-        profile.setExternalNetworkAccess(Boolean.TRUE.equals(request.externalNetworkAccess()));
-        return PermissionProfileResponse.from(repository.save(profile));
     }
 
     /** Backend Tool Layer enforcement: Prompt 설명이 아니라 여기서 실제로 허용 여부를 결정한다. */

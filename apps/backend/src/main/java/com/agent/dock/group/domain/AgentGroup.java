@@ -45,6 +45,14 @@ public class AgentGroup {
     @Column(name = "leader_agent_id", insertable = false, updatable = false)
     private Long leaderAgentId;
 
+    /** 손으로 옮긴 그룹 상자 좌표(월드 좌표). null 이면 자동 배치를 따른다. */
+    // Spring 의 snake_case 규칙은 마지막 대문자 앞에 밑줄을 넣지 않아 nodeX → nodex 가 되므로 이름을 고정한다.
+    @Column(name = "node_x")
+    private Double nodeX;
+
+    @Column(name = "node_y")
+    private Double nodeY;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private Instant createdAt;

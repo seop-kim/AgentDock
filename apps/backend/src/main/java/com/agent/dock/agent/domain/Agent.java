@@ -65,6 +65,18 @@ public class Agent {
     private String model;
     private String mode;
 
+    /** 구성도에 놓인 상태인지. 마스터는 항상 놓여 있다(화면에서 뺄 수 없다). */
+    @Column(nullable = false)
+    private boolean placed = true;
+
+    /** 손으로 옮긴 구성도 좌표(월드 좌표). null 이면 자동 배치를 따른다. */
+    // Spring 의 snake_case 규칙은 마지막 대문자 앞에 밑줄을 넣지 않아 nodeX → nodex 가 되므로 이름을 고정한다.
+    @Column(name = "node_x")
+    private Double nodeX;
+
+    @Column(name = "node_y")
+    private Double nodeY;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> profile;

@@ -2,7 +2,6 @@ package com.agent.dock.role.service;
 
 import com.agent.dock.role.domain.AgentRole;
 import com.agent.dock.role.dto.AgentRoleResponse;
-import com.agent.dock.role.dto.CreateAgentRoleRequest;
 import com.agent.dock.role.repository.AgentRoleRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -15,12 +14,5 @@ public class RoleService {
 
     public List<AgentRoleResponse> findAll() {
         return repository.findAllByOrderByNameAsc().stream().map(AgentRoleResponse::from).toList();
-    }
-
-    public AgentRoleResponse create(CreateAgentRoleRequest request) {
-        AgentRole role = new AgentRole();
-        role.setName(request.name());
-        role.setDescription(request.description());
-        return AgentRoleResponse.from(repository.save(role));
     }
 }

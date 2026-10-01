@@ -8,6 +8,7 @@ import java.util.List;
 public record GroupResponse(
         Long id, Long projectId, String name, String description, String prompt,
         AgentSummary leader, List<AgentSummary> members,
+        Double nodeX, Double nodeY,
         Instant createdAt, Instant updatedAt
 ) {
     public static GroupResponse from(AgentGroup g, List<AgentSummary> members) {
@@ -16,6 +17,7 @@ public record GroupResponse(
                 : (g.getProject() != null ? g.getProject().getId() : null);
         AgentSummary leader = g.getLeaderAgent() == null ? null : AgentSummary.from(g.getLeaderAgent());
         return new GroupResponse(g.getId(), projectId, g.getName(), g.getDescription(),
-                g.getPrompt() == null ? "" : g.getPrompt(), leader, members, g.getCreatedAt(), g.getUpdatedAt());
+                g.getPrompt() == null ? "" : g.getPrompt(), leader, members,
+                g.getNodeX(), g.getNodeY(), g.getCreatedAt(), g.getUpdatedAt());
     }
 }
