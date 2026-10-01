@@ -1,0 +1,75 @@
+.sidebar {
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  height: 100vh;
+  width: 56px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  background: var(--color-sidebar);
+  border-right: 1px solid var(--color-border);
+  overflow: hidden;
+  transition: width 0.18s ease;
+}
+
+.expanded {
+  width: 200px;
+}
+
+.menus {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* 메뉴 버튼과 메뉴 링크가 함께 쓰는 한 줄 항목 */
+.item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-muted);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.item:hover {
+  background: var(--color-code-bg);
+  color: var(--color-text);
+}
+
+.active,
+.active:hover {
+  background: var(--color-code-bg);
+  color: var(--color-text);
+}
+
+.icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.brand {
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+.label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 테마 전환은 메뉴 아래쪽에 붙인다 */
+.themeButton {
+  margin-top: auto;
+}

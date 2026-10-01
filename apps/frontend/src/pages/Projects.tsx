@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Project, Workspace, api } from '../lib/api';
 import WorkspacePicker from './Workspaces/WorkspacePicker';
 
@@ -98,7 +99,10 @@ export default function Projects() {
         <tbody>
           {projects.map((p) => (
             <tr key={p.id}>
-              <td>{p.name}</td>
+              <td>
+                <Link to={`/projects/${p.id}`}>{p.name}</Link>
+                {p.masterAgent != null && <div style={{ color: 'var(--color-muted)', fontSize: 12 }}>마스터 {p.masterAgent.name}</div>}
+              </td>
               <td>
                 {p.workspaces.length === 0 && <span>할당된 워크스페이스 없음</span>}
                 {p.workspaces.map((w) => (

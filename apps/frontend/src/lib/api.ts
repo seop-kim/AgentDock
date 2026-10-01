@@ -87,6 +87,9 @@ export interface Project {
   name: string;
   description?: string | null;
   workspaces: ProjectWorkspaceInfo[];
+  /** 프로젝트 마스터(최상위 리더). 없으면 명령을 받을 대상이 없다. */
+  masterAgent?: AgentSummary | null;
+  masterPrompt?: string;
 }
 
 export interface ProjectSummary {
@@ -104,6 +107,8 @@ export interface AgentGroup {
   projectId: number;
   name: string;
   description?: string | null;
+  /** 그룹 프롬프트(마스터 프롬프트 아래, 에이전트 위에 겹친다). */
+  prompt?: string;
   leader: AgentSummary | null;
   members: AgentSummary[];
 }
@@ -140,6 +145,52 @@ export interface Execution {
   status: string;
   prompt: string;
   exitCode: number | null;
+  agentId?: number;
+  taskId?: number | null;
+  /** 실행 트리: 부모 실행과 트리 루트(루트는 null). */
+  parentExecutionId?: number | null;
+  rootExecutionId?: number | null;
+  /** 판단 실행의 계약 결과: DELEGATE | DONE. */
+  decision?: 'DELEGATE' | 'DONE' | null;
+  delegatedTargetAgentId?: number | null;
+  /** 모델이 낸 최종 텍스트(계약 JSON 또는 작업 요약 JSON). */
+  resultText?: string | null;
+  errorMessage?: string | null;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  /** CLI 가 돌려준 실제 계측값. */
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  costUsd?: number | null;
+  durationMs?: number | null;
+  numTurns?: number | null;
+  sessionId?: string | null;
+}
+
+export interface ExecutionTreeNode {
+  execution: Execution;
+  depth: number;
+  agentName: string | null;
+  targetAgentName: string | null;
+  logCount: number;
+}
+
+export interface ExecutionTree {
+  rootExecutionId: number;
+  nodes: ExecutionTreeNode[];
+}
+
+export interface ExecutionLogEntry {
+  id?: number;
+  stream: string;
+  content: string;
+  createdAt?: string;
+}
+
+/** 명령 하나 = Task 하나 + 실행 트리 하나. */
+export interface CommandResult {
+  taskId: number;
+  rootExecutionId: number;
 }
 
 export interface WorkspaceBrowseEntry {
@@ -235,4 +286,16 @@ export const api = {
   createExecution: (data: { agentId: number; projectId: number; prompt: string }) =>
     request<Execution>('/executions', { method: 'POST', body: JSON.stringify(data) }),
   getExecution: (id: number | string) => request<Execution>(`/executions/${id}`),
+  getExecutionLogs: (id: number | string) => request<ExecutionLogEntry[]>(`/executions/${id}/logs`),
+  getExecutionTree: (id: number | string) => request<ExecutionTree>(`/executions/${id}/tree`),
+  cancelExecution: (id: number | string) =>
+    request<{ cancelled: boolean }>(`/executions/${id}/cancel`, { method: 'POST' }),
+
+  getProject: (id: number | string) => request<Project>(`/projects/${id}`),
+  setProjectMaster: (projectId: number, data: { agentId: number | null; masterPrompt?: string }) =>
+    request<Project>(`/projects/${projectId}/master`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  /** 프로젝트 채팅 명령: 마스터(또는 지정 대상)가 받아 팀으로 위임한다. */
+  sendCommand: (projectId: number, data: { text: string; targetAgentId?: number; groupId?: number }) =>
+    request<CommandResult>(`/projects/${projectId}/commands`, { method: 'POST', body: JSON.stringify(data) }),
 };

@@ -1,27 +1,24 @@
-import { Route, Routes, Link, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, Route, Routes, useMatch } from 'react-router-dom';
 import styles from './layout.module.css';
+import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
 import Projects from './pages/Projects';
+import ProjectDetail from './pages/ProjectDetail';
 import Groups from './pages/Groups';
 import Tasks from './pages/Tasks';
 import Providers from './pages/Providers';
 import Workspaces from './pages/Workspaces/Workspaces';
 import Agents from './pages/Agents';
 import ExecutionDetail from './pages/ExecutionDetail';
+import TerminalWindow from './pages/TerminalWindow';
 
 function Layout() {
+  // 프로젝트 상세는 화면 전체를 쓰므로 여백·최대폭 제한 없이 그린다.
+  const fullBleed = useMatch('/projects/:id') !== null;
   return (
-    <div>
-      <nav className={styles.nav}>
-        <Link to="/">Dashboard</Link>
-        <Link to="/projects">Projects</Link>
-        <Link to="/groups">Groups</Link>
-        <Link to="/tasks">Tasks</Link>
-        <Link to="/agents">Agents</Link>
-        <Link to="/workspaces">Workspaces</Link>
-        <Link to="/providers">에이전트 설정</Link>
-      </nav>
-      <main className={styles.main}>
+    <div className={styles.shell}>
+      <Sidebar />
+      <main className={`${styles.main} ${fullBleed ? styles.mainFull : ''}`}>
         <Outlet />
       </main>
     </div>
@@ -31,15 +28,19 @@ function Layout() {
 export default function App() {
   return (
     <Routes>
+      {/* 터미널 창은 새 창으로 뜨므로 사이드바·레이아웃 없이 그린다 */}
+      <Route path="/terminal/:executionId" element={<TerminalWindow />} />
       <Route element={<Layout />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/projects" element={<Projects />} />
+        <Route path="/projects/:id" element={<ProjectDetail />} />
         <Route path="/groups" element={<Groups />} />
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/providers" element={<Providers />} />
         <Route path="/workspaces" element={<Workspaces />} />
         <Route path="/agents" element={<Agents />} />
         <Route path="/executions/:id" element={<ExecutionDetail />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
   );
