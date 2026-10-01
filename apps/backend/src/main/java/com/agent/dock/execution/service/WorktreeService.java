@@ -30,6 +30,13 @@ import org.springframework.stereotype.Component;
  * `git merge --no-ff` 로 되돌린다. 더럽거나 충돌하면 `git merge --abort` 로 절대 반쯤 병합된 상태를 남기지 않고
  * 사유와 함께 수동 병합 대상으로 넘긴다. 워크트리·브랜치의 **자동 삭제는 없다**(정리는 `DELETE /executions/{id}/worktree`).
  *
+ * <p>깨끗함은 **추적되는 파일의 변경만** 본다(`git status --porcelain --untracked-files=no`). 추적되지 않는 파일
+ * (`?? .commandcode/` 같은 도구 폴더) 하나 때문에 자동 병합이 막히면 안 된다 — git 이 실제로 병합을 거부하면
+ * 그때 abort + MANUAL 로 간다.
+ *
+ * <p>자동 병합이 MANUAL 로 끝난 뒤 사람이 변경을 정리했으면 {@link #mergeBranch} 로 **다시 병합**할 수 있다.
+ * 커밋은 만들지 않고 트리 브랜치를 그대로 병합하며, 규칙(깨끗함 확인·충돌 시 abort)은 자동 병합과 같다.
+ *
  * <p>git 은 {@link ProcessService} 로 실행한다(셸 미경유 — {@code ProcessService} 가 {@code Executables} 로 실제 실행 파일을 찾는다).
  * 실패는 실행을 막지 않는다 — 만들지 못하면 비어 있는 결과와 사유를 돌려주고 호출부가 워크스페이스에서 계속 돌린다.
  */
@@ -196,6 +203,39 @@ public class WorktreeService {
         }
     }
 
+    /**
+     * 이미 커밋된 트리 브랜치를 메인 저장소의 **현재 브랜치**로 다시 병합한다.
+     *
+     * <p>자동 병합이 MANUAL(더러운 작업 트리·충돌)로 끝난 뒤 사람이 변경을 정리했을 때 부른다. 커밋은 만들지 않고
+     * 트리 브랜치의 커밋을 그대로 병합하며, 깨끗함 확인(추적되는 파일만)과 실패 시 {@code git merge --abort} 규칙은
+     * 자동 병합과 같다. 트리 브랜치가 이미 병합돼 있으면 git 이 할 일이 없다고 답하고 MERGED 로 돌아온다.
+     *
+     * @param worktreePath 이 트리가 돈 worktree 경로(메인 저장소를 여기서 찾는다)
+     * @param branch       트리 브랜치(`agentdock/exec-<루트id>`)
+     */
+    public TreeResult mergeBranch(String worktreePath, String branch) {
+        if (worktreePath == null || worktreePath.isBlank()) {
+            return new TreeResult(MergeStatus.MANUAL, null, "워크트리 경로가 없습니다", null, List.of());
+        }
+        if (branch == null || branch.isBlank()) {
+            return new TreeResult(MergeStatus.MANUAL, null, "트리 브랜치가 없습니다", null, List.of());
+        }
+        try {
+            String repository = mainWorktree(worktreePath).orElse(null);
+            if (repository == null) {
+                return new TreeResult(MergeStatus.MANUAL, null,
+                        "저장소를 찾지 못했습니다: " + worktreePath, null, List.of());
+            }
+            // 병합 전에 구한다: 병합이 끝나면 브랜치와 HEAD 가 같아져 diff 가 비어 버린다.
+            String commit = shortSha(repository, branch);
+            List<ChangedFile> files = changedFilesOfBranch(repository, branch);
+            return merge(repository, branch, commit, files);
+        } catch (Exception ex) {
+            log.warn("트리 브랜치 다시 병합 실패: {}", ex.getMessage());
+            return new TreeResult(MergeStatus.MANUAL, null, String.valueOf(ex.getMessage()), null, List.of());
+        }
+    }
+
     /** 메인 저장소로 되돌린다. 병합은 전역으로 직렬화한다(커밋은 각자 자기 worktree 에서 이미 끝났다). */
     private TreeResult merge(String repositoryPath, String branch, String commit, List<ChangedFile> files)
             throws Exception {
@@ -204,7 +244,8 @@ public class WorktreeService {
         }
         mergeLock.acquire();
         try {
-            GitResult status = git(List.of("status", "--porcelain"), repositoryPath);
+            // 추적되는 파일의 변경만 본다. 추적되지 않는 파일(`?? .commandcode/` 같은 도구 폴더)은 병합을 막지 않는다.
+            GitResult status = git(List.of("status", "--porcelain", "--untracked-files=no"), repositoryPath);
             if (status.exitCode() != 0) {
                 return new TreeResult(MergeStatus.MANUAL, commit,
                         "메인 저장소 상태를 확인하지 못했습니다: " + status.text(), null, files);
@@ -232,7 +273,12 @@ public class WorktreeService {
 
     /** `git diff --name-status <base>...HEAD` 한 줄씩 파싱한다. 이름 바꾸기(R)/복사(C)는 마지막 필드가 새 경로다. */
     private List<ChangedFile> changedFiles(String worktreePath, String base) throws Exception {
-        GitResult diff = git(List.of("diff", "--name-status", base + "...HEAD"), worktreePath);
+        return changedFiles(worktreePath, base, "HEAD");
+    }
+
+    /** `git diff --name-status <base>...<head>` 를 파싱한다. */
+    private List<ChangedFile> changedFiles(String cwd, String base, String head) throws Exception {
+        GitResult diff = git(List.of("diff", "--name-status", base + "..." + head), cwd);
         if (diff.exitCode() != 0) {
             return List.of();
         }
@@ -247,8 +293,23 @@ public class WorktreeService {
         return files;
     }
 
+    /** 트리 브랜치가 바꾼 파일 목록(메인 저장소 기준). 병합하기 **전에** 부른다 — 병합 뒤에는 차이가 사라진다. */
+    private List<ChangedFile> changedFilesOfBranch(String repositoryPath, String branch) throws Exception {
+        GitResult base = git(List.of("merge-base", branch, "HEAD"), repositoryPath);
+        if (base.exitCode() != 0) {
+            return List.of();
+        }
+        return changedFiles(repositoryPath, base.text().strip(), branch);
+    }
+
     private String shortSha(String cwd) throws Exception {
         GitResult result = git(List.of("rev-parse", "--short", "HEAD"), cwd);
+        return result.exitCode() == 0 ? result.text().strip() : null;
+    }
+
+    /** 특정 ref 의 짧은 sha(트리 브랜치의 마지막 커밋). 없으면 null. */
+    private String shortSha(String cwd, String ref) throws Exception {
+        GitResult result = git(List.of("rev-parse", "--short", ref), cwd);
         return result.exitCode() == 0 ? result.text().strip() : null;
     }
 

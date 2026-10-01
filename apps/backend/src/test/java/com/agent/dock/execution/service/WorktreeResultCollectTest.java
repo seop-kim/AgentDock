@@ -48,6 +48,30 @@ class WorktreeResultCollectTest {
                 .containsExactlyInAnyOrder("file.txt", "new.txt");
     }
 
+    /**
+     * 추적되지 않는 파일(`?? .commandcode/` 같은 도구 폴더)은 병합을 막지 않는다 — 깨끗함은 **추적되는 파일의 변경만**
+     * 본다(`git status --porcelain --untracked-files=no`). 예전에는 이것 하나 때문에 모든 트리가 MANUAL 로 끝났다.
+     */
+    @Test
+    void mergesEvenWhenTheMainRepositoryHasUntrackedFiles(@TempDir Path tempDir) throws Exception {
+        String git = assumeGit();
+        Path repository = initRepository(git, tempDir);
+
+        WorktreeService.Worktree worktree = service.create(repository.toString(), 42L);
+        assumeTrue(worktree.created(), "worktree 생성 실패로 건너뜁니다");
+        Files.writeString(Path.of(worktree.path()).resolve("new.txt"), "new\n");
+        // 추적되지 않는 폴더를 메인 저장소에 남긴다(도구 폴더가 만드는 실제 상황).
+        Files.createDirectories(repository.resolve(".commandcode"));
+        Files.writeString(repository.resolve(".commandcode/config.json"), "{}\n");
+
+        WorktreeService.TreeResult result = service.collect(repository.toString(), worktree.path(),
+                worktree.branch(), "실행 요약", "실행 #42\n참여: 마스터");
+
+        assertThat(result.status()).isEqualTo(MergeStatus.MERGED);
+        assertThat(run(git, repository, "status", "--porcelain", "--untracked-files=no").text()).isBlank();
+        assertThat(Files.exists(repository.resolve("new.txt"))).isTrue();
+    }
+
     @Test
     void recordsManualWithoutLeavingAHalfMergeWhenTheMainTreeIsDirty(@TempDir Path tempDir) throws Exception {
         String git = assumeGit();
