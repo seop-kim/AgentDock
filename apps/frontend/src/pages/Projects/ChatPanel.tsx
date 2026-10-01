@@ -2,13 +2,14 @@ import { DragEvent, FormEvent, useEffect, useRef, useState } from 'react';
 import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ClipIcon, FileIcon } from '../../components/icons';
 import { unavailableReason } from '../../lib/agentAvailability';
 import { ATTACHMENT_FOLDER, hasAttachment } from '../../lib/attachments';
+import { treeOrder } from '../../lib/executions';
 import { useAgentDockStore } from '../../store/AgentDockStore';
 import attach from '../../styles/attachment.module.css';
 import shared from '../../styles/shared.module.css';
 import type { AttachedFile, ChatTarget, Project } from '../../types';
 import AttachFilesModal from './AttachFilesModal';
 import styles from './ChatPanel.module.css';
-import { ExecutionSummaryCard } from './ExecutionTree';
+import { ExecutionSummaryCard, WaitingInputCard } from './ExecutionTree';
 
 const toValue = (target: ChatTarget | null) => (target ? `${target.kind}:${target.id}` : '');
 
@@ -190,6 +191,13 @@ export default function ChatPanel({
           {messages.length === 0 && <p className={shared.muted}>아직 보낸 명령이 없습니다.</p>}
           {messages.map((m) => {
             const rootId = m.rootExecutionId;
+            // 이 트리 안에서 사람의 답을 기다리는 실행이 있으면 질문과 답 입력을 함께 보여 준다.
+            const waiting =
+              rootId === null
+                ? null
+                : (treeOrder(projectExecutions, rootId)
+                    .map((row) => row.execution)
+                    .find((execution) => execution.status === 'WAITING_INPUT') ?? null);
             return (
               <div key={m.id} className={`${styles.message} ${styles[m.role]}`}>
                 <div className={styles.meta}>
@@ -216,6 +224,7 @@ export default function ChatPanel({
                     onOpen={() => onOpenExecutions(rootId)}
                   />
                 )}
+                {waiting !== null && <WaitingInputCard execution={waiting} />}
               </div>
             );
           })}

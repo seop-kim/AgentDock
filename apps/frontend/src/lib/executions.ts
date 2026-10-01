@@ -7,6 +7,7 @@ export const STATUS_LABEL: Record<ExecutionStatus, string> = {
   QUEUED: '대기',
   RUNNING: '실행 중',
   WAITING_CHILD: '하위 대기',
+  WAITING_INPUT: '입력 대기',
   DONE: '완료',
   FAILED: '실패',
 };
@@ -16,6 +17,7 @@ export const STATUS_TONE: Record<ExecutionStatus, 'wait' | 'active' | 'done' | '
   QUEUED: 'wait',
   RUNNING: 'active',
   WAITING_CHILD: 'wait',
+  WAITING_INPUT: 'wait',
   DONE: 'done',
   FAILED: 'failed',
 };
@@ -88,8 +90,13 @@ export function summarize(executions: Execution[]): ExecutionTotals {
     durationMs: root?.metrics?.durationMs ?? 0,
     inputTokens: sum((e) => e.metrics?.inputTokens ?? 0, (a, b) => a + b, 0),
     outputTokens: sum((e) => e.metrics?.outputTokens ?? 0, (a, b) => a + b, 0),
-    running: executions.some((e) => e.status === 'QUEUED' || e.status === 'RUNNING' || e.status === 'WAITING_CHILD'),
+    running: executions.some((e) => isLive(e.status)),
   };
+}
+
+/** 아직 끝나지 않은 실행인지(대기·실행 중·하위 대기·입력 대기). 에이전트의 "작업 중" 판정에 쓴다. */
+export function isLive(status: ExecutionStatus): boolean {
+  return status === 'QUEUED' || status === 'RUNNING' || status === 'WAITING_CHILD' || status === 'WAITING_INPUT';
 }
 
 export function formatCost(usd: number): string {

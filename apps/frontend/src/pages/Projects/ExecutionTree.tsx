@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   MERGE_LABEL,
@@ -24,8 +25,10 @@ export function ExecutionBadge({ status }: { status: ExecutionStatus }) {
 /**
  * 트리 결과 한 줄: 병합 상태 배지(병합됨/수동 병합 필요) · 커밋 sha · 변경 파일(`A path` …).
  * 트리 결과는 루트 실행에만 채워지므로 자식(mergeStatus null)에는 아무것도 그리지 않는다.
+ * 수동 병합 필요(MANUAL)면 **다시 병합** 버튼을 함께 둔다(사람이 변경을 정리한 뒤 누른다).
  */
 function TreeResultLine({ execution }: { execution: Execution }) {
+  const { retryMerge } = useAgentDockStore();
   const status = execution.mergeStatus;
   if (status !== 'MERGED' && status !== 'MANUAL') return null;
   return (
@@ -35,6 +38,11 @@ function TreeResultLine({ execution }: { execution: Execution }) {
       {execution.changedFiles.length > 0 && (
         <> · {execution.changedFiles.map((file) => `${file.status} ${file.path}`).join(', ')}</>
       )}
+      {status === 'MANUAL' && (
+        <button type="button" className={exec.cardButton} onClick={() => retryMerge(execution.id)}>
+          다시 병합
+        </button>
+      )}
     </p>
   );
 }
@@ -42,9 +50,50 @@ function TreeResultLine({ execution }: { execution: Execution }) {
 /** 아직 계약을 내지 않은 실행을 "직접 처리"로 잘못 보여주지 않도록 따로 표시한다. */
 function actionLabel(execution: Execution, nameOf: (id: number) => string): string {
   if (execution.decision === null) return '판단 중…';
-  return execution.decision.action === 'delegate'
-    ? `→ 위임 ${nameOf(execution.decision.targetAgentId)}`
-    : '직접 처리';
+  switch (execution.decision.action) {
+    case 'delegate':
+      return `→ 위임 ${nameOf(execution.decision.targetAgentId)}`;
+    case 'ask':
+      return '질문';
+    default:
+      return '직접 처리';
+  }
+}
+
+/**
+ * 사람에게 물은 질문(`ask` 계약)과 답 입력. 실행이 `WAITING_INPUT` 인 동안만 그린다.
+ * 답을 보내면 서버가 **같은 실행**을 이어서 돌리고, 그 결과가 다시 실행 트리로 돌아온다.
+ */
+export function WaitingInputCard({ execution }: { execution: Execution }) {
+  const { answerExecution } = useAgentDockStore();
+  const [text, setText] = useState('');
+  if (execution.status !== 'WAITING_INPUT') return null;
+
+  return (
+    <div className={exec.question}>
+      <p className={exec.questionText}>⎿ 질문: {execution.question ?? execution.prompt}</p>
+      <form
+        className={exec.answer}
+        onSubmit={(e) => {
+          e.preventDefault();
+          const answer = text.trim();
+          if (answer === '') return;
+          answerExecution(execution.id, answer);
+          setText('');
+        }}
+      >
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="답을 입력하고 Enter"
+          aria-label="답변 입력"
+        />
+        <button type="submit" disabled={text.trim() === ''}>
+          답 보내기
+        </button>
+      </form>
+    </div>
+  );
 }
 
 /**

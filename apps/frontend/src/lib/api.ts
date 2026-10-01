@@ -137,7 +137,7 @@ export interface Execution {
   exitCode: number | null;
   errorMessage: string | null;
   resultText: string | null;
-  decision: 'DELEGATE' | 'DONE' | null;
+  decision: 'DELEGATE' | 'ASK' | 'DONE' | null;
   delegatedTargetAgentId: number | null;
   parentExecutionId: number | null;
   rootExecutionId: number | null;
@@ -159,6 +159,10 @@ export interface Execution {
   mergeDetail: string | null;
   /** 트리가 바꾼 파일 목록(`{status, path}`). 커밋·병합하지 못했으면 빈 배열. */
   changedFiles: { status: string; path: string }[] | null;
+  /** 판단 실행이 사람에게 물은 질문(계약 `ask`). 답을 기다리는 동안 채워진다. */
+  question: string | null;
+  /** 그 질문에 대한 사람의 답. */
+  answer: string | null;
   startedAt: string | null;
   finishedAt: string | null;
 }
@@ -264,6 +268,11 @@ export const api = {
   /** 워크트리 정리(사람이 판단해 부른다). deleteBranch 면 전용 브랜치도 함께 지운다. 도는 실행이면 409. */
   removeExecutionWorktree: (id: number, deleteBranch = false) =>
     request<void>(`/executions/${id}/worktree${deleteBranch ? '?branch=true' : ''}`, { method: 'DELETE' }),
+  /** 자동 병합이 MANUAL 로 끝난 트리를 다시 병합한다(사람이 변경을 정리한 뒤). 도는 트리면 409. */
+  retryExecutionMerge: (id: number) => request<Execution>(`/executions/${id}/merge`, { method: 'POST' }),
+  /** `WAITING_INPUT` 인 실행에 사람의 답을 넣고 그 실행을 이어서 돌린다. 입력 대기가 아니면 409. */
+  answerExecution: (id: number, text: string) =>
+    request<Execution>(`/executions/${id}/answer`, { method: 'POST', body: JSON.stringify({ text }) }),
 
   listProviders: () => request<Provider[]>('/ai-providers'),
   createProvider: (data: { key: string; name: string }) =>

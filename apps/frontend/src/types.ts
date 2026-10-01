@@ -104,8 +104,8 @@ export interface Task {
   agentId: number | null;
 }
 
-/** 실행 단위의 상태. 부모는 자식이 도는 동안 WAITING_CHILD 로 멈춘다. */
-export type ExecutionStatus = 'QUEUED' | 'RUNNING' | 'WAITING_CHILD' | 'DONE' | 'FAILED';
+/** 실행 단위의 상태. 부모는 자식이 도는 동안 WAITING_CHILD 로, 사람에게 물으면 WAITING_INPUT 으로 멈춘다. */
+export type ExecutionStatus = 'QUEUED' | 'RUNNING' | 'WAITING_CHILD' | 'WAITING_INPUT' | 'DONE' | 'FAILED';
 
 /**
  * 실행 출력의 **마지막 줄에 강제하는 계약**. 판단이 필요한 마스터·리더만 쓴다.
@@ -113,6 +113,7 @@ export type ExecutionStatus = 'QUEUED' | 'RUNNING' | 'WAITING_CHILD' | 'DONE' | 
  */
 export type ExecutionDecision =
   | { action: 'delegate'; targetAgentId: number; prompt: string }
+  | { action: 'ask'; question: string }
   | { action: 'done'; summary: string };
 
 /** CLI 의 `--output-format json` 이 그대로 돌려주는 값(usage / total_cost_usd / duration_ms). */
@@ -156,6 +157,10 @@ export interface Execution {
   mergeDetail: string | null;
   /** 트리가 바꾼 파일 목록(git `--name-status`). 커밋·병합하지 못했으면 빈 배열. */
   changedFiles: ChangedFile[];
+  /** 판단 실행이 사람에게 물은 질문(계약 `ask`). 답을 기다리는 동안 채워져 있다. */
+  question: string | null;
+  /** 그 질문에 대한 사람의 답(`POST /executions/{id}/answer`). */
+  answer: string | null;
 }
 
 /** 트리 결과를 메인 저장소로 되돌린 결과. */

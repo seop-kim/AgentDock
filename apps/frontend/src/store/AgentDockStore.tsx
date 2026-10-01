@@ -82,6 +82,10 @@ interface AgentDockStore {
   sendCommand: (projectId: number, target: ChatTarget, text: string, attachments: AttachedFile[]) => void;
   /** 실행 트리의 워크트리를 정리한다(사람이 판단해 부른다). deleteBranch 면 전용 브랜치도 지운다. */
   removeWorktree: (executionId: number, deleteBranch: boolean) => void;
+  /** 자동 병합이 MANUAL 로 끝난 트리를 다시 병합한다(사람이 변경을 정리한 뒤 부른다). */
+  retryMerge: (executionId: number) => void;
+  /** `WAITING_INPUT` 인 실행에 사람의 답을 넣고 그 실행을 이어서 돌린다. */
+  answerExecution: (executionId: number, text: string) => void;
   uploadAttachments: (workspaceId: number, files: File[]) => Promise<AttachedFile[]>;
   loadWorkspaceFiles: (workspaceId: number) => void;
 }
@@ -140,6 +144,7 @@ function executionStatus(status: string): Execution['status'] {
       return 'FAILED';
     case 'RUNNING':
     case 'WAITING_CHILD':
+    case 'WAITING_INPUT':
     case 'FAILED':
       return status;
     default:
@@ -171,7 +176,9 @@ function executionOf(execution: ApiExecution, projectId: number): Execution {
       ? { action: 'done', summary }
       : execution.decision === 'DELEGATE' && execution.delegatedTargetAgentId !== null
         ? { action: 'delegate', targetAgentId: execution.delegatedTargetAgentId, prompt: '' }
-        : null;
+        : execution.decision === 'ASK'
+          ? { action: 'ask', question: execution.question ?? '' }
+          : null;
   return {
     id: execution.id,
     projectId,
@@ -200,6 +207,8 @@ function executionOf(execution: ApiExecution, projectId: number): Execution {
     mergeStatus: execution.mergeStatus ?? null,
     mergeDetail: execution.mergeDetail ?? null,
     changedFiles: execution.changedFiles ?? [],
+    question: execution.question ?? null,
+    answer: execution.answer ?? null,
   };
 }
 
@@ -673,6 +682,8 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
       sendCommand,
       removeWorktree: (executionId, deleteBranch) =>
         call(() => api.removeExecutionWorktree(executionId, deleteBranch)),
+      retryMerge: (executionId) => call(() => api.retryExecutionMerge(executionId)),
+      answerExecution: (executionId, text) => call(() => api.answerExecution(executionId, text)),
       uploadAttachments: async (workspaceId, files) => {
         try {
           const uploaded: ApiAttachment[] = await api.uploadAttachments(workspaceId, files);
