@@ -1,0 +1,112 @@
+/* 입력 대기 표시: 프로젝트 상세의 배너 · 구성도 노드/에이전트 카드의 말풍선 · 그 말풍선에서 여는 팝업. */
+
+/* 헤더 카드 아래에 뜨는 배너. 답을 기다리는 실행이 있을 때만 그린다. */
+.banner {
+  composes: glass from '../../styles/glass.module.css';
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: var(--radius-lg);
+  /* 글래스(블러) 요소에는 overflow 를 두지 않는다 — 길면 안쪽 목록이 스크롤한다. */
+  box-shadow: var(--shadow-float), var(--glass-highlight), inset 3px 0 0 var(--color-warning);
+}
+
+/* 머리말 줄 전체가 접기/펴기 버튼이다 */
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  color: var(--color-warning);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.headTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.headChevron {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--color-muted);
+  line-height: 0;
+}
+
+.headChevron svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* 질문 목록. 길어지면 여기서만 스크롤한다(블러가 없는 요소라 잘라도 된다). */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 42vh;
+  overflow-y: auto;
+}
+
+/* 말풍선(💬) 표시: 구성도 노드와 왼쪽 에이전트 카드가 함께 쓴다. */
+.bubble {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--color-warning);
+  border-radius: 999px;
+  background: var(--glass-bg-strong);
+  color: var(--color-warning);
+  font-size: 12px;
+  line-height: 1;
+  box-shadow: 0 2px 8px var(--color-shadow);
+  cursor: pointer;
+}
+
+/* 구성도 노드: 오른쪽 위 모서리에 붙여 이름을 가리지 않는다 */
+.bubbleOnNode {
+  composes: bubble;
+  position: absolute;
+  top: -9px;
+  right: -9px;
+}
+
+/* 왼쪽 에이전트 카드: 상태 배지 옆에 놓는다 */
+.bubbleOnCard {
+  composes: bubble;
+}
+
+.bubble:hover,
+.bubbleOnNode:hover,
+.bubbleOnCard:hover {
+  background: var(--color-warning-bg);
+  filter: none;
+}
+
+/* 말풍선에서 여는 작은 팝업. 패널의 블러·스크롤에 잘리지 않도록 body 에 포털로 그린다. */
+.popup {
+  composes: glassStrong from '../../styles/glass.module.css';
+  position: fixed;
+  top: var(--top);
+  left: var(--left);
+  z-index: 300;
+  width: var(--popup-width);
+  max-width: calc(100vw - 16px);
+  padding: 8px;
+  border-radius: var(--radius);
+  color: var(--color-text);
+}

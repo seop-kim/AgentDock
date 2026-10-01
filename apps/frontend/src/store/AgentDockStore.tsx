@@ -208,6 +208,7 @@ function executionOf(execution: ApiExecution, projectId: number): Execution {
     mergeDetail: execution.mergeDetail ?? null,
     changedFiles: execution.changedFiles ?? [],
     question: execution.question ?? null,
+    options: execution.questionOptions ?? [],
     answer: execution.answer ?? null,
   };
 }

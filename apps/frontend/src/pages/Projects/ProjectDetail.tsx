@@ -12,6 +12,7 @@ import GroupCanvas from './GroupCanvas';
 import GroupList from './GroupList';
 import styles from './ProjectDetail.module.css';
 import ProjectSettingsModal from './ProjectSettingsModal';
+import WaitingInputBanner from './WaitingInput';
 
 const NOTICE_MS = 2500;
 /** 에이전트 패널 너비(320) + 왼쪽 여백(16) + 호흡(16). 구성도 맞춤이 이만큼을 비켜 간다. */
@@ -155,6 +156,9 @@ export default function ProjectDetail() {
             ))}
           </div>
         </header>
+
+        {/* 답을 기다리는 질문이 있으면 헤더 카드 아래에 가장 눈에 띄게 둔다(없으면 스스로 사라진다). */}
+        <WaitingInputBanner project={project} />
 
         <AgentList
           project={project}

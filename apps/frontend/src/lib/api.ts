@@ -161,6 +161,8 @@ export interface Execution {
   changedFiles: { status: string; path: string }[] | null;
   /** 판단 실행이 사람에게 물은 질문(계약 `ask`). 답을 기다리는 동안 채워진다. */
   question: string | null;
+  /** 그 질문에 함께 온 보기(`ask` 의 options). 화면이 답을 버튼으로 그린다. 없으면 빈 배열. */
+  questionOptions: string[] | null;
   /** 그 질문에 대한 사람의 답. */
   answer: string | null;
   startedAt: string | null;

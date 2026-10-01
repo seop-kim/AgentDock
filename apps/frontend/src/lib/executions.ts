@@ -99,6 +99,19 @@ export function isLive(status: ExecutionStatus): boolean {
   return status === 'QUEUED' || status === 'RUNNING' || status === 'WAITING_CHILD' || status === 'WAITING_INPUT';
 }
 
+/**
+ * 프로젝트의 실행 중 사람의 답을 기다리는 것들(입력 대기). **부모·자식 모두** 포함한다 —
+ * 위임받은 자식이 사람에게 물으면 그것도 함께 보여 줘야 한다(마스터만 보면 놓친다).
+ */
+export function waitingInputs(executions: Execution[]): Execution[] {
+  return executions.filter((execution) => execution.status === 'WAITING_INPUT');
+}
+
+/** 입력 대기 항목에 보여 줄 질문 문장(계약 `ask` 의 question, 없으면 그 실행이 받은 지시). */
+export function questionText(execution: Execution): string {
+  return execution.question ?? execution.prompt;
+}
+
 export function formatCost(usd: number): string {
   return `$${usd.toFixed(2)}`;
 }

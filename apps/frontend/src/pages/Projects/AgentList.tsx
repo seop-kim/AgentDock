@@ -2,15 +2,18 @@ import { DragEvent, useEffect, useRef, useState } from 'react';
 import { unavailableReason } from '../../lib/agentAvailability';
 import { agentStatus } from '../../lib/agentStatus';
 import { isAgentDrag, readAgentDrag, startAgentDrag } from '../../lib/dnd';
+import { waitingInputs } from '../../lib/executions';
 import { openTerminalWindow } from '../../lib/windowSync';
 import { ChevronDownIcon, ChevronUpIcon, PlusIcon } from '../../components/icons';
 import { useAgentDockStore } from '../../store/AgentDockStore';
 import shared from '../../styles/shared.module.css';
-import type { Agent, Project } from '../../types';
+import type { Agent, Execution, Project } from '../../types';
 import AgentCardMenu from './AgentCardMenu';
 import AgentFormModal from './AgentFormModal';
 import AgentHoverCard from './AgentHoverCard';
+import WaitingInputPopup from './WaitingInputPopup';
 import styles from './AgentList.module.css';
+import waiting from './WaitingInput.module.css';
 
 /** 마우스를 올린 뒤 정보 창이 뜨기까지의 지연(스쳐 지나갈 때 깜빡이지 않게) */
 const HOVER_DELAY_MS = 250;
@@ -44,9 +47,16 @@ export default function AgentList({
   const [dropActive, setDropActive] = useState(false);
   const [hover, setHover] = useState<{ agent: Agent; rect: DOMRect } | null>(null);
   const [menu, setMenu] = useState<{ agent: Agent; rect: DOMRect } | null>(null);
+  // 카드의 말풍선(💬)을 누르면 그 자리에 뜨는 입력 대기 팝업.
+  const [waitingPopup, setWaitingPopup] = useState<{ execution: Execution; rect: DOMRect } | null>(null);
   const hoverTimer = useRef<number | undefined>(undefined);
 
   const projectAgents = agents.filter((a) => a.projectId === project.id);
+  // 에이전트마다 답을 기다리는 첫 실행(부모·자식 모두 포함). 그 에이전트 카드에 말풍선을 붙인다.
+  const waitingByAgent = new Map<number, Execution>();
+  waitingInputs(executions.filter((execution) => execution.projectId === project.id)).forEach((execution) => {
+    if (!waitingByAgent.has(execution.agentId)) waitingByAgent.set(execution.agentId, execution);
+  });
 
   useEffect(() => () => window.clearTimeout(hoverTimer.current), []);
 
@@ -148,6 +158,7 @@ export default function AgentList({
               IDLE: styles.statusIdle,
             }[status.kind];
             const selected = selectedAgentId === agent.id;
+            const pending = waitingByAgent.get(agent.id) ?? null;
             return (
               <div
                 key={agent.id}
@@ -170,6 +181,22 @@ export default function AgentList({
                   <span className={styles.role}>{role?.name}</span>
                 </div>
                 {project.masterAgentId === agent.id && <span className={styles.master}>마스터</span>}
+                {/* 입력 대기 말풍선: 누르면 카드에 붙은 팝업에서 질문에 답한다(선택/끌기로 번지지 않게 막는다). */}
+                {pending !== null && (
+                  <button
+                    type="button"
+                    className={waiting.bubbleOnCard}
+                    aria-label={`${agent.name} 입력 대기 질문 열기`}
+                    title="입력 대기 중인 질문이 있습니다"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      hideHover();
+                      setWaitingPopup({ execution: pending, rect: e.currentTarget.getBoundingClientRect() });
+                    }}
+                  >
+                    💬
+                  </button>
+                )}
                 <span className={`${styles.status} ${statusClass}`} title={`상태: ${status.label}`}>
                   {status.label}
                 </span>
@@ -223,6 +250,13 @@ export default function AgentList({
       )}
       {creating && <AgentFormModal project={project} onClose={() => setCreating(false)} />}
       {editing && <AgentFormModal project={project} agent={editing} onClose={() => setEditing(null)} />}
+      {waitingPopup && (
+        <WaitingInputPopup
+          execution={waitingPopup.execution}
+          anchor={waitingPopup.rect}
+          onClose={() => setWaitingPopup(null)}
+        />
+      )}
     </aside>
   );
 }

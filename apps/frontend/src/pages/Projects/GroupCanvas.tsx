@@ -13,15 +13,18 @@ import { unavailableReason } from '../../lib/agentAvailability';
 import { agentStatus } from '../../lib/agentStatus';
 import { layoutCanvas, NODE_H, NODE_W, type CanvasNode } from '../../lib/canvasLayout';
 import { isAgentDrag, readAgentDrag } from '../../lib/dnd';
+import { waitingInputs } from '../../lib/executions';
 import { useGroupDrop } from '../../lib/useGroupDrop';
 import { useAgentDockStore } from '../../store/AgentDockStore';
 import { openTerminalWindow } from '../../lib/windowSync';
 import shared from '../../styles/shared.module.css';
-import type { Agent, Project } from '../../types';
+import type { Agent, Execution, Project } from '../../types';
 import AgentNodeMenu from './AgentNodeMenu';
 import GroupCardMenu from './GroupCardMenu';
 import GroupPromptModal from './GroupPromptModal';
+import WaitingInputPopup from './WaitingInputPopup';
 import styles from './GroupCanvas.module.css';
+import waiting from './WaitingInput.module.css';
 
 interface View {
   x: number;
@@ -95,6 +98,14 @@ export default function GroupCanvas({
   // 구성도에는 "놓인" 에이전트만 그린다. 빼 둔 에이전트는 에이전트 목록에만 있다.
   const placedAgents = useMemo(() => projectAgents.filter((a) => a.placed), [projectAgents]);
   const projectGroups = useMemo(() => groups.filter((g) => g.projectId === project.id), [groups, project.id]);
+  // 답을 기다리는 실행(입력 대기). 부모·자식 모두 포함하고, 에이전트마다 첫 건을 그 노드에 말풍선으로 붙인다.
+  const waitingByAgent = useMemo(() => {
+    const map = new Map<number, Execution>();
+    waitingInputs(executions.filter((execution) => execution.projectId === project.id)).forEach((execution) => {
+      if (!map.has(execution.agentId)) map.set(execution.agentId, execution);
+    });
+    return map;
+  }, [executions, project.id]);
   const layout = useMemo(
     () => layoutCanvas(placedAgents, projectGroups, nodePositions, groupPositions),
     [placedAgents, projectGroups, nodePositions, groupPositions],
@@ -107,6 +118,8 @@ export default function GroupCanvas({
   // 그룹 상자도 "⋮" 메뉴에서 프롬프트 편집/삭제를 한다(왼쪽 그룹 카드와 같다).
   const [boxMenu, setBoxMenu] = useState<{ groupId: number; rect: DOMRect } | null>(null);
   const [promptGroupId, setPromptGroupId] = useState<number | null>(null);
+  // 노드의 말풍선(💬)을 누르면 그 자리에 뜨는 입력 대기 팝업.
+  const [waitingPopup, setWaitingPopup] = useState<{ execution: Execution; rect: DOMRect } | null>(null);
   // 노드나 그룹 상자를 끌어 위치를 옮긴다(노드를 그룹 상자 위에 놓으면 그 그룹으로 들어간다).
   type DragTarget = { kind: 'node'; agentId: number } | { kind: 'group'; groupId: number };
   const [dragTarget, setDragTarget] = useState<DragTarget | null>(null);
@@ -465,6 +478,8 @@ export default function GroupCanvas({
                   ? styles.nodeStatusWaiting
                   : '';
             const isSelected = node.agentId === selectedAgentId;
+            // 이 노드의 에이전트가 사람의 답을 기다리면 말풍선(💬)을 붙인다.
+            const pending = waitingByAgent.get(node.agentId) ?? null;
             // 끌고 있는 동안에는 포인터를 따라간다.
             const manual = nodePositions[node.agentId];
             const dragging = dragTarget?.kind === 'node' && dragTarget.agentId === node.agentId;
@@ -506,6 +521,22 @@ export default function GroupCanvas({
                   </span>
                 )}
                 {reason && <span className={styles.warnDot} aria-label={reason} />}
+                {/* 입력 대기 말풍선: 누르면 그 노드에 붙은 팝업에서 질문에 답한다. 끌기/이동으로 번지지 않게 막는다. */}
+                {pending !== null && (
+                  <button
+                    type="button"
+                    className={waiting.bubbleOnNode}
+                    aria-label={`${agent.name} 입력 대기 질문 열기`}
+                    title="입력 대기 중인 질문이 있습니다"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setWaitingPopup({ execution: pending, rect: e.currentTarget.getBoundingClientRect() });
+                    }}
+                  >
+                    💬
+                  </button>
+                )}
                 {isSelected && <span className={styles.selectedTag}>선택됨</span>}
                 {/* 마스터는 그룹에 속하지 않고 구성도에서 뺄 수도 없어 노드에 할 동작이 없다 */}
                 {agent.id !== project.masterAgentId && (
@@ -585,6 +616,14 @@ export default function GroupCanvas({
         />
       )}
       {promptGroup && <GroupPromptModal group={promptGroup} onClose={() => setPromptGroupId(null)} />}
+
+      {waitingPopup && (
+        <WaitingInputPopup
+          execution={waitingPopup.execution}
+          anchor={waitingPopup.rect}
+          onClose={() => setWaitingPopup(null)}
+        />
+      )}
 
       {nodeMenu && (
         <AgentNodeMenu
