@@ -34,6 +34,10 @@ public class AgentGroup {
 
     private String description;
 
+    /** 그룹 프롬프트. 마스터 프롬프트 아래, 에이전트 프롬프트 위에 적용된다. */
+    @Column(nullable = false, columnDefinition = "text")
+    private String prompt = "";
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "leader_agent_id")
     private Agent leaderAgent;
