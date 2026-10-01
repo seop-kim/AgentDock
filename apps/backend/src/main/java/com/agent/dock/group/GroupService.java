@@ -59,6 +59,7 @@ public class GroupService {
         }
         group.setName(request.name());
         group.setDescription(request.description());
+        group.setPrompt(request.prompt() == null ? "" : request.prompt());
         group.setLeaderAgent(request.leaderAgentId() == null ? null : requireAgent(request.leaderAgentId()));
         groupRepository.save(group);
         return findOne(id);

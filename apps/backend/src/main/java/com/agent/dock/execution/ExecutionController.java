@@ -32,6 +32,11 @@ public class ExecutionController {
         return service.getLogs(id);
     }
 
+    @GetMapping("/{id}/tree")
+    public ExecutionTreeResponse getTree(@PathVariable Long id) {
+        return service.getTree(id);
+    }
+
     @GetMapping(value = "/{id}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream(@PathVariable String id) {
         return service.streamLogs(id);

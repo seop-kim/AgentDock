@@ -6,7 +6,7 @@ import java.time.Instant;
 import java.util.List;
 
 public record GroupResponse(
-        Long id, Long projectId, String name, String description,
+        Long id, Long projectId, String name, String description, String prompt,
         AgentSummary leader, List<AgentSummary> members,
         Instant createdAt, Instant updatedAt
 ) {
@@ -16,6 +16,6 @@ public record GroupResponse(
                 : (g.getProject() != null ? g.getProject().getId() : null);
         AgentSummary leader = g.getLeaderAgent() == null ? null : AgentSummary.from(g.getLeaderAgent());
         return new GroupResponse(g.getId(), projectId, g.getName(), g.getDescription(),
-                leader, members, g.getCreatedAt(), g.getUpdatedAt());
+                g.getPrompt() == null ? "" : g.getPrompt(), leader, members, g.getCreatedAt(), g.getUpdatedAt());
     }
 }

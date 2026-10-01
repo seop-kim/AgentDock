@@ -24,7 +24,8 @@ public class Project {
     private String description;
 
     /** 프로젝트 마스터 에이전트(최상위 리더). 그룹에 속하지 않고, 프롬프트 계층의 맨 위에 선다. */
-    @ManyToOne(fetch = FetchType.LAZY)
+    // 응답에 마스터 이름을 함께 보여줘야 해서 즉시 로딩한다(프로젝트 한 행당 1건).
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "master_agent_id")
     private Agent masterAgent;
 

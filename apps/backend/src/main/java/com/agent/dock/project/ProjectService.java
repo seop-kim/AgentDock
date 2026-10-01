@@ -1,5 +1,8 @@
 package com.agent.dock.project;
 
+import com.agent.dock.agent.Agent;
+import com.agent.dock.agent.AgentRepository;
+import com.agent.dock.common.BadRequestException;
 import com.agent.dock.common.ConflictException;
 import com.agent.dock.common.NotFoundException;
 import com.agent.dock.workspace.Workspace;
@@ -18,6 +21,7 @@ public class ProjectService {
     private final ProjectRepository repository;
     private final WorkspaceRepository workspaceRepository;
     private final ProjectWorkspaceRepository workspaceLinkRepository;
+    private final AgentRepository agentRepository;
 
     public List<ProjectResponse> findAll() {
         List<Project> projects = repository.findAllByOrderByNameAsc();
@@ -93,6 +97,25 @@ public class ProjectService {
                 .or(() -> workspaceLinkRepository.findFirstByProjectIdOrderByIdAsc(projectId))
                 .map(ProjectWorkspace::getWorkspace)
                 .orElseThrow(() -> new ConflictException("Project %d has no workspace assigned".formatted(projectId)));
+    }
+
+    /** 마스터 에이전트 지정/변경과 마스터 프롬프트(프롬프트 계층 맨 위). agentId 가 null 이면 해제한다. */
+    @Transactional
+    public ProjectResponse updateMaster(Long projectId, UpdateMasterRequest request) {
+        Project project = findProject(projectId);
+        if (request.agentId() == null) {
+            project.setMasterAgent(null);
+        } else {
+            Agent agent = agentRepository.findById(request.agentId())
+                    .orElseThrow(() -> new NotFoundException("Agent %d not found".formatted(request.agentId())));
+            if (agent.getProject() == null || !agent.getProject().getId().equals(projectId)) {
+                throw new BadRequestException("Agent does not belong to project");
+            }
+            project.setMasterAgent(agent);
+        }
+        project.setMasterPrompt(request.masterPrompt() == null ? "" : request.masterPrompt());
+        repository.save(project);
+        return findOne(projectId);
     }
 
     private void clearOtherDefaults(Long projectId, Long keepLinkId) {

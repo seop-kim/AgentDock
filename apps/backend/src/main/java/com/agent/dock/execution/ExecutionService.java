@@ -14,6 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -51,6 +53,42 @@ public class ExecutionService {
                 .map(ExecutionLogResponse::from).toList();
     }
 
+    /** 실행 트리 조회: 루트부터 순서대로 평평하게(깊이 포함) 돌려준다. 가운데 실행을 줘도 루트를 찾아 올린다. */
+    public ExecutionTreeResponse getTree(Long executionId) {
+        Execution execution = executionRepository.findById(executionId)
+                .orElseThrow(() -> new NotFoundException("Execution %d not found".formatted(executionId)));
+        Execution root = execution.getRootExecutionId() == null
+                ? execution
+                : executionRepository.findById(execution.getRootExecutionId()).orElse(execution);
+
+        List<Execution> all = new ArrayList<>();
+        all.add(root);
+        all.addAll(executionRepository.findByRootExecutionIdOrderByIdAsc(root.getId()));
+
+        // 자식은 항상 부모보다 나중에 만들어져 id 가 크다. 그래서 부모 깊이는 이미 계산돼 있다.
+        Map<Long, Integer> depths = new HashMap<>();
+        List<ExecutionTreeResponse.ExecutionTreeNode> nodes = new ArrayList<>();
+        for (Execution node : all) {
+            Long parentId = node.getParentExecutionId();
+            int depth = parentId == null ? 0 : depths.getOrDefault(parentId, 0) + 1;
+            depths.put(node.getId(), depth);
+            nodes.add(new ExecutionTreeResponse.ExecutionTreeNode(
+                    ExecutionResponse.from(node),
+                    depth,
+                    agentName(node.getAgentId()),
+                    node.getDelegatedTargetAgentId() == null ? null : agentName(node.getDelegatedTargetAgentId()),
+                    logRepository.countByExecutionId(node.getId())));
+        }
+        return new ExecutionTreeResponse(root.getId(), nodes);
+    }
+
+    private String agentName(Long agentId) {
+        if (agentId == null) {
+            return null;
+        }
+        return agentRepository.findById(agentId).map(Agent::getName).orElse(null);
+    }
+
     public ExecutionResponse create(Long agentId, Long projectId, String prompt) {
         return create(agentId, projectId, prompt, null);
     }
@@ -58,6 +96,8 @@ public class ExecutionService {
     public ExecutionResponse create(Long agentId, Long projectId, String prompt, Long taskId) {
         ExecutionGuard.Target target = guard.prepare(agentId, projectId, null);
         Execution execution = factory.createRoot(target, prompt, taskId);
+        // 응답을 돌려준 뒤 바로 구독할 수 있도록 로그 버퍼를 먼저 연다.
+        streamHub.open(execution.getId());
         executor.submit(() -> runSingle(execution.getId(), target, prompt, taskId));
         return ExecutionResponse.from(execution);
     }
@@ -156,7 +196,6 @@ public class ExecutionService {
     }
 
     private void runSingle(Long executionId, ExecutionGuard.Target target, String prompt, Long taskId) {
-        streamHub.open(executionId);
         ExecutionStatus status = ExecutionStatus.FAILED;
         Integer exitCode = null;
         try {

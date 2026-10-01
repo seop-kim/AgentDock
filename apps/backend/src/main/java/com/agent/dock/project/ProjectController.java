@@ -41,4 +41,10 @@ public class ProjectController {
     public void removeWorkspace(@PathVariable Long id, @PathVariable Long workspaceId) {
         service.removeWorkspace(id, workspaceId);
     }
+
+    /** 마스터 에이전트 지정/변경과 마스터 프롬프트. */
+    @PutMapping("/{id}/master")
+    public ProjectResponse updateMaster(@PathVariable Long id, @RequestBody UpdateMasterRequest request) {
+        return service.updateMaster(id, request);
+    }
 }
