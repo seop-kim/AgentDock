@@ -126,6 +126,54 @@ public class ExecutionService {
     }
 
     /**
+     * 트리 브랜치를 메인 저장소의 현재 브랜치로 **다시 병합**한다(자동 병합이 MANUAL 로 끝난 뒤, 사람이 변경을
+     * 정리하고 화면의 "다시 병합" 버튼으로 부른다). 커밋은 만들지 않고 트리 브랜치를 그대로 병합한다.
+     *
+     * <p>아직 도는 트리는 409, 워크트리 브랜치가 없으면(격리하지 않았거나 이미 정리됐으면) 404 다.
+     * 결과(병합 상태·사유·커밋·변경 파일)는 실행에 다시 기록하고 SYSTEM 로그로도 알린다.
+     */
+    public ExecutionResponse retryMerge(Long executionId) {
+        Execution execution = executionRepository.findById(executionId)
+                .orElseThrow(() -> new NotFoundException("Execution %d not found".formatted(executionId)));
+        if (isRunning(execution.getStatus())) {
+            throw new ConflictException("아직 실행 중인 트리는 병합할 수 없습니다");
+        }
+        String branch = execution.getWorktreeBranch();
+        if (branch == null || branch.isBlank()) {
+            throw new NotFoundException("Execution %d has no worktree branch".formatted(executionId));
+        }
+        List<ChangedFile> previous = execution.getChangedFiles() == null ? List.of() : execution.getChangedFiles();
+        streamHub.system(executionId, "⎿ 트리 브랜치 %s 를 다시 병합합니다".formatted(branch));
+        WorktreeService.TreeResult result = worktreeService.mergeBranch(execution.getWorktreePath(), branch);
+        // 이미 병합된 브랜치를 다시 부르면 diff 가 비어 온다 — 그때는 처음 기록한 변경 파일을 그대로 남긴다.
+        List<ChangedFile> changedFiles = result.changedFiles().isEmpty() ? previous : result.changedFiles();
+        update(executionId, e -> {
+            e.setMergeStatus(result.status());
+            if (result.commit() != null) {
+                e.setResultCommit(result.commit());
+            }
+            e.setMergeDetail(result.detail());
+            e.setChangedFiles(changedFiles);
+        });
+        logMergeResult(executionId, result, branch);
+        return findOne(executionId);
+    }
+
+    /**
+     * 병합 결과를 SYSTEM 로그로 알린다(자동 병합과 다시 병합이 같은 문구를 쓴다).
+     * 커밋 줄은 호출부가 먼저 남긴다 — 여기서는 병합 상태만 말한다.
+     */
+    public void logMergeResult(Long executionId, WorktreeService.TreeResult result, String treeBranch) {
+        switch (result.status()) {
+            case MERGED -> streamHub.system(executionId,
+                    "⎿ 메인 저장소(%s)로 병합했습니다".formatted(result.repositoryBranch()));
+            case MANUAL -> streamHub.system(executionId,
+                    "⎿ 자동 병합하지 못했습니다(%s). 브랜치 %s 를 직접 병합하세요".formatted(result.detail(), treeBranch));
+            case NONE -> streamHub.system(executionId, "⎿ 커밋·병합을 건너뜁니다: " + result.detail());
+        }
+    }
+
+    /**
      * 워크트리 정리(사람이 판단해 부른다 — 자동 삭제는 하지 않는다). 아직 도는 트리는 막고(409),
      * 지운 뒤에는 실행에서 경로·브랜치를 비워 화면의 정리 표시도 함께 사라지게 한다.
      */
@@ -149,10 +197,34 @@ public class ExecutionService {
         });
     }
 
-    /** 아직 끝나지 않은 상태(PENDING/RUNNING/WAITING_CHILD)인지. */
+    /** 아직 끝나지 않은 상태(PENDING/RUNNING/WAITING_CHILD/WAITING_INPUT)인지. */
     private static boolean isRunning(ExecutionStatus status) {
         return status == ExecutionStatus.PENDING || status == ExecutionStatus.RUNNING
-                || status == ExecutionStatus.WAITING_CHILD;
+                || status == ExecutionStatus.WAITING_CHILD || status == ExecutionStatus.WAITING_INPUT;
+    }
+
+    /**
+     * 판단 실행이 사람에게 물어 보고 멈춘다(실행은 끝나지 않는다). 질문을 저장하고 상태를 `WAITING_INPUT` 으로 둔다.
+     * 답이 오면(`answer`) 같은 실행의 판단 루프를 이어서 돈다.
+     */
+    public void markWaitingInput(Long executionId, String question) {
+        update(executionId, execution -> {
+            execution.setStatus(ExecutionStatus.WAITING_INPUT);
+            execution.setQuestion(question);
+            // 판단이 끝난 것이 아니므로 완료 시각을 남기지 않는다(화면이 "완료"로 보이면 안 된다).
+            execution.setFinishedAt(null);
+        });
+    }
+
+    /** 사람의 답을 저장한다(다음 판단 스텝의 프롬프트에 질문과 함께 붙는다). */
+    public void recordAnswer(Long executionId, String answer) {
+        update(executionId, execution -> execution.setAnswer(answer));
+    }
+
+    /** 실행 하나를 읽는다(재개에 필요한 값 — 프롬프트·워크트리·질문/답 — 을 꺼내기 위해). */
+    public Execution require(Long executionId) {
+        return executionRepository.findById(executionId)
+                .orElseThrow(() -> new NotFoundException("Execution %d not found".formatted(executionId)));
     }
 
     public void markRunning(Long executionId) {

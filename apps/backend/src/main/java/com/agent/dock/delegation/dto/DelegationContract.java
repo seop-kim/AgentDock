@@ -12,15 +12,22 @@ import java.util.Optional;
  *
  * <pre>
  * {"action":"delegate","targets":[{"agentId":12,"prompt":"…","expects":"…"}]}
+ * {"action":"ask","question":"…","options":["…"]}
  * {"action":"done","summary":"…"}
  * </pre>
  *
  * 모델이 낸 문장을 해석하지 않는다. `--json-schema` 로 강제한 JSON 만 읽는다.
  */
-public record DelegationContract(ExecutionDecision action, List<Order> orders, String summary) {
+public record DelegationContract(ExecutionDecision action, List<Order> orders, String summary,
+                                 String question, List<String> options) {
 
     /** 한 에이전트에게 맡기는 한 건. */
     public record Order(Long agentId, String prompt, String expects) {
+    }
+
+    /** 위임 계약(규칙 라우터 폴백도 이 모양을 쓴다). */
+    public static DelegationContract delegate(List<Order> orders, String summary) {
+        return new DelegationContract(ExecutionDecision.DELEGATE, orders, summary, "", List.of());
     }
 
     /** 스키마를 통과한 JSON 을 계약으로 읽는다. 형식이 어긋나면 비어 있다(재시도·폴백 대상). */
@@ -33,7 +40,15 @@ public record DelegationContract(ExecutionDecision action, List<Order> orders, S
         }
         String summary = text(payload.get("summary"));
         if ("done".equals(action)) {
-            return Optional.of(new DelegationContract(ExecutionDecision.DONE, List.of(), summary));
+            return Optional.of(new DelegationContract(ExecutionDecision.DONE, List.of(), summary, "", List.of()));
+        }
+        if ("ask".equals(action)) {
+            String question = text(payload.get("question"));
+            if (question.isBlank()) {
+                return Optional.empty();
+            }
+            return Optional.of(new DelegationContract(ExecutionDecision.ASK, List.of(), summary, question,
+                    options(payload.get("options"))));
         }
         if (!"delegate".equals(action)) {
             return Optional.empty();
@@ -53,7 +68,15 @@ public record DelegationContract(ExecutionDecision action, List<Order> orders, S
             }
             orders.add(new Order(agentId, prompt, text(target.get("expects"))));
         }
-        return Optional.of(new DelegationContract(ExecutionDecision.DELEGATE, orders, summary));
+        return Optional.of(delegate(orders, summary));
+    }
+
+    /** `options`(선택 항목). 문자열이 아닌 항목은 버린다 — 없어도 되는 값이라 계약을 깨뜨리지 않는다. */
+    private static List<String> options(Object value) {
+        if (!(value instanceof List<?> items)) {
+            return List.of();
+        }
+        return items.stream().filter(String.class::isInstance).map(String.class::cast).toList();
     }
 
     private static String text(Object value) {

@@ -9,11 +9,11 @@ package com.agent.dock.delegation.util;
  */
 public final class ContractSchemas {
 
-    /** 판단 실행(마스터·그룹 리더): 위임할 대상과 각자에게 줄 지시, 또는 완료 요약. */
+    /** 판단 실행(마스터·그룹 리더): 위임할 대상과 각자에게 줄 지시, 사람에게 물을 질문, 또는 완료 요약. */
     public static final String JUDGEMENT = "{"
             + "\"type\":\"object\","
             + "\"properties\":{"
-            + "\"action\":{\"type\":\"string\",\"enum\":[\"delegate\",\"done\"]},"
+            + "\"action\":{\"type\":\"string\",\"enum\":[\"delegate\",\"ask\",\"done\"]},"
             + "\"targets\":{\"type\":\"array\",\"items\":{"
             + "\"type\":\"object\","
             + "\"properties\":{"
@@ -22,6 +22,8 @@ public final class ContractSchemas {
             + "\"expects\":{\"type\":\"string\"}},"
             + "\"required\":[\"agentId\",\"prompt\"],"
             + "\"additionalProperties\":false}},"
+            + "\"question\":{\"type\":\"string\"},"
+            + "\"options\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},"
             + "\"summary\":{\"type\":\"string\"}},"
             + "\"required\":[\"action\"],"
             + "\"additionalProperties\":false}";

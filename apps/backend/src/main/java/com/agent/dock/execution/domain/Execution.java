@@ -104,6 +104,17 @@ public class Execution {
     @Column(name = "result_text", columnDefinition = "text")
     private String resultText;
 
+    /**
+     * 판단 실행이 사람에게 물은 질문(계약 `{"action":"ask"}`). 이 값이 채워져 있고 상태가 `WAITING_INPUT` 이면
+     * 실행은 끝나지 않고 사람의 답을 기다린다(답이 오면 같은 실행의 판단 루프를 이어서 돈다).
+     */
+    @Column(columnDefinition = "text")
+    private String question;
+
+    /** 그 질문에 대한 사람의 답(`POST /executions/{id}/answer`). 다음 판단 스텝의 프롬프트에 붙는다. */
+    @Column(columnDefinition = "text")
+    private String answer;
+
     /** 다음 실행으로 넘기는 최소 Handoff(요약·변경 파일 등). */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")

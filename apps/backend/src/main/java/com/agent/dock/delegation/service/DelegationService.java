@@ -10,6 +10,7 @@ import com.agent.dock.delegation.util.DelegationPrompts;
 import com.agent.dock.execution.domain.Execution;
 import com.agent.dock.execution.domain.ExecutionDecision;
 import com.agent.dock.execution.domain.ExecutionStatus;
+import com.agent.dock.execution.dto.ExecutionResponse;
 import com.agent.dock.execution.repository.ExecutionRepository;
 import com.agent.dock.execution.service.ExecutionFactory;
 import com.agent.dock.execution.service.ExecutionGuard;
@@ -111,6 +112,10 @@ public class DelegationService {
         TreeState state = new TreeState(projectId, taskId, root.getId(), target.worktreePath(), target.worktreeBranch());
         workers.submit(() -> {
             ExecutionStatus status = runExecution(root, target, text, judgement, 0, List.of(rootAgentId), state);
+            // 사람의 답을 기다리는 중이면 트리는 끝난 것이 아니다 — 결과를 되돌리지도, 스트림을 닫지도 않는다.
+            if (status == ExecutionStatus.WAITING_INPUT) {
+                return;
+            }
             // 트리가 끝나면 그 워크트리의 결과를 커밋해 메인 저장소로 되돌린다(되돌리지 못하면 사유와 브랜치를 알린다).
             // 스트림을 닫기 전에 하여 로그가 라이브로도 보이게 한다.
             collectTreeResult(root, target);
@@ -118,6 +123,83 @@ public class DelegationService {
             executionService.publishFinished(root.getId(), taskId, status);
         });
         return root;
+    }
+
+    // ── 사람에게 묻고 답을 받아 이어서 돈다 (`ask` 계약) ──────────────────────────────
+
+    /**
+     * 사람의 답을 저장하고 **같은 실행의 판단 루프를 이어서** 돌린다(`WAITING_INPUT` → 다시 판단).
+     * 질문과 답은 다음 스텝 프롬프트의 "지난 단계 결과"에 그대로 들어가고, 스텝 상한은 그대로 적용된다.
+     *
+     * <p>재개는 실행 행에 남아 있는 값(지시·워크트리·트리)과 조상 사슬(깊이·경로)로 문맥을 다시 만든다 —
+     * 스텝 루프가 스레드를 넘어 이어지기 때문이다.
+     */
+    public ExecutionResponse answer(Long executionId, String text) {
+        Execution execution = executionService.require(executionId);
+        if (execution.getStatus() != ExecutionStatus.WAITING_INPUT) {
+            throw new ConflictException("입력 대기 상태의 실행이 아닙니다");
+        }
+        String answer = text == null ? "" : text.strip();
+        executionService.recordAnswer(executionId, answer);
+        streamHub.system(executionId, "⎿ 답변: " + answer);
+        resume(execution, answer);
+        return executionService.findOne(executionId);
+    }
+
+    /** 멈춰 있던 판단 실행을 이어서 돈다. 끝나면 루트의 트리 결과를 되돌리고 스트림을 닫는다. */
+    private void resume(Execution asked, String answer) {
+        Long agentId = asked.getAgentId();
+        Long projectId = requireAgent(agentId).getProjectId();
+        Long groupId = groupIdOf(agentId, projectId);
+        ExecutionGuard.Target prepared = guard.prepare(agentId, projectId, groupId);
+        ExecutionGuard.Target target = asked.getWorktreePath() == null || asked.getWorktreePath().isBlank()
+                ? prepared
+                : prepared.withWorktree(asked.getWorktreePath(), asked.getWorktreeBranch());
+        Long rootId = asked.getRootExecutionId() == null ? asked.getId() : asked.getRootExecutionId();
+        TreeState state = new TreeState(projectId, asked.getTaskId(), rootId,
+                target.worktreePath(), target.worktreeBranch());
+        int depth = depthOf(asked);
+        List<Long> path = pathOf(asked);
+        boolean judgement = isJudgementAgent(agentId, projectId);
+        boolean root = asked.getParentExecutionId() == null;
+        String progress = DelegationPrompts.answerContext(asked.getQuestion(), answer);
+
+        workers.submit(() -> {
+            ExecutionStatus status = judgement
+                    ? runJudgement(asked, target, asked.getPrompt(), depth, path, state, progress)
+                    : runWork(asked, target, asked.getPrompt());
+            if (status == ExecutionStatus.WAITING_INPUT) {
+                return; // 또 물었으면 다시 기다린다.
+            }
+            if (root) {
+                collectTreeResult(asked, target);
+            }
+            closeStream(asked.getId(), status);
+            executionService.publishFinished(asked.getId(), asked.getTaskId(), status);
+        });
+    }
+
+    /** 실행이 트리에서 몇 단계 아래인지(루트 = 0). 조상 사슬을 타고 올라가며 센다. */
+    private int depthOf(Execution execution) {
+        int depth = 0;
+        Long parentId = execution.getParentExecutionId();
+        while (parentId != null) {
+            depth++;
+            parentId = executionRepository.findById(parentId).map(Execution::getParentExecutionId).orElse(null);
+        }
+        return depth;
+    }
+
+    /** 루트에서 이 실행까지의 에이전트 경로(순환 위임 판정에 쓴다). */
+    private List<Long> pathOf(Execution execution) {
+        List<Long> agents = new ArrayList<>();
+        Execution current = execution;
+        while (current != null) {
+            agents.add(current.getAgentId());
+            Long parentId = current.getParentExecutionId();
+            current = parentId == null ? null : executionRepository.findById(parentId).orElse(null);
+        }
+        return agents.reversed();
     }
 
     /**
@@ -203,13 +285,7 @@ public class DelegationService {
             streamHub.system(rootId, "⎿ 변경 %d개를 커밋했습니다 (%s)"
                     .formatted(result.changedFiles().size(), result.commit()));
         }
-        switch (result.status()) {
-            case MERGED -> streamHub.system(rootId,
-                    "⎿ 메인 저장소(%s)로 병합했습니다".formatted(result.repositoryBranch()));
-            case MANUAL -> streamHub.system(rootId,
-                    "⎿ 자동 병합하지 못했습니다(%s). 브랜치 %s 를 직접 병합하세요".formatted(result.detail(), treeBranch));
-            case NONE -> streamHub.system(rootId, "⎿ 커밋·병합을 건너뜁니다: " + result.detail());
-        }
+        executionService.logMergeResult(rootId, result, treeBranch);
     }
 
     // ── 실행 하나를 돌린다(자식은 재귀로 각자 돈다) ────────────────────────────────
@@ -246,11 +322,20 @@ public class DelegationService {
     /** 판단하는 실행: 계약을 남기고, 위임하면 자식을 기다렸다가 결과를 붙여 다시 판단한다. */
     private ExecutionStatus runJudgement(Execution execution, ExecutionGuard.Target target, String request,
                                          int depth, List<Long> path, TreeState state) {
+        return runJudgement(execution, target, request, depth, path, state, "");
+    }
+
+    /**
+     * 판단 루프. `initialProgress` 는 "지난 단계 결과"의 첫 내용이다 — 자식 결과를 기다린 재판단뿐 아니라
+     * 사람의 답을 받아 이어서 도는 재개(`ask`)도 같은 자리에 질문·답을 넣는다.
+     */
+    private ExecutionStatus runJudgement(Execution execution, ExecutionGuard.Target target, String request,
+                                         int depth, List<Long> path, TreeState state, String initialProgress) {
         Long id = execution.getId();
         Project project = projectRepository.findById(state.projectId()).orElseThrow();
         List<GroupResponse> groups = groupService.findAll(state.projectId());
         String roster = rosterOf(groups);
-        String progress = "";
+        String progress = initialProgress == null ? "" : initialProgress;
         boolean retryUsed = false;
 
         for (int step = 0; step < maxSteps; step++) {
@@ -295,6 +380,18 @@ public class DelegationService {
                 return ExecutionStatus.SUCCEEDED;
             }
 
+            // 혼자 정할 수 없는 갈림길: 사람에게 묻고 멈춘다(실행은 끝나지 않는다 — 답이 오면 이어서 돈다).
+            if (decided.action() == ExecutionDecision.ASK) {
+                String question = decided.question().isBlank() ? request.strip() : decided.question().strip();
+                executionService.recordDecision(id, ExecutionDecision.ASK, null);
+                executionService.markWaitingInput(id, question);
+                streamHub.system(id, "⎿ 질문: " + question);
+                if (!decided.options().isEmpty()) {
+                    streamHub.system(id, "⎿ 보기: " + String.join(" / ", decided.options()));
+                }
+                return ExecutionStatus.WAITING_INPUT;
+            }
+
             List<DelegationContract.Order> orders = acceptableOrders(id, decided, groups, depth, path, state);
             if (orders.isEmpty()) {
                 executionService.markEscalated(id, "맡길 수 있는 대상을 찾지 못해 사람에게 넘깁니다");
@@ -305,6 +402,17 @@ public class DelegationService {
             streamHub.system(id, "⎿ %d건을 맡기고 결과를 기다립니다".formatted(orders.size()));
 
             List<DelegationPrompts.ChildOutcome> outcomes = runChildren(execution, orders, depth + 1, path, state, request);
+            // 하위 실행이 사람의 입력을 기다리면 이 실행도 멈춘다(트리는 끝나지 않는다). 질문은 위로 올려
+            // 화면(채팅)에서 한 번만 보이게 한다.
+            Optional<DelegationPrompts.ChildOutcome> waiting = outcomes.stream()
+                    .filter(DelegationPrompts.ChildOutcome::waiting)
+                    .findFirst();
+            if (waiting.isPresent()) {
+                String question = waiting.get().note().isBlank() ? request.strip() : waiting.get().note();
+                executionService.markWaitingInput(id, question);
+                streamHub.system(id, "⎿ 하위 실행이 사람의 입력을 기다립니다");
+                return ExecutionStatus.WAITING_INPUT;
+            }
             progress = DelegationPrompts.childResults(outcomes);
         }
 
@@ -349,7 +457,10 @@ public class DelegationService {
 
         boolean judgement = isJudgementAgent(childAgentId, state.projectId());
         ExecutionStatus status = runExecution(child, target, request, judgement, depth, append(path, childAgentId), state);
-        closeStream(child.getId(), status);
+        // 사람의 답을 기다리는 자식은 끝난 것이 아니다 — 스트림을 닫지 않는다(답이 오면 이어서 돈다).
+        if (status != ExecutionStatus.WAITING_INPUT) {
+            closeStream(child.getId(), status);
+        }
         return outcomeOf(childAgentId, status, child.getId());
     }
 
@@ -360,7 +471,10 @@ public class DelegationService {
         List<String> changedFiles = handoff != null && handoff.get("changedFiles") instanceof List<?> files
                 ? files.stream().map(String::valueOf).toList()
                 : List.of();
-        return new DelegationPrompts.ChildOutcome(agentName(agentId), agentId, statusLabel(status), summary, changedFiles, "");
+        boolean waiting = status == ExecutionStatus.WAITING_INPUT;
+        String note = waiting && execution.getQuestion() != null ? execution.getQuestion() : "";
+        return new DelegationPrompts.ChildOutcome(agentName(agentId), agentId, statusLabel(status), summary,
+                changedFiles, note, waiting);
     }
 
     // ── 가드 ─────────────────────────────────────────────────────────────────────
@@ -428,7 +542,7 @@ public class DelegationService {
                 .toList();
         Optional<Long> leaderId = ruleRouter.route(request, teams);
         leaderId.ifPresent(id -> streamHub.system(executionId, "⎿ 규칙으로 대상을 정했습니다(에이전트 id=%d)".formatted(id)));
-        return leaderId.map(id -> new DelegationContract(ExecutionDecision.DELEGATE,
+        return leaderId.map(id -> DelegationContract.delegate(
                 List.of(new DelegationContract.Order(id, request, "")), ""));
     }
 
@@ -530,6 +644,7 @@ public class DelegationService {
             case PENDING -> "대기";
             case RUNNING -> "실행 중";
             case WAITING_CHILD -> "하위 대기";
+            case WAITING_INPUT -> "입력 대기";
             case SUCCEEDED -> "완료";
             case FAILED -> "실패";
             case CANCELLED -> "취소";

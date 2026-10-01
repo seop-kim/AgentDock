@@ -7,9 +7,20 @@ import java.util.List;
  */
 public final class DelegationPrompts {
 
-    /** 자식 실행 하나의 결과(부모의 다음 판단에 넣는다). */
+    /**
+     * 자식 실행 하나의 결과(부모의 다음 판단에 넣는다).
+     *
+     * @param waiting 사람의 답을 기다리는 중인지(`ask`). 그러면 그 자식은 끝나지 않았고 부모도 함께 멈춘다
+     * @param note    기다리는 이유(질문 문장)나 실패 사유
+     */
     public record ChildOutcome(String agentName, Long agentId, String statusLabel, String summary,
-                               List<String> changedFiles, String note) {
+                              List<String> changedFiles, String note, boolean waiting) {
+
+        /** 끝나거나 실패한 결과(사람의 입력을 기다리지 않는 보통의 경우). */
+        public ChildOutcome(String agentName, Long agentId, String statusLabel, String summary,
+                            List<String> changedFiles, String note) {
+            this(agentName, agentId, statusLabel, summary, changedFiles, note, false);
+        }
     }
 
     public static String judgement(String projectName, String roster, String request, String progress, int maxTargets) {
@@ -31,6 +42,9 @@ public final class DelegationPrompts {
                 - 팀에 맡길 때는 targets 의 각 항목에 agentId(위 팀 목록의 id), prompt(그 에이전트에게 줄 지시),
                   expects(기대하는 결과)를 넣으세요. 한 번에 최대 %d건까지 맡길 수 있습니다.
                 - 맡긴 일의 결과는 다음 단계에서 당신에게 돌아옵니다. 같은 일을 같은 사람에게 두 번 맡기지 마세요.
+                - 혼자 정할 수 없는 갈림길(범위·취향·되돌리기 어려운 변경)은 추측하지 말고 사람에게 물으세요
+                  (action=ask + question, 필요하면 options). 답은 다음 단계에서 당신에게 돌아오므로 그 결정을 그대로 따르세요.
+                  이미 답을 받은 것을 다시 묻지 마세요.
                 - 출력은 아래 스키마를 정확히 따르는 JSON 하나만 내세요. 설명이나 코드블록 없이 JSON 만 출력하세요.
                 %s
                 """.formatted(maxTargets, ContractSchemas.JUDGEMENT));
@@ -64,6 +78,16 @@ public final class DelegationPrompts {
                 """.formatted(previous, ContractSchemas.JUDGEMENT);
     }
 
+    /**
+     * 사람의 답을 받아 이어서 도는 스텝의 "지난 단계 결과" 첫 줄. 계약 `ask` 로 물었던 질문과 사람의 답을
+     * 그대로 넣어, 같은 것을 다시 묻지 않고 그 결정을 따르게 한다.
+     */
+    public static String answerContext(String question, String answer) {
+        String asked = question == null || question.isBlank() ? "(질문 없음)" : question.strip();
+        String given = answer == null || answer.isBlank() ? "(답 없음)" : answer.strip();
+        return "- 사람에게 물은 질문: " + asked + "\n- 사람의 답: " + given + "\n";
+    }
+
     public static String childResults(List<ChildOutcome> outcomes) {
         StringBuilder progress = new StringBuilder();
         for (ChildOutcome outcome : outcomes) {
@@ -77,7 +101,7 @@ public final class DelegationPrompts {
                 progress.append(" · 변경 파일: ").append(String.join(", ", outcome.changedFiles()));
             }
             if (!outcome.note().isBlank()) {
-                progress.append(" · ").append(outcome.note());
+                progress.append(" · ").append(outcome.waiting() ? "질문: " + outcome.note() : outcome.note());
             }
             progress.append("\n");
         }
