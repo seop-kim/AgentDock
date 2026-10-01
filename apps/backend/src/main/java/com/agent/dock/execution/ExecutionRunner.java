@@ -22,7 +22,7 @@ public class ExecutionRunner {
     private final ExecutionStreamHub streamHub;
 
     public AgentExecutionResult runStep(Long executionId, Agent agent, String workspacePath, String systemPrompt,
-                                        String prompt, String contractSchema, BigDecimal maxBudgetUsd) throws Exception {
+                                        String prompt, BigDecimal maxBudgetUsd) throws Exception {
         AgentRuntime runtime = runtimeRegistry.resolve(agent.getProvider().getKey().name());
         return runtime.execute(new AgentExecutionRequest(
                 String.valueOf(executionId),
@@ -31,7 +31,6 @@ public class ExecutionRunner {
                 systemPrompt,
                 agent.getModel(),
                 agent.getMode(),
-                contractSchema,
                 maxBudgetUsd,
                 (content, stream) -> streamHub.line(executionId, LogStream.fromName(stream), content)));
     }

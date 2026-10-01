@@ -61,14 +61,20 @@ public class ProjectService {
         Workspace workspace = workspaceRepository.findById(workspaceId)
                 .orElseThrow(() -> new NotFoundException("Workspace %d not found".formatted(workspaceId)));
         boolean firstAssignment = workspaceLinkRepository.countByProjectId(projectId) == 0;
+        boolean makeDefault = firstAssignment || isDefault;
 
         ProjectWorkspace link = new ProjectWorkspace();
         link.setProject(repository.getReferenceById(projectId));
         link.setWorkspace(workspace);
-        link.setDefault(firstAssignment || isDefault);
-        ProjectWorkspace saved = workspaceLinkRepository.save(link);
-        if (saved.isDefault()) {
+        // 기본은 프로젝트당 하나만 허용된다(부분 유니크 인덱스).
+        // 새 기본을 넣을 때 기존 기본을 먼저 내려야 인덱스를 잠깐이라도 위반하지 않는다.
+        link.setDefault(false);
+        ProjectWorkspace saved = workspaceLinkRepository.saveAndFlush(link);
+        if (makeDefault) {
             clearOtherDefaults(projectId, saved.getId());
+            workspaceLinkRepository.flush();
+            saved.setDefault(true);
+            workspaceLinkRepository.save(saved);
         }
         return findOne(projectId);
     }

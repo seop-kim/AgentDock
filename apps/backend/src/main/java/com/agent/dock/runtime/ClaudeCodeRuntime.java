@@ -5,8 +5,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -36,6 +38,10 @@ public class ClaudeCodeRuntime implements AgentRuntime {
         String command = System.getenv().getOrDefault("CLAUDE_CODE_BIN", "claude");
         Process process = processService.spawn(request.executionId(), command, buildArgs(request), request.workspacePath());
 
+        // 프롬프트는 인자가 아니라 표준입력(UTF-8)으로 넘긴다.
+        // 길이 제한과 인용 문제를 피할 수 있고, 한글도 그대로 전달된다(2026-09-30 실측).
+        writePrompt(process, request.prompt());
+
         AtomicReference<ClaudeStreamJson.Outcome> outcome = new AtomicReference<>();
         CompletableFuture<Void> stdout = CompletableFuture.runAsync(
                 () -> pumpStdout(process.getInputStream(), request, outcome));
@@ -53,16 +59,28 @@ public class ClaudeCodeRuntime implements AgentRuntime {
                 parsed.isError() || exitCode != 0);
     }
 
+    private void writePrompt(Process process, String prompt) {
+        try (OutputStream stdin = process.getOutputStream()) {
+            stdin.write(prompt.getBytes(StandardCharsets.UTF_8));
+            stdin.flush();
+        } catch (IOException ignored) {
+            // 이미 닫혔으면 더 쓸 것이 없다.
+        }
+    }
+
     /**
-     * CLI 인자 조립.
+     * CLI 인자 조립. 프롬프트는 표준입력으로 넘기므로 `-p` 뒤에 값을 붙이지 않는다.
      * - systemPrompt 는 프롬프트 계층(마스터 → 그룹 → 에이전트)을 합친 값으로, 기본 시스템 프롬프트에 덧붙인다.
      * - mode 는 권한/실행 모드(--permission-mode), model 은 --model.
-     * - contractSchema 가 있으면 계약을 강제하고(--json-schema), maxBudgetUsd 는 스텝 예산 상한이다.
+     * - maxBudgetUsd 는 스텝 예산 상한(--max-budget-usd).
      * 값이 없으면 플래그를 붙이지 않고 CLI 기본값을 쓴다.
+     *
+     * 출력 계약(JSON)은 `--json-schema` 로 강제하지 않는다. Java 의 Windows 인자 인용 때문에
+     * 따옴표가 든 JSON 문자열이 CLI 에 온전히 전달되지 않는다(2026-09-30 실측: 파일 경로도 거부).
+     * 대신 프롬프트에 스키마를 적어 주고, 결과 텍스트에서 JSON 을 파싱한다(ClaudeStreamJson).
      */
     List<String> buildArgs(AgentExecutionRequest request) {
-        List<String> args = new ArrayList<>(
-                List.of("-p", request.prompt(), "--output-format", "stream-json", "--verbose"));
+        List<String> args = new ArrayList<>(List.of("-p", "--output-format", "stream-json", "--verbose"));
         if (request.systemPrompt() != null && !request.systemPrompt().isBlank()) {
             args.add("--append-system-prompt");
             args.add(request.systemPrompt());
@@ -74,10 +92,6 @@ public class ClaudeCodeRuntime implements AgentRuntime {
         if (request.mode() != null && !request.mode().isBlank()) {
             args.add("--permission-mode");
             args.add(request.mode());
-        }
-        if (request.contractSchema() != null && !request.contractSchema().isBlank()) {
-            args.add("--json-schema");
-            args.add(request.contractSchema());
         }
         if (request.maxBudgetUsd() != null) {
             args.add("--max-budget-usd");

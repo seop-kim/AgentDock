@@ -133,7 +133,7 @@ public class DelegationService {
         executionService.markRunning(execution.getId());
         Agent agent = requireAgent(target.agentId());
         AgentExecutionResult result = step(execution.getId(), agent, target,
-                DelegationPrompts.work(request, execution.getPrompt()), ContractSchemas.WORK);
+                DelegationPrompts.work(request, execution.getPrompt()));
         return applyStep(execution.getId(), result);
     }
 
@@ -151,29 +151,32 @@ public class DelegationService {
             executionService.markRunning(id);
             Agent agent = requireAgent(target.agentId());
             String prompt = DelegationPrompts.judgement(project.getName(), roster, request, progress, maxTargets);
-            AgentExecutionResult result = step(id, agent, target, prompt, ContractSchemas.JUDGEMENT);
+            AgentExecutionResult result = step(id, agent, target, prompt);
             ExecutionStatus status = applyStep(id, result);
             if (!result.succeeded()) {
                 streamHub.system(id, "⎿ 실행이 실패해 사람에게 넘깁니다");
                 return status;
             }
+            // 판단은 계속된다. 스텝 종료 상태가 화면에 '완료'로 보이지 않게 다시 실행 중으로 돌린다.
+            executionService.markRunning(id);
 
             Optional<DelegationContract> contract = DelegationContract.parse(result.structured());
             if (contract.isEmpty() && !retryUsed) {
                 retryUsed = true;
                 streamHub.system(id, "⎿ 계약을 읽지 못해 한 번 더 시도합니다");
-                result = step(id, agent, target, DelegationPrompts.repair(result.resultText()), ContractSchemas.JUDGEMENT);
+                result = step(id, agent, target, DelegationPrompts.repair(result.resultText()));
                 status = applyStep(id, result);
                 if (!result.succeeded()) {
                     return status;
                 }
+                executionService.markRunning(id);
                 contract = DelegationContract.parse(result.structured());
             }
             if (contract.isEmpty()) {
                 contract = ruleFallback(id, request, groups);
             }
             if (contract.isEmpty()) {
-                streamHub.system(id, "⎿ 계약을 읽지 못해 사람에게 넘깁니다");
+                executionService.markEscalated(id, "계약을 읽지 못해 사람에게 넘깁니다");
                 return ExecutionStatus.FAILED;
             }
 
@@ -181,13 +184,14 @@ public class DelegationService {
             if (decided.action() == ExecutionDecision.DONE) {
                 executionService.recordDecision(id, ExecutionDecision.DONE, null);
                 executionService.recordHandoff(id, Map.of("summary", decided.summary()));
+                executionService.markSucceeded(id);
                 streamHub.system(id, "⎿ 마무리합니다");
                 return ExecutionStatus.SUCCEEDED;
             }
 
             List<DelegationContract.Order> orders = acceptableOrders(id, decided, groups, depth, path, state);
             if (orders.isEmpty()) {
-                streamHub.system(id, "⎿ 맡길 수 있는 대상이 없어 사람에게 넘깁니다");
+                executionService.markEscalated(id, "맡길 수 있는 대상을 찾지 못해 사람에게 넘깁니다");
                 return ExecutionStatus.FAILED;
             }
             executionService.recordDecision(id, ExecutionDecision.DELEGATE, orders.get(0).agentId());
@@ -198,7 +202,7 @@ public class DelegationService {
             progress = DelegationPrompts.childResults(outcomes);
         }
 
-        streamHub.system(id, "⎿ 판단을 %d번 반복해 중단합니다".formatted(maxSteps));
+        executionService.markEscalated(id, "판단을 %d번 반복해 중단합니다".formatted(maxSteps));
         return ExecutionStatus.FAILED;
     }
 
@@ -431,8 +435,7 @@ public class DelegationService {
     }
 
     /** 동시 실행 수를 지키며 CLI 한 번을 돌린다. 슬롯은 CLI 가 도는 동안만 잡는다. */
-    private AgentExecutionResult step(Long executionId, Agent agent, ExecutionGuard.Target target,
-                                      String prompt, String schema) {
+    private AgentExecutionResult step(Long executionId, Agent agent, ExecutionGuard.Target target, String prompt) {
         try {
             cliSlots.acquire();
         } catch (InterruptedException ex) {
@@ -440,7 +443,7 @@ public class DelegationService {
             throw new IllegalStateException("실행이 중단되었습니다", ex);
         }
         try {
-            return runner.runStep(executionId, agent, target.workspacePath(), target.systemPrompt(), prompt, schema, maxCostUsd);
+            return runner.runStep(executionId, agent, target.workspacePath(), target.systemPrompt(), prompt, maxCostUsd);
         } catch (RuntimeException ex) {
             throw ex;
         } catch (Exception ex) {

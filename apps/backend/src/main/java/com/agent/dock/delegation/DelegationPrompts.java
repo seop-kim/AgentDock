@@ -24,13 +24,16 @@ public final class DelegationPrompts {
         prompt.append("""
 
                 [판단 규칙]
-                - 직접 처리하는 편이 낫거나 일이 끝났다면 action=done 과 summary 를 남기세요.
-                - 팀에 맡기는 편이 낫다면 action=delegate 와 targets 를 남기세요.
-                  targets 의 각 항목은 agentId(위 팀 목록의 id), prompt(그 에이전트에게 줄 지시), expects(기대하는 결과) 입니다.
-                - 한 번에 최대 %d건까지 맡길 수 있습니다. 같은 에이전트에게 같은 일을 두 번 맡기지 마세요.
-                - 맡긴 일의 결과는 다음 단계에서 당신에게 돌아옵니다. 지난 단계 결과를 보고 마무리하세요.
-                - 출력은 지정된 스키마의 JSON 하나만 내세요.
-                """.formatted(maxTargets));
+                - 지난 단계 결과가 있으면 그것을 모아 마무리하세요(action=done + summary).
+                - 요청이 특정 팀이나 팀원을 지목했으면 그대로 그 팀에 맡기세요(action=delegate). 지목은 사용자의 결정이므로 되돌리지 마세요.
+                - 지목이 없고 일이 작거나 이미 끝났다면 직접 처리하세요(action=done + summary).
+                - 팀원이 2명 이상이고 나눌 수 있는 일이면 한 사람에게 몰아주지 말고 나눠 맡기세요.
+                - 팀에 맡길 때는 targets 의 각 항목에 agentId(위 팀 목록의 id), prompt(그 에이전트에게 줄 지시),
+                  expects(기대하는 결과)를 넣으세요. 한 번에 최대 %d건까지 맡길 수 있습니다.
+                - 맡긴 일의 결과는 다음 단계에서 당신에게 돌아옵니다. 같은 일을 같은 사람에게 두 번 맡기지 마세요.
+                - 출력은 아래 스키마를 정확히 따르는 JSON 하나만 내세요. 설명이나 코드블록 없이 JSON 만 출력하세요.
+                %s
+                """.formatted(maxTargets, ContractSchemas.JUDGEMENT));
         return prompt.toString();
     }
 
@@ -42,8 +45,9 @@ public final class DelegationPrompts {
                 [당신이 맡은 일]
                 %s
 
-                일이 끝나면 summary(무엇을 했는지 한두 문장)와 changedFiles(바꾼 파일 경로)를 남기세요.
-                """.formatted(request, order);
+                일이 끝나면 아래 스키마를 정확히 따르는 JSON 하나만 내세요. 설명이나 코드블록 없이 JSON 만 출력하세요.
+                %s
+                """.formatted(request, order, ContractSchemas.WORK);
     }
 
     /** 계약을 못 읽었을 때 한 번 더 시도할 때 붙이는 문장. */
@@ -55,8 +59,9 @@ public final class DelegationPrompts {
                 [방금 출력]
                 %s
 
-                지정된 스키마의 JSON 하나만 다시 내세요. 설명이나 코드 블록 없이 JSON 만 출력하세요.
-                """.formatted(previous);
+                [다시] 아래 스키마를 정확히 따르는 JSON 하나만 내세요. 설명이나 코드블록 없이 JSON 만 출력하세요.
+                %s
+                """.formatted(previous, ContractSchemas.JUDGEMENT);
     }
 
     public static String childResults(List<ChildOutcome> outcomes) {

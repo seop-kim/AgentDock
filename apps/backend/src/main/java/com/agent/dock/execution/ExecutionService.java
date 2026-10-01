@@ -117,6 +117,26 @@ public class ExecutionService {
             if (execution.getStartedAt() == null) {
                 execution.setStartedAt(Instant.now());
             }
+            // 판단이 여러 스텝으로 이어지는 실행은 한 스텝이 끝나도 아직 끝난 것이 아니다.
+            execution.setFinishedAt(null);
+        });
+    }
+
+    /** 판단은 끝났지만 결과를 사람에게 넘겨야 하는 상태(계약 실패·맡길 대상 없음 등). */
+    public void markEscalated(Long executionId, String reason) {
+        update(executionId, execution -> {
+            execution.setStatus(ExecutionStatus.FAILED);
+            execution.setFinishedAt(Instant.now());
+            execution.setErrorMessage(reason);
+        });
+        streamHub.system(executionId, "⎿ " + reason);
+    }
+
+    /** 판단을 마쳤다(성공). 여러 스텝을 돌린 실행의 마지막에 부른다. */
+    public void markSucceeded(Long executionId) {
+        update(executionId, execution -> {
+            execution.setStatus(ExecutionStatus.SUCCEEDED);
+            execution.setFinishedAt(Instant.now());
         });
     }
 
@@ -202,7 +222,7 @@ public class ExecutionService {
             markRunning(executionId);
             Agent agent = agentRepository.findByIdWithRelations(target.agentId()).orElseThrow();
             AgentExecutionResult result = runner.runStep(executionId, agent, target.workspacePath(),
-                    target.systemPrompt(), prompt, null, null);
+                    target.systemPrompt(), prompt, null);
             status = applyResult(executionId, result);
             exitCode = result.exitCode();
             publishFinished(executionId, taskId, status);

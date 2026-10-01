@@ -95,6 +95,19 @@ class ClaudeStreamJsonTest {
     }
 
     @Test
+    void parsesJsonObjectWrappedInCodeFenceOrProse() {
+        String fenced = """
+                {"type":"result","is_error":false,"result":"```json\\n{\\"action\\":\\"done\\",\\"summary\\":\\"ok\\"}\\n```",
+                 "usage":{"input_tokens":1}}""";
+        String prose = """
+                {"type":"result","is_error":false,"result":"결과입니다: {\\"action\\":\\"done\\",\\"summary\\":\\"ok\\"} 이상입니다",
+                 "usage":{"input_tokens":1}}""";
+
+        assertThat(ClaudeStreamJson.outcome(fenced).orElseThrow().structured()).containsEntry("action", "done");
+        assertThat(ClaudeStreamJson.outcome(prose).orElseThrow().structured()).containsEntry("action", "done");
+    }
+
+    @Test
     void plainTextResultHasNoStructuredPayload() {
         String line = """
                 {"type":"result","is_error":false,"result":"그냥 텍스트","usage":{"input_tokens":1}}""";

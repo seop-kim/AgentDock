@@ -158,17 +158,31 @@ public final class ClaudeStreamJson {
         return single.length() <= SUMMARY_LIMIT ? single : single.substring(0, SUMMARY_LIMIT) + "…";
     }
 
-    /** structured_output 이 있으면 그걸, 없으면 result 문자열을 JSON 으로 파싱해 쓴다. */
+    /** structured_output 이 있으면 그걸, 없으면 결과 텍스트에서 JSON 객체 하나를 찾아 쓴다. */
     private static Map<String, Object> structuredOf(JsonNode event, String resultText) {
         JsonNode structured = event.path("structured_output");
         if (structured.isObject()) {
             return toMap(structured);
         }
-        if (resultText.startsWith("{")) {
-            Optional<JsonNode> parsed = parse(resultText);
+        return jsonObjectIn(resultText);
+    }
+
+    /**
+     * 결과 텍스트에서 JSON 객체 하나를 찾는다. 모델이 코드블록(```json … ```)이나 앞뒤 설명을
+     * 섞어 내도 동작하도록 첫 '{' 부터 마지막 '}' 까지를 파싱하고, 실패하면 끝을 하나씩 줄여 다시 시도한다.
+     */
+    private static Map<String, Object> jsonObjectIn(String text) {
+        if (text == null) {
+            return null;
+        }
+        int start = text.indexOf('{');
+        int end = text.lastIndexOf('}');
+        while (start >= 0 && end > start) {
+            Optional<JsonNode> parsed = parse(text.substring(start, end + 1));
             if (parsed.isPresent() && parsed.get().isObject()) {
                 return toMap(parsed.get());
             }
+            end = text.lastIndexOf('}', end - 1);
         }
         return null;
     }
