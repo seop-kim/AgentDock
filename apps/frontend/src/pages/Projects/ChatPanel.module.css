@@ -186,15 +186,19 @@
   box-shadow: 0 0 0 3px var(--color-code-bg);
 }
 
-.form input {
+.form textarea {
   flex: 1;
   min-width: 0;
   padding: 7px 4px;
   border: none;
   background: transparent;
+  resize: none;
+  line-height: 1.5;
+  max-height: 120px;
+  overflow-y: auto;
 }
 
-.form input:focus-visible {
+.form textarea:focus-visible {
   border-color: transparent;
   box-shadow: none;
 }
@@ -226,4 +230,138 @@
   border-radius: var(--radius);
   color: var(--color-primary);
   font-size: 12px;
+}
+
+/* AI 답변을 마크다운으로 그리는 영역(코드블록·리스트·강조 등). 좁은 말풍선 안에서도 넘치지 않게 한다. */
+.markdown {
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+/* 첫/마지막 블록의 바깥 여백은 없애 말풍선 여백과 겹치지 않게 한다. */
+.markdown > :first-child {
+  margin-top: 0;
+}
+
+.markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown p {
+  margin: 0 0 8px;
+}
+
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  margin: 12px 0 6px;
+  line-height: 1.3;
+}
+
+.markdown h1 {
+  font-size: 1.25rem;
+}
+
+.markdown h2 {
+  font-size: 1.15rem;
+}
+
+.markdown h3 {
+  font-size: 1.05rem;
+}
+
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  font-size: 1rem;
+}
+
+.markdown ul,
+.markdown ol {
+  margin: 0 0 8px;
+  padding-left: 1.4em;
+}
+
+.markdown li {
+  margin: 2px 0;
+}
+
+.markdown li > ul,
+.markdown li > ol {
+  margin: 4px 0 0;
+}
+
+.markdown a {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+/* 내가 보낸 말풍선(강조 배경)에서는 링크도 글자색을 따라간다. */
+.user .markdown a {
+  color: inherit;
+}
+
+.markdown strong {
+  font-weight: 700;
+}
+
+.markdown em {
+  font-style: italic;
+}
+
+.markdown code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--color-code-bg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+}
+
+.markdown pre {
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-code-bg);
+  overflow-x: auto;
+}
+
+.markdown pre code {
+  padding: 0;
+  background: none;
+  font-size: 0.9em;
+  white-space: pre;
+}
+
+.markdown blockquote {
+  margin: 0 0 8px;
+  padding: 2px 12px;
+  border-left: 3px solid var(--color-border-strong);
+  color: var(--color-muted);
+}
+
+.markdown hr {
+  margin: 12px 0;
+  border: none;
+  border-top: 1px solid var(--color-border);
+}
+
+.markdown table {
+  margin: 0 0 8px;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+
+.markdown th,
+.markdown td {
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.markdown th {
+  background: var(--color-code-bg);
 }

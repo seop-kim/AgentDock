@@ -1,4 +1,6 @@
-import { DragEvent, FormEvent, useEffect, useRef, useState } from 'react';
+import { DragEvent, FormEvent, KeyboardEvent, useEffect, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ClipIcon, FileIcon } from '../../components/icons';
 import { unavailableReason } from '../../lib/agentAvailability';
 import { ATTACHMENT_FOLDER, hasAttachment } from '../../lib/attachments';
@@ -16,6 +18,8 @@ const fromValue = (value: string): ChatTarget | null => {
   const [kind, id] = value.split(':');
   return kind === 'agent' || kind === 'group' ? { kind, id: Number(id) } : null;
 };
+
+const MAX_INPUT_HEIGHT = 120;
 
 /**
  * 구성도 아래에 떠 있는 채팅 창. 기본 대상은 프로젝트 **마스터 에이전트**이고, 원하면 그룹(리더가 받음)이나
@@ -51,6 +55,8 @@ export default function ChatPanel({
   /** 파일을 끌어오는 중인지(놓을 곳을 보여 준다). */
   const [dragging, setDragging] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
+  /** 입력 textarea — 줄이 늘면 높이를 맞춘다. */
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const projectAgents = agents.filter((a) => a.projectId === project.id);
   const projectGroups = groups.filter((g) => g.projectId === project.id);
@@ -60,6 +66,14 @@ export default function ChatPanel({
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
   }, [messages.length, messages.filter((m) => m.status === 'pending').length, open]);
+
+  /** 입력이 길어지면 textarea 높이를 내용에 맞춘다(최대 MAX_INPUT_HEIGHT). */
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    input.style.height = 'auto';
+    input.style.height = `${Math.min(input.scrollHeight, MAX_INPUT_HEIGHT)}px`;
+  }, [text, open]);
 
   const receiverHint = (() => {
     if (!target) return '명령을 받을 에이전트나 그룹을 고르세요.';
@@ -108,6 +122,14 @@ export default function ChatPanel({
     // 자식 요소로 옮겨 다닐 때도 dragleave 가 오므로, 창 밖으로 나갈 때만 끈다.
     if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
     setDragging(false);
+  };
+
+  /** Enter 단독이면 전송, Shift+Enter 는 줄바꿈으로 둔다. */
+  const onInputKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      e.currentTarget.form?.requestSubmit();
+    }
   };
 
   const onSubmit = (e: FormEvent) => {
@@ -197,7 +219,13 @@ export default function ChatPanel({
                   {m.targetLabel && <span> → {m.targetLabel}</span>}
                 </div>
                 <div className={m.status === 'error' ? styles.error : undefined}>
-                  {m.status === 'pending' ? <span className={styles.pending}>작업 중…</span> : m.text}
+                  {m.status === 'pending' ? (
+                    <span className={styles.pending}>작업 중…</span>
+                  ) : (
+                    <div className={styles.markdown}>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.text}</ReactMarkdown>
+                    </div>
+                  )}
                 </div>
                 {m.attachments.length > 0 && (
                   <ul className={attach.chips}>
@@ -267,10 +295,13 @@ export default function ChatPanel({
         >
           <ClipIcon size={18} />
         </button>
-        <input
+        <textarea
+          ref={inputRef}
+          rows={1}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={target ? '명령을 입력하고 Enter' : '먼저 대상을 선택하세요'}
+          onKeyDown={onInputKeyDown}
+          placeholder={target ? '명령을 입력하고 Enter (Shift+Enter 로 줄바꿈)' : '먼저 대상을 선택하세요'}
           aria-label="명령 입력"
         />
         <button type="submit" disabled={!target || (text.trim() === '' && attachments.length === 0)}>
