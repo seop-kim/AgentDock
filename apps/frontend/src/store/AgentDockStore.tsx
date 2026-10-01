@@ -262,9 +262,11 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
           }
         });
 
-        // 채팅은 도착 순서대로 쌓는다(명령 하나 = 내 말풍선 + 그 응답).
+        // 채팅은 도착 순서대로 쌓는다(명령 하나 = 내 말풍선 + 그 응답). 위가 옛날, 아래가 최신.
         // 예전에는 메시지를 id 로 정렬했는데, 응답 id 를 크게 잡아 두는 바람에 내 말풍선이 전부 위로 몰렸다.
-        for (const task of projectTasks) {
+        // 백엔드는 태스크를 최신순(id desc)으로 주므로 화면 순서에 맞춰 오름차순으로 뒤집는다.
+        const orderedTasks = [...projectTasks].sort((left, right) => left.id - right.id);
+        for (const task of orderedTasks) {
           taskList.push({
             id: task.id,
             projectId: project.id,
