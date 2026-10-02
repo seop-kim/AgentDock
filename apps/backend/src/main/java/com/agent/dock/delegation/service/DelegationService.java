@@ -251,6 +251,9 @@ public class DelegationService {
         executionService.recordTreeResult(rootId, result.status(), result.commit(), result.detail(),
                 result.changedFiles());
         logTreeResult(rootId, result, target.worktreeBranch());
+        // 트리가 끝나면 그 그룹의 공유 노트에 한 줄 남긴다 —
+        // 같은 팀의 다음 실행이 이 맥락을 이어받는다(런타임이 달라도 공유된다).
+        groupService.appendSharedNote(fresh.getAgentId(), "#%d %s".formatted(rootId, message));
     }
 
     /** 커밋 제목: 루트 실행의 최종 요약(계약 done.summary / result_text)을 다듬어 쓴다. 없으면 `실행 #<id> 작업 결과`. */
