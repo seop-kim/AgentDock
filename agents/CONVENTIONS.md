@@ -108,6 +108,17 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
 - **CLI 권한 모드 주의(실측)**: 에이전트의 `mode`(=`--permission-mode`)가 파일 쓰기를 막는 기본값이면 무인 실행에서 CLI 가 쓰기를 거부해 **트리에 변경이 남지 않고 `NONE` 으로 끝난다**(실제로 확인). 파일을 고쳐야 하는 에이전트는 `acceptEdits` 같은 쓰기 허용 모드를 지정한다(모드는 DB 데이터다).
 - **화면**: 터미널 창 머리말에 브랜치와 커밋 sha, 실행 트리 창의 각 행에 브랜치가 보이고, 트리 **루트 행**에는 병합 상태 배지(병합됨 / 수동 병합 필요)·커밋 sha·변경 파일 목록(`A path` 등)과 정리 버튼이 있다. 채팅 **실행 요약 카드**(`ExecutionSummaryCard`)에도 같은 결과 한 줄이 붙는다(`apps/frontend`, 기존 토큰·CSS 모듈 클래스만 쓴다).
 
+### 위임 프롬프트는 파일로 넘긴다
+
+지시가 길어질수록 CLI 입력이 커져 토큰이 낭비되고 기록이 읽기 어려워진다. 그래서 **자식 실행의 전체 지시와 부모의 재판단 문맥은 프롬프트에 인라인하지 않고 마크다운 파일로 넘긴다**(`delegation/util/DelegationPrompts` 가 문자열을, `delegation/service/DelegationService` 가 파일 쓰기를 맡는다).
+
+- **지시 파일**: 자식 실행을 만들 때 전체 지시를 마크다운 한 장(절: **원래 요청 / 맡은 일 / 기대 결과 / 지난 결과 / 첨부 파일**)으로 만들어 **작업 디렉터리(cwd — worktree 가 있으면 그 안, 없으면 워크스페이스) 기준** `<cwd>/.agentdock/prompts/<자식실행id>.md` 에 UTF-8 로 쓴다(`java.nio.file`, 셸 미경유). 빈 절(기대 결과·지난 결과·첨부)은 넣지 않는다.
+- **자식 프롬프트(짧다)**: 파일을 가리키는 1~3줄만 넣는다 — `지시 파일: .agentdock/prompts/42.md — 이 파일을 먼저 읽고 그 내용대로 작업하세요. 기대 결과: <expects>`(expects 가 없으면 그 부분을 뺀다). 위임받은 판단 자식도 같은 지시 파일 참조를 지시로 받고, **팀 로스터·판단 규칙·계약 스키마는 짧으므로 그대로 인라인**한다.
+- **재판단 문맥**: 부모가 자식 결과를 붙여 다시 판단할 때 그 문맥(자식 결과·사람의 답)은 `<cwd>/.agentdock/prompts/<실행id>-step<N>.md` 로 쓰고 스텝 프롬프트에는 참조 한 줄만 넣는다.
+- **폴백 — 실패가 실행을 막지 않는다**: 파일을 쓰지 못하면(권한·경로 오류) 사유를 남기고 예전처럼 지시·문맥을 프롬프트에 인라인한다.
+- **로그(SYSTEM)**: 파일마다 `⎿ 지시 파일: .agentdock/prompts/42.md (1,240자)`, 스텝마다 실제로 보낸 프롬프트 크기를 `⎿ 프롬프트 240자`.
+- **gitignore**: 이 파일들은 워크트리 안에 생긴다 — 저장소 루트 `.gitignore` 에 **`.agentdock/`** 을 둬 프롬프트·첨부가 작업 트리를 더럽히거나 자동 병합을 막지 않게 한다.
+
 ### CLI 출력을 다루는 법 (실측으로 확인한 사실 — 추측 금지)
 
 - `--output-format stream-json`(+`--verbose`)으로 실행하고 **JSONL 한 줄씩** 받아 로그로 바꾼다(`runtime/ClaudeStreamJson`). `assistant` 이벤트의 content 블록(thinking/text/tool_use)이 로그 줄이 되고, 마지막 `result` 이벤트에서 결과 텍스트와 계측값을 꺼낸다(`usage`·`total_cost_usd`·`duration_ms`·`num_turns`·`session_id`·`is_error`).

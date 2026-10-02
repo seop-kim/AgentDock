@@ -142,3 +142,28 @@ npm run build --workspace=apps/frontend      # tsc --noEmit && vite build (커�
 - **실행 중 남은 프로세스 없음**: 검증용 8081/3031 서버는 종료했고, 사용자의 8080 서버는 건드리지 않았다.
 - **다음 후보**: (1) 워크트리·브랜치 자동 정리 옵션(병합 성공 후), (2) `MANUAL` 인 트리를 화면에서 바로 병합하도록 돕는 버튼, (3) 저장소에 추적되지 않는 파일이 있어도 병합할지 정하는 정책(현재는 무조건 `MANUAL`).
 
+## 10. 위임 프롬프트를 파일로 넘긴다 (2026-10-02 추가)
+
+마스터·리더가 위임할 때 **자식의 전체 지시(원래 요청·맡은 일·기대 결과·지난 결과·첨부 경로)를 프롬프트에 인라인**하던 것을 **작업 디렉터리(cwd) 안 `.agentdock/prompts/<자식 id>.md` 파일로 옮기고 프롬프트에는 짧은 참조만** 남긴다. 프롬프트가 길어질수록 CLI 입력이 커져 토큰이 낭비되고 기록이 읽기 어려워지기 때문이다. 규칙은 `agents/CONVENTIONS.md` 의 "위임 프롬프트는 파일로 넘긴다" 절에 있다.
+
+- **새 코드**: `delegation/util/DelegationPrompts`(`childInstruction`/`instructionReference`/`inlineInstruction`/`stepContextReference`/`childPromptFileName`/`stepPromptFileName`/`promptFileReference` — 순수 문자열), `delegation/service/DelegationService`(`writePromptFileLogged` — cwd 기준 `.agentdock/prompts` 에 UTF-8 로 쓰고 SYSTEM 로그, `stepContext`, `attachmentsIn`, `executionInstruction`). `AttachmentService.ATTACHMENT_PROMPT_HEADER` 상수 추가(위임이 `[첨부 파일]` 절을 떼어 내므로 머리말을 한 곳에서 정의). 스키마 변경 없음.
+- **동작**: 자식 행을 만든 뒤(**id 가 필요해**) 지시 파일을 쓰고, `child.prompt` 를 `지시 파일: .agentdock/prompts/<id>.md — 이 파일을 먼저 읽고 그 내용대로 작업하세요. 기대 결과: <expects>` 로 저장한다. 위임받은 **판단 자식**도 같은 참조를 지시로 받고(팀 로스터·판단 규칙·계약 스키마는 짧아 인라인 유지), **루트**는 원래 요청을 그대로 쓴다. 부모의 재판단 문맥(자식 결과·사람의 답)은 `<실행id>-step<N>.md` 로 넘긴다.
+- **폴백**: 파일을 못 쓰면 사유를 SYSTEM 로그로 남기고 예전처럼 지시·문맥을 프롬프트에 인라인한다(실행을 막지 않는다).
+- **로그(SYSTEM)**: 파일마다 `⎿ 지시 파일: <경로> (N자)`, 스텝마다 `⎿ 프롬프트 <N>자`(CLI 에 실제로 넘긴 크기). 새 로깅 프레임워크는 넣지 않았다.
+- **`.gitignore`**: 이 파일들이 워크트리 안에 생겨 트리를 더럽히므로 저장소 루트 `.gitignore` 에 `.agentdock/` 을 추가했다.
+
+**검증(실측)**
+
+- `.\gradlew.bat test` **182건 통과, 0 실패**. 새 테스트: `DelegationServiceTest`(파일이 실제로 쓰이고 상대 경로 반환·스텝 파일 이름·쓰기 실패 폴백), `DelegationPromptsTest` 확장(지시 파일 절·참조 한 줄·이름 규칙·인라인 폴백). `DelegationAnswerResumeTest` 는 답 문맥이 인라인 대신 `<실행id>-step0.md` 로 넘어가도록 고쳤다.
+- 8081(백엔드)로 프로젝트 6(마스터 13)에 명령을 보내 실제 확인(task 39 / 루트 실행 98, 자식 99·100). 워크트리는 `C:\Users\chey.kim\Documents\GitHub\AgentDock-wt\98`.
+  - **지시 파일**: `...\AgentDock-wt\98\.agentdock\prompts\` 에 `98-step1.md`(52B)·`98-step2.md`(154B)·`99.md`(354B)·`100.md`(447B) 생성. `99.md` 는 `# 위임 지시` / `## 원래 요청` / `## 맡은 일` / `## 기대 결과` 절을 담았다.
+  - **DB 프롬프트(짧아짐)**: 98(루트, 원래 요청)=49자, **99=79자, 100=88자** — 자식 프롬프트가 `지시 파일: .agentdock/prompts/99.md — … 기대 결과: 위임 수신 확인 한 줄` 만 남았다(예전에는 원래 요청·맡은 일·기대 결과·스키마가 다 인라인됐다).
+  - **SYSTEM 로그**: 98 → `⎿ 지시 파일: .agentdock/prompts/98-step1.md (30자)`, `⎿ 지시 파일: .agentdock/prompts/98-step2.md (72자)`; 99 → `⎿ 지시 파일: .agentdock/prompts/99.md (162자)`, `⎿ 프롬프트 1,673자`; 100 → `⎿ 지시 파일: .agentdock/prompts/100.md (199자)`.
+  - 루트 98 은 `SUCCEEDED`, 자식 99·100 은 `FAILED`(모델이 리더에게 순환 위임을 시도해 거부됨 — 이번 변경과 무관). 루트 `merge_status=NONE`(변경 없음) 이라 **메인 저장소에 병합 커밋이 생기지 않았다**.
+  - 정리: 워크트리 `AgentDock-wt\98` + 브랜치 `agentdock/exec-98` 삭제, 검증 행(execution 98~100, 로그 49줄, task 39) 삭제. 사용자의 다른 워크트리(51·52·68·69·74·87)와 대기 중 실행(48·65·66)은 건드리지 않았고, 8081 서버는 종료했다.
+
+**남은 한계(설계대로)**
+
+- 루트 실행의 지시(사용자 명령)는 짧으므로 인라인을 유지한다 — 파일로 옮기는 대상은 **자식 지시와 재판단 문맥**뿐이다.
+- 지시 파일은 워크트리에 남는다(정리는 사람이 `DELETE /executions/{id}/worktree`). `.agentdock/` 이 `.gitignore` 에 있어 병합을 막지 않는다.
+
