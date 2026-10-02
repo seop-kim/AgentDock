@@ -7,7 +7,8 @@
  */
 .dock {
   position: absolute;
-  bottom: calc(var(--spacing-md) + 46px);
+  /* 확대/축소 도구(51px) + 사이(8px) 만큼 띄운다 — 도구 상자 위에 겹쳐 보이지 않게. */
+  bottom: calc(var(--spacing-md) + 51px + 8px);
   left: calc((100% + var(--inset-left, 0px) - var(--inset-right, 0px)) / 2);
   transform: translateX(-50%);
   display: flex;
