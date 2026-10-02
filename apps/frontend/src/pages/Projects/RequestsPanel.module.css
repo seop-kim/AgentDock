@@ -40,31 +40,29 @@
   background: transparent;
 }
 
-/* 화면 중앙에서 위로 올라온다. 뒤 배경은 그대로 보인다. */
+/* 화면 하단에 붙어 있는 긴 패널이 아래에서 위로 올라온다(뒤 배경은 그대로 보인다). */
 .sheet {
   composes: glassStrong from '../../styles/glass.module.css';
   position: fixed;
-  top: 50%;
+  bottom: 0;
   left: 50%;
-  width: min(880px, calc(100vw - 32px));
-  max-height: min(74vh, 560px);
+  width: min(1000px, calc(100vw - 32px));
+  height: min(78vh, 680px);
   display: flex;
   flex-direction: column;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   box-shadow: var(--shadow-float), var(--glass-highlight);
-  /* 애니메이션이 끝난 뒤에도 중앙에 머물도록 기준 위치를 잡아 둔다. */
-  transform: translate(-50%, -50%);
-  animation: rise 170ms ease-out;
+  /* 애니메이션이 끝난 뒤에도 제자리에 머물도록 기준 위치를 잡아 둔다. */
+  transform: translateX(-50%);
+  animation: rise 190ms ease-out;
 }
 
 @keyframes rise {
   from {
-    transform: translate(-50%, calc(-50% + 28px));
-    opacity: 0;
+    transform: translate(-50%, 100%);
   }
   to {
-    transform: translate(-50%, -50%);
-    opacity: 1;
+    transform: translate(-50%, 0);
   }
 }
 
@@ -82,6 +80,7 @@
 }
 
 .body {
+  flex: 1 1 auto;
   display: flex;
   gap: var(--spacing-sm);
   min-height: 0;
