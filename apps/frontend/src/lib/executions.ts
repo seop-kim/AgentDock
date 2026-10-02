@@ -21,7 +21,8 @@ export const STATUS_TONE: Record<ExecutionStatus, 'wait' | 'active' | 'done' | '
   WAITING_INPUT: 'wait',
   DONE: 'done',
   FAILED: 'failed',
-  CANCELLED: 'wait',
+  /* 취소는 끝난 것이다 — 대기(노랑)로 보이면 아직 돌고 있는 것처럼 읽힌다. */
+  CANCELLED: 'done',
 };
 
 /** 트리 결과 배지의 한국어 이름(실행 트리 창 루트 행·채팅 요약 카드·터미널 머리말이 함께 쓴다). */
