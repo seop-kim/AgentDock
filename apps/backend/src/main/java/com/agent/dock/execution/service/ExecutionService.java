@@ -408,9 +408,71 @@ public class ExecutionService {
     private void update(Long executionId, Consumer<Execution> change) {
         Execution execution = executionRepository.findById(executionId)
                 .orElseThrow(() -> new NotFoundException("Execution %d not found".formatted(executionId)));
+        ExecutionStatus before = execution.getStatus();
+        String beforeSignature = signatureOf(execution);
         change.accept(execution);
         executionRepository.save(execution);
+        // 상태가 그대로여도 병합·커밋·질문처럼 사람이 궁금해할 변화가 있으면 남긴다(그 밖의 잔변경은 DEBUG).
+        if (!beforeSignature.equals(signatureOf(execution))) {
+            logTransition(execution, before);
+        } else {
+            log.debug("[execution] {} 갱신 (상태 {} 그대로)", execution.getId(), execution.getStatus());
+        }
         changeEvents.executionChanged(projectIdOf(execution), executionId, execution.getTaskId());
+    }
+
+    /**
+     * 한 줄 로그를 남길 만한 변화가 있었는지 판단하는 서명(상태·병합·커밋·워크트리·질문).
+     * 지표(토큰·비용)와 결과 본문은 상태 변화에 함께 실리므로 여기 넣지 않는다.
+     */
+    private static String signatureOf(Execution execution) {
+        return "%s|%s|%s|%s|%s".formatted(
+                execution.getStatus(),
+                execution.getMergeStatus(),
+                execution.getResultCommit(),
+                execution.getWorktreeBranch(),
+                execution.getQuestion() == null ? "" : execution.getQuestion());
+    }
+
+    /**
+     * 실행 하나의 상태 전이를 한 줄로 남긴다(콘솔과 파일에 함께). 지표는 **있는 것만** 붙인다 —
+     * 없는 값을 0 이나 `-` 로 지어내지 않는다.
+     */
+    private void logTransition(Execution execution, ExecutionStatus before) {
+        StringBuilder line = new StringBuilder("execution=%d agent=%s task=%s %s->%s".formatted(
+                execution.getId(),
+                execution.getAgentId() == null ? "-" : execution.getAgentId(),
+                execution.getTaskId() == null ? "-" : execution.getTaskId(),
+                before == null ? "-" : before,
+                execution.getStatus()));
+        if (execution.getExitCode() != null) {
+            line.append(" exit=").append(execution.getExitCode());
+        }
+        if (execution.getDurationMs() != null) {
+            line.append(" ms=").append(execution.getDurationMs());
+        }
+        if (execution.getInputTokens() != null) {
+            line.append(" in=").append(execution.getInputTokens());
+        }
+        if (execution.getOutputTokens() != null) {
+            line.append(" out=").append(execution.getOutputTokens());
+        }
+        if (execution.getCostUsd() != null) {
+            line.append(" cost=").append(execution.getCostUsd());
+        }
+        if (execution.getErrorMessage() != null) {
+            line.append(" error=").append(execution.getErrorMessage());
+        }
+        if (execution.getMergeStatus() != null) {
+            line.append(" merge=").append(execution.getMergeStatus());
+        }
+        if (execution.getResultCommit() != null) {
+            line.append(" commit=").append(execution.getResultCommit());
+        }
+        if (execution.getWorktreeBranch() != null) {
+            line.append(" wt=").append(execution.getWorktreeBranch());
+        }
+        log.info("[execution] {}", line);
     }
 
     /** 실행 에이전트의 프로젝트 id(화면이 어느 프로젝트를 다시 읽을지 정하는 데 쓴다). 모르면 null. */
