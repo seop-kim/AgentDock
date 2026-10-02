@@ -36,3 +36,6 @@ Thumbs.db
 # misc
 .turbo/
 *.pid
+
+# agentdock runtime (위임 지시 파일·첨부) — 워크트리 병합이 작업 트리를 더럽히지 않게 한다
+.agentdock/

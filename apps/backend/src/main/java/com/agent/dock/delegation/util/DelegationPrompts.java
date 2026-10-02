@@ -3,9 +3,24 @@ package com.agent.dock.delegation.util;
 import java.util.List;
 
 /**
- * 위임 실행에 쓰는 프롬프트. 계약 형식과 팀 로스터를 매번 함께 넣어 모델이 대상을 고르게 한다.
+ * 위임 실행에 쓰는 프롬프트와 지시 파일. 계약 형식과 팀 로스터를 매번 함께 넣어 모델이 대상을 고르게 한다.
+ *
+ * <p><b>긴 내용은 프롬프트에 인라인하지 않고 파일로 넘긴다.</b> 자식 실행의 전체 지시(원래 요청·맡은 일·기대 결과·
+ * 지난 결과·첨부 경로)는 {@link #childInstruction} 으로 마크다운 한 장을 만들어 작업 디렉터리
+ * `&lt;cwd&gt;/.agentdock/prompts/&lt;실행 id&gt;.md` 에 쓰고, 프롬프트에는 {@link #instructionReference} 로 그 파일을
+ * 가리키는 짧은 한 줄만 넣는다. 부모의 재판단 문맥("지난 단계 결과")도 {@link #stepContextReference} 로 파일을 가리킨다.
+ * (파일 쓰기·경로 조립은 {@code DelegationService} 가 맡는다 — 여기는 순수 문자열만 만든다.)
  */
 public final class DelegationPrompts {
+
+    /** 지시·문맥 파일을 두는 폴더(작업 디렉터리 기준 상대 경로). cwd 밖으로 나가지 않는다. */
+    public static final String PROMPT_FOLDER = ".agentdock/prompts";
+
+    /** 자식 실행 프롬프트가 지시 파일임을 알리는 접두. */
+    public static final String FILE_REFERENCE_PREFIX = "지시 파일: ";
+
+    /** 지시 파일을 읽으라고 시키는 한 줄. */
+    private static final String READ_INSTRUCTION = "이 파일을 먼저 읽고 그 내용대로 작업하세요.";
 
     /**
      * 자식 실행 하나의 결과(부모의 다음 판단에 넣는다).
@@ -24,13 +39,89 @@ public final class DelegationPrompts {
         }
     }
 
-    public static String judgement(String projectName, String roster, String request, String progress, int maxTargets) {
+    // ── 지시·문맥 파일 (긴 내용을 프롬프트 밖으로 옮긴다) ───────────────────────────────
+
+    /** 자식 실행의 지시 파일 이름(자식 실행 id). */
+    public static String childPromptFileName(Long childExecutionId) {
+        return childExecutionId + ".md";
+    }
+
+    /** 부모의 재판단 문맥 파일 이름(`&lt;실행 id&gt;-step&lt;N&gt;.md`). */
+    public static String stepPromptFileName(Long executionId, int step) {
+        return executionId + "-step" + step + ".md";
+    }
+
+    /** cwd 기준 상대 경로(예: `.agentdock/prompts/42.md`). */
+    public static String promptFileReference(String fileName) {
+        return PROMPT_FOLDER + "/" + fileName;
+    }
+
+    /**
+     * 자식 실행의 "전체 지시"를 마크다운 한 장으로 만든다. 프롬프트에 인라인하던 원래 요청·맡은 일·기대 결과·
+     * 지난 결과·첨부 파일(워크스페이스 기준 경로)을 여기로 모은다. 비어 있는 절(기대 결과·지난 결과·첨부)은 생략한다.
+     */
+    public static String childInstruction(String request, String order, String expects, String previous,
+                                          List<String> attachments) {
+        StringBuilder doc = new StringBuilder();
+        doc.append("# 위임 지시\n\n");
+        doc.append("## 원래 요청\n\n").append(block(request)).append("\n\n");
+        doc.append("## 맡은 일\n\n").append(block(order)).append("\n");
+        if (!isBlank(expects)) {
+            doc.append("\n## 기대 결과\n\n").append(expects.strip()).append("\n");
+        }
+        if (!isBlank(previous)) {
+            doc.append("\n## 지난 결과\n\n").append(previous.strip()).append("\n");
+        }
+        if (attachments != null && !attachments.isEmpty()) {
+            doc.append("\n## 첨부 파일\n\n");
+            attachments.forEach(path -> doc.append("- ").append(path).append("\n"));
+        }
+        return doc.toString();
+    }
+
+    /**
+     * 자식 실행의 실제 프롬프트: 지시 파일을 가리키는 짧은 한 줄(1~3줄). 기대 결과가 있으면 덧붙이고 없으면 생략한다.
+     * 예: `지시 파일: .agentdock/prompts/42.md — 이 파일을 먼저 읽고 그 내용대로 작업하세요. 기대 결과: ...`
+     */
+    public static String instructionReference(String relativePath, String expects) {
+        StringBuilder prompt = new StringBuilder()
+                .append(FILE_REFERENCE_PREFIX).append(relativePath).append(" — ").append(READ_INSTRUCTION);
+        if (!isBlank(expects)) {
+            prompt.append(" 기대 결과: ").append(expects.strip());
+        }
+        return prompt.toString();
+    }
+
+    /** 지시 파일을 쓰지 못했을 때의 폴백: 지시를 프롬프트에 그대로 넣는다(예전 동작). */
+    public static String inlineInstruction(String request, String order, String expects) {
+        StringBuilder prompt = new StringBuilder()
+                .append("[원래 요청]\n").append(block(request))
+                .append("\n\n[맡은 일]\n").append(block(order));
+        if (!isBlank(expects)) {
+            prompt.append("\n\n[기대 결과]\n").append(expects.strip());
+        }
+        return prompt.toString();
+    }
+
+    /** 재판단 스텝에서 "지난 단계 결과"를 인라인하지 않고 파일로 가리키는 한 줄. */
+    public static String stepContextReference(String relativePath) {
+        return relativePath + " — 이 파일을 먼저 읽고 그 결과를 반영하세요.";
+    }
+
+    // ── 판단·작업 프롬프트 ─────────────────────────────────────────────────────────
+
+    /**
+     * 판단 프롬프트. `instruction` 은 이 실행이 처리할 지시(루트는 원래 요청, 위임받은 자식은 지시 파일 참조 한 줄)이고,
+     * `progress` 는 "지난 단계 결과" 자리에 그대로 들어갈 문장(파일 참조 한 줄이나 폴백 인라인 문맥)이다.
+     * 팀 로스터와 판단 규칙·스키마는 짧으므로 그대로 인라인한다.
+     */
+    public static String judgement(String projectName, String roster, String instruction, String progress, int maxTargets) {
         StringBuilder prompt = new StringBuilder();
         prompt.append("당신은 프로젝트 \"").append(projectName).append("\" 의 리더입니다. 아래 팀을 보고 요청을 처리하세요.\n\n");
         prompt.append("[팀 목록]\n");
         prompt.append(roster.isBlank() ? "(팀 없음 — 직접 처리하세요)\n" : roster);
-        prompt.append("\n[요청]\n").append(request).append("\n");
-        if (!progress.isBlank()) {
+        prompt.append("\n[요청]\n").append(instruction).append("\n");
+        if (!isBlank(progress)) {
             prompt.append("\n[지난 단계 결과]\n").append(progress);
         }
         prompt.append("""
@@ -52,17 +143,17 @@ public final class DelegationPrompts {
         return prompt.toString();
     }
 
-    public static String work(String request, String order) {
+    /**
+     * 작업(자식·직접처리) 실행의 프롬프트: 실행에 저장된 지시(루트는 원래 요청, 자식은 지시 파일 참조 한 줄)와
+     * 작업 계약 스키마만 붙인다. 원래 요청·맡은 일은 이미 그 지시 안(또는 지시 파일 안)에 있다.
+     */
+    public static String work(String order) {
         return """
-                [원래 요청]
-                %s
-
-                [당신이 맡은 일]
                 %s
 
                 일이 끝나면 아래 스키마를 정확히 따르는 JSON 하나만 내세요. 설명이나 코드블록 없이 JSON 만 출력하세요.
                 %s
-                """.formatted(request, order, ContractSchemas.WORK);
+                """.formatted(order, ContractSchemas.WORK);
     }
 
     /** 계약을 못 읽었을 때 한 번 더 시도할 때 붙이는 문장. */
@@ -107,6 +198,14 @@ public final class DelegationPrompts {
             progress.append("\n");
         }
         return progress.toString();
+    }
+
+    private static String block(String value) {
+        return value == null ? "" : value.strip();
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     private DelegationPrompts() {

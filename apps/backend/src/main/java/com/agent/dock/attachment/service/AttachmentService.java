@@ -36,6 +36,12 @@ public class AttachmentService {
     /** 첨부를 복사해 두는 폴더(워크스페이스 기준 상대 경로). 화면 안내 문구와 같아야 한다. */
     public static final String ATTACHMENT_FOLDER = ".agentdock/attachments";
 
+    /**
+     * 실행 프롬프트 끝에 붙이는 첨부 안내 절의 머리말. 위임이 이 절을 지시 파일의 "첨부 파일" 로 떼어 내므로
+     * (거기서 참조) 머리말을 한 곳에서만 정의한다.
+     */
+    public static final String ATTACHMENT_PROMPT_HEADER = "[첨부 파일]";
+
     private static final int MAX_FILES = 2000;
     private static final int MAX_DEPTH = 8;
     /** 파일 목록에서 건너뛸 폴더(용량이 크고 첨부와 무관하다). */
@@ -124,7 +130,8 @@ public class AttachmentService {
         attachmentRepository.saveAll(attachments);
 
         StringBuilder prompt = new StringBuilder();
-        prompt.append("\n\n[첨부 파일]\n아래 경로는 프로젝트 폴더 기준입니다. 이 경로로 파일을 읽으세요.\n");
+        prompt.append("\n\n").append(ATTACHMENT_PROMPT_HEADER)
+                .append("\n아래 경로는 프로젝트 폴더 기준입니다. 이 경로로 파일을 읽으세요.\n");
         for (Attachment attachment : attachments) {
             prompt.append("- ").append(attachment.getStoredPath())
                     .append(" (").append(attachment.getOriginalName()).append(")\n");

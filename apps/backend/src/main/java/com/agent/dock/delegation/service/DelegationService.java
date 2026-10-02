@@ -2,6 +2,7 @@ package com.agent.dock.delegation.service;
 
 import com.agent.dock.agent.domain.Agent;
 import com.agent.dock.agent.repository.AgentRepository;
+import com.agent.dock.attachment.service.AttachmentService;
 import com.agent.dock.common.exception.BadRequestException;
 import com.agent.dock.common.exception.ConflictException;
 import com.agent.dock.common.exception.NotFoundException;
@@ -25,7 +26,11 @@ import com.agent.dock.project.repository.ProjectRepository;
 import com.agent.dock.runtime.dto.AgentExecutionResult;
 import com.agent.dock.runtime.util.JsonObjects;
 import jakarta.annotation.PostConstruct;
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
@@ -167,7 +172,7 @@ public class DelegationService {
         workers.submit(() -> {
             ExecutionStatus status = judgement
                     ? runJudgement(asked, target, asked.getPrompt(), depth, path, state, progress)
-                    : runWork(asked, target, asked.getPrompt());
+                    : runWork(asked, target);
             if (status == ExecutionStatus.WAITING_INPUT) {
                 return; // 또 물었으면 다시 기다린다.
             }
@@ -296,7 +301,7 @@ public class DelegationService {
         try {
             return judgement
                     ? runJudgement(execution, target, request, depth, path, state)
-                    : runWork(execution, target, request);
+                    : runWork(execution, target);
         } catch (Exception ex) {
             log.error("execution {} failed", id, ex);
             executionService.markFailed(id, ex);
@@ -310,12 +315,15 @@ public class DelegationService {
         streamHub.close(id, status, exitCode);
     }
 
-    /** 일하는 실행: 계약 없이 한 번 돌리고 Handoff 를 남긴다. */
-    private ExecutionStatus runWork(Execution execution, ExecutionGuard.Target target, String request) {
+    /**
+     * 일하는 실행: 계약 없이 한 번 돌리고 Handoff 를 남긴다. 프롬프트는 실행에 저장된 지시를 그대로 쓴다 —
+     * 루트는 원래 요청, 위임받은 자식은 지시 파일을 가리키는 짧은 한 줄이라 원래 요청을 다시 인라인하지 않는다.
+     */
+    private ExecutionStatus runWork(Execution execution, ExecutionGuard.Target target) {
         executionService.markRunning(execution.getId());
         Agent agent = requireAgent(target.agentId());
         AgentExecutionResult result = step(execution.getId(), agent, target,
-                DelegationPrompts.work(request, execution.getPrompt()));
+                DelegationPrompts.work(execution.getPrompt()));
         return applyStep(execution.getId(), result);
     }
 
@@ -335,13 +343,17 @@ public class DelegationService {
         Project project = projectRepository.findById(state.projectId()).orElseThrow();
         List<GroupResponse> groups = groupService.findAll(state.projectId());
         String roster = rosterOf(groups);
+        // 이 실행이 처리할 지시: 루트는 원래 요청, 위임받은 자식은 지시 파일 참조 한 줄.
+        String instruction = executionInstruction(execution, request);
         String progress = initialProgress == null ? "" : initialProgress;
         boolean retryUsed = false;
 
         for (int step = 0; step < maxSteps; step++) {
             executionService.markRunning(id);
             Agent agent = requireAgent(target.agentId());
-            String prompt = DelegationPrompts.judgement(project.getName(), roster, request, progress, maxTargets);
+            // "지난 단계 결과"(자식 결과·사람의 답)는 지시 파일로 넘기고 프롬프트에는 참조 한 줄만 둔다.
+            String prompt = DelegationPrompts.judgement(project.getName(), roster, instruction,
+                    stepContext(id, target, step, progress), maxTargets);
             AgentExecutionResult result = step(id, agent, target, prompt);
             ExecutionStatus status = applyStep(id, result);
             if (!result.succeeded()) {
@@ -449,11 +461,20 @@ public class DelegationService {
         ExecutionGuard.Target target = state.worktreePath() == null
                 ? prepared
                 : prepared.withWorktree(state.worktreePath(), state.worktreeBranch());
-        String childPrompt = order.expects().isBlank()
-                ? order.prompt()
-                : order.prompt() + "\n\n[기대 결과]\n" + order.expects();
-        Execution child = executionFactory.createChild(target, childPrompt, state.taskId(), parent, parent);
-        streamHub.open(child.getId());
+        // 프롬프트에 인라인하던 전체 지시(원래 요청·맡은 일·기대 결과·첨부 경로)를 자식 실행 id 이름의 지시 파일로
+        // 옮기고, 프롬프트에는 그 파일을 가리키는 짧은 한 줄만 남긴다(파일 id 가 필요해 행을 만든 뒤 파일을 쓴다).
+        Execution child = executionFactory.createChild(target, "", state.taskId(), parent, parent);
+        Long childId = child.getId();
+        String instruction = DelegationPrompts.childInstruction(request, order.prompt(), order.expects(), "",
+                attachmentsIn(request));
+        String reference = writePromptFileLogged(childId, target.cwd(),
+                DelegationPrompts.childPromptFileName(childId), instruction);
+        // 파일을 쓰지 못했으면 예전처럼 지시를 프롬프트에 그대로 넣는다(실행은 막지 않는다).
+        child.setPrompt(reference == null
+                ? DelegationPrompts.inlineInstruction(request, order.prompt(), order.expects())
+                : DelegationPrompts.instructionReference(reference, order.expects()));
+        executionRepository.save(child);
+        streamHub.open(childId);
 
         boolean judgement = isJudgementAgent(childAgentId, state.projectId());
         ExecutionStatus status = runExecution(child, target, request, judgement, depth, append(path, childAgentId), state);
@@ -652,6 +673,72 @@ public class DelegationService {
         };
     }
 
+    // ── 지시 파일 (긴 지시·문맥을 프롬프트 밖으로 옮긴다) ─────────────────────────────
+
+    /** 판단 실행에 넣을 지시: 위임받은 자식은 저장된 짧은 지시(파일 참조), 루트는 원래 요청을 그대로 쓴다. */
+    private String executionInstruction(Execution execution, String request) {
+        String prompt = execution.getPrompt();
+        return prompt == null || prompt.isBlank() ? request : prompt;
+    }
+
+    /**
+     * "지난 단계 결과" 문맥(자식 결과·사람의 답)을 지시 파일로 넘긴다. 문맥이 없으면 빈 문자열이라 프롬프트에 절이 안 생긴다.
+     * 파일을 쓰지 못하면 문맥을 그대로 인라인한다(예전 동작) — 어느 쪽이든 실행은 계속된다.
+     */
+    private String stepContext(Long executionId, ExecutionGuard.Target target, int step, String progress) {
+        if (progress == null || progress.isBlank()) {
+            return "";
+        }
+        String reference = writePromptFileLogged(executionId, target.cwd(),
+                DelegationPrompts.stepPromptFileName(executionId, step), progress);
+        return reference == null ? progress : DelegationPrompts.stepContextReference(reference);
+    }
+
+    /**
+     * 지시 파일을 작업 디렉터리(cwd) 안 `.agentdock/prompts` 에 UTF-8 로 쓴다(셸을 거치지 않고 java.nio.file 만 쓴다).
+     * 성공하면 경로·크기를 SYSTEM 로그 한 줄로 남기고 cwd 기준 상대 경로를, 실패하면 사유를 로그로 남기고 null 을 돌려준다.
+     * 파일 쓰기 실패가 실행을 막지 않는다 — 호출부가 인라인 프롬프트로 되돌린다.
+     */
+    String writePromptFileLogged(Long executionId, String cwd, String fileName, String content) {
+        try {
+            Path folder = Path.of(cwd, DelegationPrompts.PROMPT_FOLDER);
+            Files.createDirectories(folder);
+            Files.writeString(folder.resolve(fileName), content, StandardCharsets.UTF_8);
+            String reference = DelegationPrompts.promptFileReference(fileName);
+            streamHub.system(executionId, "⎿ 지시 파일: %s (%,d자)".formatted(reference, content.length()));
+            return reference;
+        } catch (Exception ex) {
+            log.warn("프롬프트 파일을 쓰지 못했습니다(execution {}): {}", executionId, ex.getMessage());
+            streamHub.system(executionId, "⎿ 지시 파일을 쓰지 못했습니다(%s)".formatted(ex.getMessage()));
+            return null;
+        }
+    }
+
+    /**
+     * 원래 요청 끝에 붙은 첨부 안내 블록(`[첨부 파일]` — {@link AttachmentService#ATTACHMENT_PROMPT_HEADER})에서
+     * 워크스페이스 기준 경로만 뽑는다. 첨부가 없으면 빈 목록이라 지시 파일에 첨부 절이 생기지 않는다.
+     */
+    private static List<String> attachmentsIn(String request) {
+        if (request == null) {
+            return List.of();
+        }
+        int start = request.indexOf(AttachmentService.ATTACHMENT_PROMPT_HEADER);
+        if (start < 0) {
+            return List.of();
+        }
+        List<String> paths = new ArrayList<>();
+        for (String raw : request.substring(start).split("\\R")) {
+            String line = raw.strip();
+            if (!line.startsWith("- ")) {
+                continue;
+            }
+            String value = line.substring(2).strip();
+            int cut = value.lastIndexOf(" (");
+            paths.add(cut > 0 ? value.substring(0, cut) : value);
+        }
+        return paths;
+    }
+
     // ── 스텝 실행 ────────────────────────────────────────────────────────────────
 
     private ExecutionStatus applyStep(Long executionId, AgentExecutionResult result) {
@@ -671,6 +758,8 @@ public class DelegationService {
             throw new IllegalStateException("실행이 중단되었습니다", ex);
         }
         try {
+            // 이 스텝이 CLI 에 실제로 넘긴 프롬프트 크기를 SYSTEM 로그로 남긴다(파일로 옮긴 뒤 얼마나 줄었는지 확인용).
+            streamHub.system(executionId, "⎿ 프롬프트 %,d자".formatted(prompt.length()));
             return runner.runStep(executionId, agent, target.cwd(), target.systemPrompt(), prompt, maxCostUsd);
         } catch (RuntimeException ex) {
             throw ex;

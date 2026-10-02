@@ -19,12 +19,15 @@ import com.agent.dock.project.repository.ProjectRepository;
 import com.agent.dock.runtime.dto.AgentExecutionResult;
 import com.agent.dock.runtime.dto.ExecutionMetrics;
 import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -64,6 +67,9 @@ class DelegationAnswerResumeTest {
     @Mock WorktreeService worktreeService;
     @InjectMocks DelegationService service;
 
+    /** 이 실행의 작업 디렉터리(cwd). 지시·문맥 파일이 여기 `.agentdock/prompts` 에 쓰인다. */
+    @TempDir Path cwd;
+
     private Execution asked;
 
     @BeforeEach
@@ -96,10 +102,12 @@ class DelegationAnswerResumeTest {
         // 답을 저장하고 로그를 남긴다(앞뒤 공백은 다듬는다).
         verify(executionService).recordAnswer(42L, "AGENTDOCK_LIVE_CHECK.md");
         verify(streamHub).system(42L, "⎿ 답변: AGENTDOCK_LIVE_CHECK.md");
-        // 이어서 돈 스텝의 프롬프트에 질문과 답이 그대로 들어간다.
+        // 이어서 돈 스텝은 질문·답을 프롬프트에 인라인하지 않고 문맥 파일(`<실행id>-step<N>.md`)로 넘긴다.
         ArgumentCaptor<String> prompt = ArgumentCaptor.forClass(String.class);
-        verify(runner, timeout(5000)).runStep(eq(42L), any(), eq("C:\\repo"), eq("시스템"), prompt.capture(), any());
-        assertThat(prompt.getValue()).contains("새 파일 이름을 무엇으로 할까요?").contains("AGENTDOCK_LIVE_CHECK.md");
+        verify(runner, timeout(5000)).runStep(eq(42L), any(), eq(cwd.toString()), eq("시스템"), prompt.capture(), any());
+        assertThat(prompt.getValue()).contains(".agentdock/prompts/42-step0.md");
+        assertThat(Files.readString(cwd.resolve(".agentdock/prompts/42-step0.md")))
+                .contains("새 파일 이름을 무엇으로 할까요?").contains("AGENTDOCK_LIVE_CHECK.md");
         // 판단이 끝나면 실행을 완료로 남긴다.
         verify(executionService, timeout(5000)).markSucceeded(42L);
     }
@@ -152,7 +160,7 @@ class DelegationAnswerResumeTest {
         when(projectRepository.findById(6L)).thenReturn(Optional.of(project));
         when(groupService.findAll(6L)).thenReturn(List.of());
         when(guard.prepare(9L, 6L, null))
-                .thenReturn(new ExecutionGuard.Target(9L, 3L, "C:\\repo", "시스템", null, null));
+                .thenReturn(new ExecutionGuard.Target(9L, 3L, cwd.toString(), "시스템", null, null));
     }
 
     /** CLI 한 스텝이 이 계약 JSON 을 냈다고 둔다. */
