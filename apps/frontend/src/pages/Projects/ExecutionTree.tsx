@@ -18,6 +18,7 @@ import exec from '../../styles/execution.module.css';
 import modal from '../../styles/modal.module.css';
 import shared from '../../styles/shared.module.css';
 import type { Execution, ExecutionStatus } from '../../types';
+import ExecutionDetail from './ExecutionDetail';
 
 /** 실행 상태 배지. 채팅 카드와 실행 트리 창이 함께 쓴다. */
 export function ExecutionBadge({ status }: { status: ExecutionStatus }) {
@@ -202,6 +203,8 @@ export function ExecutionSummaryCard({
       </ul>
       {notice && <p className="errorText">{notice}</p>}
       <TreeResultLine execution={rows[0].execution} />
+      {/* 실행 결과는 사람이 읽는 모양(마크다운 요약 + 키/값 블록)으로 두고 원문 JSON 은 접어 둔다. */}
+      <ExecutionDetail execution={rows[0].execution} />
       <span className={exec.note}>지표는 CLI 가 돌려준 실제 값입니다.</span>
     </div>
   );
@@ -295,10 +298,8 @@ export default function ExecutionTreeModal({
                 </p>
               )}
               {execution.parentExecutionId === null && <TreeResultLine execution={execution} />}
-              {execution.handoff && <p className={exec.rowSummary}>{execution.handoff.summary}</p>}
-              {execution.handoff !== null && execution.handoff.changedFiles.length > 0 && (
-                <p className={exec.rowFiles}>{execution.handoff.changedFiles.join('  ')}</p>
-              )}
+              {/* 결과·Handoff 를 원문 텍스트로 쏟지 않고 사람이 읽는 모양으로 그린다(원문 JSON 은 접어 둔다). */}
+              <ExecutionDetail execution={execution} />
             </li>
           ))}
         </ol>
