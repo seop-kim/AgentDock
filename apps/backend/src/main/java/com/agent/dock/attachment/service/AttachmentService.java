@@ -5,6 +5,7 @@ import com.agent.dock.attachment.dto.AttachmentResponse;
 import com.agent.dock.attachment.repository.AttachmentRepository;
 import com.agent.dock.common.exception.BadRequestException;
 import com.agent.dock.common.exception.NotFoundException;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.workspace.domain.Workspace;
 import com.agent.dock.workspace.repository.WorkspaceRepository;
 import lombok.RequiredArgsConstructor;
@@ -50,6 +51,8 @@ public class AttachmentService {
 
     private final AttachmentRepository attachmentRepository;
     private final WorkspaceRepository workspaceRepository;
+    /** 전역 SSE 스트림에 "첨부가 바뀌었다"를 알린다(파일 목록·Task 연결). */
+    private final EventPublisher changeEvents;
 
     /** 첨부 창에 보여 줄 파일 목록(워크스페이스 기준 상대 경로). */
     public List<String> listFiles(Long workspaceId, String subPath) {
@@ -110,6 +113,8 @@ public class AttachmentService {
             attachment.setSizeBytes(file.getSize());
             saved.add(AttachmentResponse.from(attachmentRepository.save(attachment)));
         }
+        // 파일 목록이 바뀌었다(워크스페이스 단위라 프로젝트를 모른다 — projectId 는 null).
+        changeEvents.attachmentChanged(null, null);
         return saved;
     }
 
@@ -128,6 +133,7 @@ public class AttachmentService {
         }
         attachments.forEach(attachment -> attachment.setTaskId(taskId));
         attachmentRepository.saveAll(attachments);
+        changeEvents.attachmentChanged(null, taskId);
 
         StringBuilder prompt = new StringBuilder();
         prompt.append("\n\n").append(ATTACHMENT_PROMPT_HEADER)

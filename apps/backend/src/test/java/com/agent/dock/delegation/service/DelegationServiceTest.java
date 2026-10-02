@@ -1,14 +1,24 @@
 package com.agent.dock.delegation.service;
 
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.agent.repository.AgentRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.repository.ExecutionRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.service.ExecutionFactory;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.service.ExecutionGuard;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.service.ExecutionRunner;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.service.ExecutionService;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.service.ExecutionStreamHub;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.service.WorktreeService;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.group.service.GroupService;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.project.repository.ProjectRepository;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -42,6 +52,7 @@ class DelegationServiceTest {
     @Mock GroupService groupService;
     @Mock RuleRouter ruleRouter;
     @Mock WorktreeService worktreeService;
+    @Mock EventPublisher changeEvents;
     @InjectMocks DelegationService service;
 
     @TempDir Path cwd;

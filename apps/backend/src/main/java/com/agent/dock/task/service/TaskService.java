@@ -11,6 +11,7 @@ import com.agent.dock.execution.domain.Execution;
 import com.agent.dock.execution.domain.ExecutionStatus;
 import com.agent.dock.execution.dto.ExecutionFinishedEvent;
 import com.agent.dock.execution.repository.ExecutionRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.group.domain.AgentGroup;
 import com.agent.dock.group.repository.AgentGroupRepository;
 import com.agent.dock.project.domain.Project;
@@ -35,6 +36,8 @@ public class TaskService {
     private final ExecutionRepository executionRepository;
     private final DelegationService delegationService;
     private final AttachmentService attachmentService;
+    /** 전역 SSE 스트림에 "Task 가 바뀌었다"를 알린다. */
+    private final EventPublisher changeEvents;
 
     public List<TaskResponse> findAll(Long projectId, Long groupId) {
         List<Task> tasks;
@@ -84,6 +87,7 @@ public class TaskService {
             task.setAgent(requireAgent(requireMasterAgentId(project)));
         }
         Task saved = taskRepository.save(task);
+        changeEvents.taskChanged(projectId, saved.getId());
 
         // 첨부를 Task 에 연결하고, 실행 프롬프트에 붙일 문장(파일 경로 안내)을 받아 온다.
         String attachmentNote = attachmentService.attachToTask(saved.getId(), request.attachmentIds());
@@ -96,6 +100,7 @@ public class TaskService {
         } catch (RuntimeException ex) {
             saved.setStatus(TaskStatus.FAILED);
             taskRepository.save(saved);
+            changeEvents.taskChanged(projectId, saved.getId());
             throw ex;
         }
     }
@@ -126,6 +131,8 @@ public class TaskService {
         taskRepository.findById(event.taskId()).ifPresent(task -> {
             task.setStatus(event.status() == ExecutionStatus.SUCCEEDED ? TaskStatus.SUCCEEDED : TaskStatus.FAILED);
             taskRepository.save(task);
+            // 트리가 끝나 Task 상태가 바뀌었다 — 화면(Tasks 목록·배지)이 이 알림으로 다시 읽는다.
+            changeEvents.taskChanged(task.getProjectId(), task.getId());
         });
     }
 

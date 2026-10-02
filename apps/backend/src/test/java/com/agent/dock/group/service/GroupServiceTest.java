@@ -1,14 +1,24 @@
 package com.agent.dock.group.service;
 
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.agent.repository.AgentRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.attachment.repository.AttachmentRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.common.exception.NotFoundException;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.repository.ExecutionLogRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.repository.ExecutionRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.group.domain.AgentGroup;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.group.repository.AgentGroupMemberRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.group.repository.AgentGroupRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.project.repository.ProjectRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.task.repository.TaskRepository;
 import java.util.List;
 import java.util.Optional;
@@ -35,6 +45,7 @@ class GroupServiceTest {
     @Mock ExecutionRepository executionRepository;
     @Mock ExecutionLogRepository executionLogRepository;
     @Mock AttachmentRepository attachmentRepository;
+    @Mock EventPublisher changeEvents;
     @InjectMocks GroupService service;
 
     private AgentGroup group(long id) {

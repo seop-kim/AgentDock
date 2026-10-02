@@ -19,6 +19,7 @@ import com.agent.dock.execution.service.ExecutionRunner;
 import com.agent.dock.execution.service.ExecutionService;
 import com.agent.dock.execution.service.ExecutionStreamHub;
 import com.agent.dock.execution.service.WorktreeService;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.group.dto.GroupResponse;
 import com.agent.dock.group.service.GroupService;
 import com.agent.dock.project.domain.Project;
@@ -70,6 +71,8 @@ public class DelegationService {
     private final GroupService groupService;
     private final RuleRouter ruleRouter;
     private final WorktreeService worktreeService;
+    /** 전역 SSE 스트림에 "실행 트리가 바뀌었다"를 알린다(자식 생성·트리 종료). */
+    private final EventPublisher changeEvents;
 
     @Value("${agentdock.delegation.max-depth:3}")
     private int maxDepth;
@@ -126,6 +129,8 @@ public class DelegationService {
             collectTreeResult(root, target);
             closeStream(root.getId(), status);
             executionService.publishFinished(root.getId(), taskId, status);
+            // 트리가 끝났다(마지막 상태·커밋·병합 결과까지 기록된 뒤) — 화면이 트리와 Task 를 다시 읽는다.
+            changeEvents.executionChanged(projectId, root.getId(), taskId);
         });
         return root;
     }
@@ -181,6 +186,7 @@ public class DelegationService {
             }
             closeStream(asked.getId(), status);
             executionService.publishFinished(asked.getId(), asked.getTaskId(), status);
+            changeEvents.executionChanged(projectId, asked.getId(), asked.getTaskId());
         });
     }
 
@@ -475,6 +481,8 @@ public class DelegationService {
                 : DelegationPrompts.instructionReference(reference, order.expects()));
         executionRepository.save(child);
         streamHub.open(childId);
+        // 자식 실행이 만들어졌다 — 화면의 실행 트리가 자식을 바로 그린다.
+        changeEvents.executionChanged(state.projectId(), childId, state.taskId());
 
         boolean judgement = isJudgementAgent(childAgentId, state.projectId());
         ExecutionStatus status = runExecution(child, target, request, judgement, depth, append(path, childAgentId), state);

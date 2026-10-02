@@ -2,6 +2,7 @@ package com.agent.dock.workspace.service;
 
 import com.agent.dock.common.exception.BadRequestException;
 import com.agent.dock.common.exception.NotFoundException;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.workspace.domain.Workspace;
 import com.agent.dock.workspace.dto.CreateWorkspaceRequest;
 import com.agent.dock.workspace.dto.FsEntry;
@@ -28,6 +29,8 @@ import org.springframework.stereotype.Service;
 public class WorkspaceService {
     private final WorkspaceRepository repository;
     private final WorkspaceFs workspaceFs;
+    /** 전역 SSE 스트림에 "워크스페이스가 바뀌었다"를 알린다. */
+    private final EventPublisher changeEvents;
 
     public List<WorkspaceResponse> findAll() {
         return repository.findAllByOrderByNameAsc().stream().map(WorkspaceResponse::from).toList();
@@ -48,7 +51,9 @@ public class WorkspaceService {
         workspace.setName(request.name());
         workspace.setPath(dir.getAbsolutePath());
         workspace.setDescription(request.description());
-        return WorkspaceResponse.from(repository.save(workspace));
+        Workspace saved = repository.save(workspace);
+        changeEvents.workspaceChanged();
+        return WorkspaceResponse.from(saved);
     }
 
     public WorkspaceBrowseResult browse(String path) {

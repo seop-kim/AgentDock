@@ -15,6 +15,7 @@ import com.agent.dock.execution.dto.ExecutionResponse;
 import com.agent.dock.execution.dto.ExecutionTreeResponse;
 import com.agent.dock.execution.repository.ExecutionLogRepository;
 import com.agent.dock.execution.repository.ExecutionRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.runtime.dto.AgentExecutionResult;
 import com.agent.dock.runtime.dto.ExecutionMetrics;
 import com.agent.dock.runtime.interfaces.AgentRuntime;
@@ -50,6 +51,8 @@ public class ExecutionService {
     private final RuntimeRegistry runtimeRegistry;
     private final ApplicationEventPublisher eventPublisher;
     private final WorktreeService worktreeService;
+    /** 전역 SSE 스트림에 "실행이 바뀌었다"를 알린다(화면은 이 알림을 받고 바뀐 조각만 다시 읽는다). */
+    private final EventPublisher changeEvents;
 
     /** 서버가 죽었다 다시 떠 고아로 남은 실행에 남기는 사유. */
     private static final String STALE_EXECUTION_REASON = "서버 재기동으로 중단됨";
@@ -106,7 +109,10 @@ public class ExecutionService {
     /** 위임 실행의 루트 실행을 만든다(스텝은 오케스트레이터가 돌린다). */
     public Started startRoot(Long agentId, Long projectId, Long groupId, String prompt, Long taskId) {
         ExecutionGuard.Target target = guard.prepare(agentId, projectId, groupId);
-        return new Started(factory.createRoot(target, prompt, taskId), target);
+        Execution root = factory.createRoot(target, prompt, taskId);
+        // 루트 실행이 만들어졌다 — 프로젝트를 아는 자리라 projectId 까지 실어 보낸다.
+        changeEvents.executionChanged(projectId, root.getId(), taskId);
+        return new Started(root, target);
     }
 
     public record Started(Execution execution, ExecutionGuard.Target target) {
@@ -382,16 +388,27 @@ public class ExecutionService {
         execution.setFinishedAt(Instant.now());
         execution.setErrorMessage(reason);
         executionRepository.save(execution);
+        changeEvents.executionChanged(projectIdOf(execution), execution.getId(), execution.getTaskId());
         if (execution.getRootExecutionId() == null) {
             publishFinished(execution.getId(), execution.getTaskId(), ExecutionStatus.CANCELLED);
         }
         return true;
     }
 
+    /** 실행 하나를 바꿔 저장하고, 바뀌었다고 전역 스트림에 알린다(상태·계약·결과·워크트리 모두 이 길로 지난다). */
     private void update(Long executionId, Consumer<Execution> change) {
         Execution execution = executionRepository.findById(executionId)
                 .orElseThrow(() -> new NotFoundException("Execution %d not found".formatted(executionId)));
         change.accept(execution);
         executionRepository.save(execution);
+        changeEvents.executionChanged(projectIdOf(execution), executionId, execution.getTaskId());
+    }
+
+    /** 실행 에이전트의 프로젝트 id(화면이 어느 프로젝트를 다시 읽을지 정하는 데 쓴다). 모르면 null. */
+    private Long projectIdOf(Execution execution) {
+        if (execution.getAgentId() == null) {
+            return null;
+        }
+        return agentRepository.findById(execution.getAgentId()).map(Agent::getProjectId).orElse(null);
     }
 }

@@ -1,23 +1,42 @@
 package com.agent.dock.project.service;
 
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.agent.domain.Agent;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.agent.repository.AgentRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.attachment.repository.AttachmentRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.common.exception.BadRequestException;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.common.exception.ConflictException;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.repository.ExecutionLogRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.repository.ExecutionRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.group.domain.AgentGroup;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.group.repository.AgentGroupMemberRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.group.repository.AgentGroupRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.project.domain.Project;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.project.dto.ProjectLayoutRequest;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.project.dto.ProjectLayoutRequest.AgentPlacement;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.project.dto.ProjectLayoutRequest.GroupPlacement;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.project.dto.UpdateProjectRequest;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.project.repository.ProjectRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.project.repository.ProjectWorkspaceRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.task.repository.TaskRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.workspace.repository.WorkspaceRepository;
 import java.util.List;
 import java.util.Optional;
@@ -47,6 +66,7 @@ class ProjectServiceTest {
     @Mock ExecutionRepository executionRepository;
     @Mock ExecutionLogRepository executionLogRepository;
     @Mock AttachmentRepository attachmentRepository;
+    @Mock EventPublisher changeEvents;
     @InjectMocks ProjectService service;
 
     private Project project(long id, String name) {

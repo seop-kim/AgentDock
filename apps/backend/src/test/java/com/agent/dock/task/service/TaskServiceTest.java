@@ -1,16 +1,28 @@
 package com.agent.dock.task.service;
 
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.agent.domain.Agent;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.agent.repository.AgentRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.attachment.service.AttachmentService;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.delegation.service.DelegationService;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.domain.Execution;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.repository.ExecutionRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.group.repository.AgentGroupRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.project.domain.Project;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.project.repository.ProjectRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.task.domain.Task;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.task.dto.CommandRequest;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.task.repository.TaskRepository;
 import java.util.List;
 import java.util.Optional;
@@ -39,6 +51,7 @@ class TaskServiceTest {
     @Mock ExecutionRepository executionRepository;
     @Mock DelegationService delegationService;
     @Mock AttachmentService attachmentService;
+    @Mock EventPublisher changeEvents;
     @InjectMocks TaskService service;
 
     private Project project;

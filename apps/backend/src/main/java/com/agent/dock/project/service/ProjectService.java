@@ -6,6 +6,7 @@ import com.agent.dock.attachment.repository.AttachmentRepository;
 import com.agent.dock.common.exception.BadRequestException;
 import com.agent.dock.common.exception.ConflictException;
 import com.agent.dock.common.exception.NotFoundException;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.repository.ExecutionLogRepository;
 import com.agent.dock.execution.repository.ExecutionRepository;
 import com.agent.dock.group.domain.AgentGroup;
@@ -44,6 +45,8 @@ public class ProjectService {
     private final ExecutionRepository executionRepository;
     private final ExecutionLogRepository executionLogRepository;
     private final AttachmentRepository attachmentRepository;
+    /** 전역 SSE 스트림에 "프로젝트가 바뀌었다"를 알린다(구성도 배치 포함). */
+    private final EventPublisher changeEvents;
 
     public List<ProjectResponse> findAll() {
         List<Project> projects = repository.findAllByOrderByNameAsc();
@@ -70,6 +73,7 @@ public class ProjectService {
         if (request.workspaceId() != null) {
             assignWorkspace(saved.getId(), request.workspaceId(), true);
         }
+        changeEvents.projectChanged(saved.getId());
         return findOne(saved.getId());
     }
 
@@ -85,6 +89,7 @@ public class ProjectService {
             project.setDescription(request.description());
         }
         repository.save(project);
+        changeEvents.projectChanged(id);
         return findOne(id);
     }
 
@@ -130,6 +135,7 @@ public class ProjectService {
         }
         workspaceLinkRepository.deleteByProjectId(id);
         repository.delete(project);
+        changeEvents.projectChanged(id);
     }
 
     /** 구성도 배치 저장(캔버스 드래그 결과). 프로젝트에 속하지 않는 에이전트/그룹이면 400. */
@@ -155,6 +161,7 @@ public class ProjectService {
                 groupRepository.save(group);
             }
         }
+        changeEvents.projectChanged(projectId);
     }
 
     /** 손으로 옮긴 좌표를 모두 비우고(자동 배치로 되돌림) 에이전트를 다시 놓는다. */
@@ -172,6 +179,7 @@ public class ProjectService {
             group.setNodeY(null);
             groupRepository.save(group);
         }
+        changeEvents.projectChanged(projectId);
     }
 
     private Agent requireProjectAgent(Long projectId, Long agentId) {
@@ -219,6 +227,7 @@ public class ProjectService {
             saved.setDefault(true);
             workspaceLinkRepository.save(saved);
         }
+        changeEvents.projectChanged(projectId);
         return findOne(projectId);
     }
 
@@ -238,6 +247,7 @@ public class ProjectService {
                 workspaceLinkRepository.save(next);
             });
         }
+        changeEvents.projectChanged(projectId);
     }
 
     /** 실행에 쓸 기본 워크스페이스. 할당된 워크스페이스가 없으면 실행할 수 없다(409). */
@@ -264,6 +274,7 @@ public class ProjectService {
         }
         project.setMasterPrompt(request.masterPrompt() == null ? "" : request.masterPrompt());
         repository.save(project);
+        changeEvents.projectChanged(projectId);
         return findOne(projectId);
     }
 

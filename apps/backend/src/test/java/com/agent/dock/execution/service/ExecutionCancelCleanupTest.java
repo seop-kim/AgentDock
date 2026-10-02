@@ -1,16 +1,28 @@
 package com.agent.dock.execution.service;
 
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.agent.domain.Agent;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.agent.repository.AgentRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.common.exception.NotFoundException;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.domain.Execution;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.domain.ExecutionStatus;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.dto.ExecutionFinishedEvent;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.repository.ExecutionLogRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.repository.ExecutionRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.provider.domain.AiProvider;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.provider.domain.ProviderKey;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.runtime.interfaces.AgentRuntime;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.runtime.service.RuntimeRegistry;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +57,7 @@ class ExecutionCancelCleanupTest {
     @Mock ApplicationEventPublisher eventPublisher;
     @Mock WorktreeService worktreeService;
     @Mock AgentRuntime runtime;
+    @Mock EventPublisher changeEvents;
     @InjectMocks ExecutionService service;
 
     private static Execution execution(Long id, ExecutionStatus status, Long rootId, Long taskId) {

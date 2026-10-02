@@ -6,6 +6,7 @@ import com.agent.dock.agent.repository.AgentRepository;
 import com.agent.dock.attachment.repository.AttachmentRepository;
 import com.agent.dock.common.exception.ConflictException;
 import com.agent.dock.common.exception.NotFoundException;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.repository.ExecutionLogRepository;
 import com.agent.dock.execution.repository.ExecutionRepository;
 import com.agent.dock.group.domain.AgentGroup;
@@ -34,6 +35,8 @@ public class GroupService {
     private final ExecutionRepository executionRepository;
     private final ExecutionLogRepository executionLogRepository;
     private final AttachmentRepository attachmentRepository;
+    /** 전역 SSE 스트림에 "그룹(팀)이 바뀌었다"를 알린다. */
+    private final EventPublisher changeEvents;
 
     public List<GroupResponse> findAll(Long projectId) {
         List<AgentGroup> groups = projectId == null
@@ -62,6 +65,7 @@ public class GroupService {
             group.setLeaderAgent(requireAgent(request.leaderAgentId()));
         }
         AgentGroup saved = groupRepository.save(group);
+        changeEvents.groupChanged(request.projectId());
         return findOne(saved.getId());
     }
 
@@ -77,6 +81,7 @@ public class GroupService {
         group.setPrompt(request.prompt() == null ? "" : request.prompt());
         group.setLeaderAgent(request.leaderAgentId() == null ? null : requireAgent(request.leaderAgentId()));
         groupRepository.save(group);
+        changeEvents.groupChanged(projectId);
         return findOne(id);
     }
 
@@ -90,6 +95,7 @@ public class GroupService {
         member.setGroup(group);
         member.setAgent(requireAgent(agentId));
         memberRepository.save(member);
+        changeEvents.groupChanged(group.getProjectId());
         return findOne(groupId);
     }
 
@@ -100,7 +106,13 @@ public class GroupService {
         AgentGroupMember member = memberRepository.findMember(groupId, agentId)
                 .orElseThrow(() -> new NotFoundException("Agent %d is not a member of group %d".formatted(agentId, groupId)));
         memberRepository.delete(member);
+        changeEvents.groupChanged(groupProjectId(groupId));
         return findOne(groupId);
+    }
+
+    /** 그룹의 프로젝트 id(알림에 싣는다). 못 찾으면 null. */
+    private Long groupProjectId(Long groupId) {
+        return groupRepository.findById(groupId).map(AgentGroup::getProjectId).orElse(null);
     }
 
     /**
@@ -122,6 +134,7 @@ public class GroupService {
         }
         memberRepository.deleteByGroupIdIn(List.of(id));
         groupRepository.delete(group);
+        changeEvents.groupChanged(group.getProjectId());
     }
 
     private List<AgentSummary> membersOf(Long groupId) {

@@ -1,15 +1,26 @@
 package com.agent.dock.execution.service;
 
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.agent.repository.AgentRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.common.exception.ConflictException;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.common.exception.NotFoundException;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.domain.ChangedFile;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.domain.Execution;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.domain.ExecutionStatus;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.domain.MergeStatus;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.dto.ExecutionResponse;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.repository.ExecutionLogRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.repository.ExecutionRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.runtime.service.RuntimeRegistry;
 import java.util.List;
 import java.util.Optional;
@@ -45,6 +56,7 @@ class ExecutionMergeRetryTest {
     @Mock RuntimeRegistry runtimeRegistry;
     @Mock ApplicationEventPublisher eventPublisher;
     @Mock WorktreeService worktreeService;
+    @Mock EventPublisher changeEvents;
     @InjectMocks ExecutionService service;
 
     @Test

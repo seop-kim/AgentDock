@@ -1,22 +1,40 @@
 package com.agent.dock.delegation.service;
 
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.agent.domain.Agent;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.agent.repository.AgentRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.common.exception.ConflictException;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.common.exception.NotFoundException;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.domain.Execution;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.domain.ExecutionStatus;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.repository.ExecutionRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.service.ExecutionFactory;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.service.ExecutionGuard;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.service.ExecutionRunner;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.service.ExecutionService;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.service.ExecutionStreamHub;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.service.WorktreeService;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.group.service.GroupService;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.project.domain.Project;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.project.repository.ProjectRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.runtime.dto.AgentExecutionResult;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.runtime.dto.ExecutionMetrics;
 import java.math.BigDecimal;
 import java.nio.file.Files;
@@ -65,6 +83,7 @@ class DelegationAnswerResumeTest {
     @Mock GroupService groupService;
     @Mock RuleRouter ruleRouter;
     @Mock WorktreeService worktreeService;
+    @Mock EventPublisher changeEvents;
     @InjectMocks DelegationService service;
 
     /** 이 실행의 작업 디렉터리(cwd). 지시·문맥 파일이 여기 `.agentdock/prompts` 에 쓰인다. */

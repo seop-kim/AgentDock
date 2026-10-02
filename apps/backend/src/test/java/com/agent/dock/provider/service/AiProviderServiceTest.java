@@ -1,11 +1,18 @@
 package com.agent.dock.provider.service;
 
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.common.exception.ConflictException;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.common.exception.NotFoundException;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.provider.domain.AiProvider;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.provider.domain.ProviderKey;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.provider.dto.CreateAiProviderRequest;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.provider.dto.ProviderCapabilities;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.provider.repository.AiProviderRepository;
 import java.util.HashMap;
 import java.util.List;
@@ -26,6 +33,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AiProviderServiceTest {
     @Mock AiProviderRepository providerRepository;
+    @Mock EventPublisher changeEvents;
     @InjectMocks AiProviderService service;
 
     @Test
