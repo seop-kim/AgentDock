@@ -15,7 +15,7 @@ import { WaitingInputItem } from './WaitingInputPopup';
  * 좌우 패널을 뺀 빈 곳의 가운데에 맞춘다.
  *
  * <p>위임받은 자식 실행이 물은 것도 함께 센다(마스터만 보면 자식이 물은 질문을 놓친다).
- * 화면은 프로젝트 상세의 **항상 도는 다시 읽기**(3초)로 갱신되므로 답한 항목은 저절로 사라진다 — 새 주기는 없다.
+ * 화면은 전역 이벤트 스트림(SSE) 알림으로 갱신되므로 답한 항목은 저절로 사라진다 — 새 주기는 없다.
  */
 export default function WaitingInputBanner({
   project,
@@ -60,7 +60,7 @@ export default function WaitingInputBanner({
           <ul className={styles.list}>
             {pending.map((execution) => (
               <li key={execution.id}>
-                <WaitingInputItem execution={execution} agentName={nameOf(execution.agentId)} />
+                <WaitingInputItem execution={execution} agentName={nameOf(execution.agentId)} wide />
               </li>
             ))}
           </ul>

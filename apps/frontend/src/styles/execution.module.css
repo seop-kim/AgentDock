@@ -107,6 +107,28 @@
   background: var(--color-surface);
 }
 
+/* 알약을 펼쳤을 때: 질문·보기·답 입력을 가로 한 줄에 놓는다(좁은 말풍선 팝업은 세로 그대로). */
+.questionWide {
+  composes: question;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.questionWide .questionText {
+  flex: 1 1 220px;
+}
+
+.questionWide .options {
+  flex: 0 0 auto;
+}
+
+.questionWide .answer {
+  flex: 0 0 auto;
+  min-width: 200px;
+}
+
 .questionText {
   margin: 0;
   color: var(--color-text);

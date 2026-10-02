@@ -692,7 +692,7 @@ export default function GroupCanvas({
 
       {/* 아래 가운데(패널 사이의 빈 곳 가운데)에 떠 있는 확대/축소 도구 */}
       <div
-        className={styles.zoom}
+        className={waitingByAgent.size > 0 ? `${styles.zoom} ${styles.zoomCompact}` : styles.zoom}
         style={vars({ '--inset-left': `${insetLeft}px`, '--inset-right': `${insetRight}px` })}
       >
         <button type="button" onClick={() => zoomBy(1 / ZOOM_STEP)} aria-label="축소">
@@ -704,15 +704,18 @@ export default function GroupCanvas({
         </button>
         <button
           type="button"
+          aria-label="맞춤"
+          title="화면에 맞춘다"
           onClick={() => {
             touchedRef.current = false;
             fit();
           }}
         >
-          맞춤
+          ⤢<span className={styles.zoomLabel}>맞춤</span>
         </button>
         <button
           type="button"
+          aria-label="위치 초기화"
           onClick={() => {
             touchedRef.current = false;
             clearPositions();
@@ -720,7 +723,7 @@ export default function GroupCanvas({
           }}
           title="손으로 옮긴 위치를 지우고 자동 배치로 되돌립니다"
         >
-          위치 초기화
+          ↺<span className={styles.zoomLabel}>위치 초기화</span>
         </button>
       </div>
 

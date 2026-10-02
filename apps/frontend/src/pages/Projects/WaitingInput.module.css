@@ -24,6 +24,8 @@
   flex-direction: column;
   gap: 6px;
   max-width: 100%;
+  /* 펼치면 질문·보기·답 입력이 한 줄에 들어가도록 가로로 길게 잡는다. */
+  min-width: min(560px, 100%);
   padding: 8px 10px;
   border-radius: var(--radius-lg);
   /* 글래스(블러) 요소에는 overflow 를 두지 않는다 — 길면 안쪽 목록이 스크롤한다. */

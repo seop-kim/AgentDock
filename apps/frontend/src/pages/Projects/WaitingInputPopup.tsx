@@ -16,7 +16,16 @@ const clamp = (value: number, min: number, max: number) => Math.min(Math.max(val
  * 입력 대기 배너와 캔버스 말풍선 팝업이 **같은 모양**을 쓴다(한 곳에서만 고친다).
  * 답을 보내면 기존 스토어 동작(`answerExecution`)이 서버에 넣고 화면을 다시 읽어 이 항목이 사라진다.
  */
-export function WaitingInputItem({ execution, agentName }: { execution: Execution; agentName: string }) {
+export function WaitingInputItem({
+  execution,
+  agentName,
+  /** 가로로 넓게 쓰는 자리인가(알약을 펼쳤을 때). 말풍선 팝업은 좁은 세로 배치 그대로다. */
+  wide = false,
+}: {
+  execution: Execution;
+  agentName: string;
+  wide?: boolean;
+}) {
   const { answerExecution } = useAgentDockStore();
   const [text, setText] = useState('');
 
@@ -33,7 +42,7 @@ export function WaitingInputItem({ execution, agentName }: { execution: Executio
   };
 
   return (
-    <div className={exec.question}>
+    <div className={wide ? exec.questionWide : exec.question}>
       <p className={exec.questionText}>
         ⎿ {agentName}: {questionText(execution)}
       </p>
