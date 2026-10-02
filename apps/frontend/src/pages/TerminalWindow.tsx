@@ -64,7 +64,12 @@ export default function TerminalWindow() {
       </header>
       {notice && <p className="errorText">{notice}</p>}
       <p className={styles.cwd}>{runDir ?? '워크스페이스가 없습니다'}</p>
-      <TerminalView executionId={execution?.id ?? null} live={state === 'live'} className={styles.terminal} />
+      <TerminalView
+        executionId={execution?.id ?? null}
+        live={state === 'live'}
+        className={styles.terminal}
+        filterable
+      />
     </div>
   );
 }

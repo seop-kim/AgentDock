@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import { logLineKind, type TerminalLine } from '../lib/terminal';
+import filter from '../styles/logFilter.module.css';
 import term from '../styles/terminal.module.css';
 
 /**
@@ -16,6 +17,7 @@ export default function TerminalView({
   live: storeLive,
   className,
   trackTail = false,
+  filterable = false,
 }: {
   /** 보여 줄 실행. null 이면 아직 실행이 없다(안내 문구만). */
   executionId: number | null;
@@ -25,9 +27,12 @@ export default function TerminalView({
   className?: string;
   /** true 면 맨 아래에 있을 때만 새 줄을 따라 내려간다(스크롤해 읽는 미리보기용). */
   trackTail?: boolean;
+  /** true 면 위에 검색줄을 붙인다(긴 로그를 훑는 터미널 창용). */
+  filterable?: boolean;
 }) {
   const [lines, setLines] = useState<TerminalLine[]>([]);
   const [finished, setFinished] = useState(false);
+  const [query, setQuery] = useState('');
   const logRef = useRef<HTMLOListElement>(null);
   // 사용자가 맨 아래(여유 24px 이내)에 있는지. trackTail 일 때만 본다.
   const atBottomRef = useRef(true);
@@ -83,26 +88,44 @@ export default function TerminalView({
           },
         ];
 
+  // 검색어는 화면에 보이는 줄만 거른다(로그 자체는 그대로 받아 둔다 — 지우면 다시 못 본다).
+  const needle = query.trim().toLowerCase();
+  const visible = needle === '' ? rows : rows.filter((line) => line.text.toLowerCase().includes(needle));
   return (
-    <ol
-      ref={logRef}
-      className={`${term.terminal} ${className ?? ''}`}
-      // trackTail 일 때만 스크롤 위치를 본다(미리보기에서 위로 올려 읽는 중인지).
-      onScroll={
-        trackTail
-          ? () => {
-              const el = logRef.current;
-              if (el) atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
-            }
-          : undefined
-      }
-    >
-      {rows.map((line, index) => (
-        <li key={`${index}-${line.text}`} className={`${term.line} ${term[line.kind]}`}>
-          {line.text}
-          {live && index === rows.length - 1 && <span className={term.cursor} />}
-        </li>
-      ))}
-    </ol>
+    <>
+      {filterable && (
+        <div className={filter.filterBar}>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="로그 검색 (예: error, 실행 #42)"
+            aria-label="로그 검색"
+          />
+          <span className={filter.filterCount}>
+            {visible.length} / {rows.length}
+          </span>
+        </div>
+      )}
+      <ol
+        ref={logRef}
+        className={`${term.terminal} ${className ?? ''}`}
+        // trackTail 일 때만 스크롤 위치를 본다(미리보기에서 위로 올려 읽는 중인지).
+        onScroll={
+          trackTail
+            ? () => {
+                const el = logRef.current;
+                if (el) atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+              }
+            : undefined
+        }
+      >
+        {visible.map((line, index) => (
+          <li key={`${index}-${line.text}`} className={`${term.line} ${term[line.kind]}`}>
+            {line.text}
+            {live && index === visible.length - 1 && <span className={term.cursor} />}
+          </li>
+        ))}
+      </ol>
+    </>
   );
 }
