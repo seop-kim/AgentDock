@@ -690,15 +690,9 @@ export default function GroupCanvas({
       {/* 사람이 처리해야 할 요청(입력 대기 + 수동 병합)을 한 알약으로 모아 둔다 — 누르면 아래에서 창이 올라온다. */}
       <RequestsPanel project={project} />
 
-      {/* 아래 가운데(패널 사이의 빈 곳 가운데)에 떠 있는 확대/축소 도구 */}
+      {/* 화면 위쪽 가운데(패널 사이의 빈 곳 가운데)에 떠 있는 확대/축소 도구 */}
       <div
-        className={
-          // 사람이 처리할 요청(입력 대기·수동 병합)이 떠 있으면 도구는 오른쪽으로 비켜서고 아이콘만 남는다.
-          waitingByAgent.size > 0 ||
-          executions.some((execution) => execution.projectId === project.id && execution.mergeStatus === 'MANUAL')
-            ? `${styles.zoom} ${styles.zoomCompact}`
-            : styles.zoom
-        }
+        className={styles.zoom}
         style={vars({ '--inset-left': `${insetLeft}px`, '--inset-right': `${insetRight}px` })}
       >
         <button type="button" onClick={() => zoomBy(1 / ZOOM_STEP)} aria-label="축소">

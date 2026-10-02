@@ -2,8 +2,8 @@
 
 .dock {
   position: absolute;
-  /* 화면 위쪽 가운데 — 헤더(72px) 아래에 붙인다. */
-  top: calc(72px + 8px);
+  /* 화면 아래 가운데(확대/축소 도구는 위로 갔으니 그 자리는 비어 있다). */
+  bottom: calc(var(--spacing-md) + 8px);
   left: calc((100% + var(--inset-left, 0px) - var(--inset-right, 0px)) / 2);
   transform: translateX(-50%);
   display: flex;
@@ -40,43 +40,43 @@
   background: transparent;
 }
 
-/* 화면 위쪽에 붙어 있는 긴 패널이 위에서 아래로 내려온다(뒤 배경은 그대로 보인다). */
+/* 화면 아래에 붙어 있는 긴 패널이 아래에서 위로 올라온다(뒤 배경은 그대로 보인다). */
 .sheet {
   composes: glassStrong from '../../styles/glass.module.css';
   position: fixed;
-  top: 0;
+  bottom: 0;
   left: 50%;
   width: min(1000px, calc(100vw - 32px));
   height: min(78vh, 680px);
   display: flex;
   flex-direction: column;
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   box-shadow: var(--shadow-float), var(--glass-highlight);
   /* 애니메이션이 끝난 뒤에도 제자리에 머물도록 기준 위치를 잡아 둔다. */
   transform: translateX(-50%);
-  animation: drop 190ms ease-out;
+  animation: rise 190ms ease-out;
 }
 
-@keyframes drop {
+@keyframes rise {
   from {
-    transform: translate(-50%, -100%);
+    transform: translate(-50%, 100%);
   }
   to {
     transform: translate(-50%, 0);
   }
 }
 
-/* 닫을 때: 위로 부드럽게 올라간 뒤 사라진다(끝난 뒤 화면에서 감춘다). */
+/* 닫을 때: 아래로 부드럽게 내려간 뒤 사라진다(끝난 뒤 화면에서 감춘다). */
 .sheetClosing {
-  animation: lift 180ms ease-in forwards;
+  animation: sink 180ms ease-in forwards;
 }
 
-@keyframes lift {
+@keyframes sink {
   from {
     transform: translate(-50%, 0);
   }
   to {
-    transform: translate(-50%, -100%);
+    transform: translate(-50%, 100%);
   }
 }
 
