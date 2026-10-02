@@ -111,7 +111,7 @@ class DelegationAnswerResumeTest {
 
         service.answer(42L, "새 파일로 만들어 주세요");
 
-        verify(executionService, timeout(5000)).markWaitingInput(42L, "그럼 기존 파일을 고칠까요?");
+        verify(executionService, timeout(5000)).markWaitingInput(42L, "그럼 기존 파일을 고칠까요?", List.of());
         verify(streamHub, timeout(5000)).system(42L, "⎿ 질문: 그럼 기존 파일을 고칠까요?");
         // 사람의 답을 기다리는 중이므로 완료로 남기지 않는다.
         verify(executionService, never()).markSucceeded(anyLong());

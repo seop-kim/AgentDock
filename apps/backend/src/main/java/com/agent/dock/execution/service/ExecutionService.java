@@ -26,7 +26,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -36,6 +39,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ExecutionService {
     private final ExecutionRepository executionRepository;
     private final ExecutionLogRepository logRepository;
@@ -46,6 +50,11 @@ public class ExecutionService {
     private final RuntimeRegistry runtimeRegistry;
     private final ApplicationEventPublisher eventPublisher;
     private final WorktreeService worktreeService;
+
+    /** 서버가 죽었다 다시 떠 고아로 남은 실행에 남기는 사유. */
+    private static final String STALE_EXECUTION_REASON = "서버 재기동으로 중단됨";
+    /** 사람이 화면에서 취소한 실행에 남기는 사유. */
+    private static final String MANUAL_CANCEL_REASON = "사용자가 취소함";
 
     public ExecutionResponse findOne(Long id) {
         Execution execution = executionRepository.findById(id)
@@ -322,6 +331,34 @@ public class ExecutionService {
         return streamHub.subscribe(Long.parseLong(executionId));
     }
 
+    /** 서버 기동 시 PENDING/RUNNING/WAITING_CHILD/WAITING_INPUT 로 남은 고아 실행을 일괄 CANCELLED 로 전이하고,
+     * 루트 실행이면 Task 도 publishFinished 경로로 종료한다. 이미 끝난 실행은 건드리지 않는다.
+     * 기동 트리거가 부를 수 있도록 public 이다(기동 1회만, 상시 감시 없음).
+     *
+     * @return 정리한 실행 수
+     */
+    public int cleanupOrphanExecutions() {
+        List<Execution> orphans = executionRepository.findAll().stream()
+                .filter(execution -> isRunning(execution.getStatus()))
+                .toList();
+        for (Execution orphan : orphans) {
+            cancelExecution(orphan, STALE_EXECUTION_REASON);
+        }
+        return orphans.size();
+    }
+
+    /**
+     * 서버 기동 시 한 번 고아 실행을 정리한다(상시 감시는 하지 않는다).
+     * WorkspaceService 의 기동 워밍업과 같은 방식으로 ApplicationReadyEvent 에 붙인다.
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    void cleanupOrphansOnStartup() {
+        int cleaned = cleanupOrphanExecutions();
+        if (cleaned > 0) {
+            log.info("cleaned up {} orphan execution(s) from a previous run", cleaned);
+        }
+    }
+
     public Map<String, Boolean> cancel(Long id) {
         Execution execution = executionRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Execution %d not found".formatted(id)));
@@ -329,7 +366,26 @@ public class ExecutionService {
                 .orElseThrow(() -> new NotFoundException("Agent %d not found".formatted(execution.getAgentId())));
         AgentRuntime runtime = runtimeRegistry.resolve(agent.getProvider().getKey().name());
         runtime.cancel(String.valueOf(execution.getId()));
-        return Map.of("cancelled", true);
+        return Map.of("cancelled", cancelExecution(execution, MANUAL_CANCEL_REASON));
+    }
+
+    /** 실행을 CANCELLED 로 전이하고 사유를 남긴다(이미 끝난 실행은 건드리지 않는다).
+     * 루트 실행(root_execution_id 가 비어 있음)이면 Task 상태도 publishFinished 경로로 동기화한다.
+     *
+     * @return 실제로 전이했으면 true
+     */
+    private boolean cancelExecution(Execution execution, String reason) {
+        if (!isRunning(execution.getStatus())) {
+            return false;
+        }
+        execution.setStatus(ExecutionStatus.CANCELLED);
+        execution.setFinishedAt(Instant.now());
+        execution.setErrorMessage(reason);
+        executionRepository.save(execution);
+        if (execution.getRootExecutionId() == null) {
+            publishFinished(execution.getId(), execution.getTaskId(), ExecutionStatus.CANCELLED);
+        }
+        return true;
     }
 
     private void update(Long executionId, Consumer<Execution> change) {

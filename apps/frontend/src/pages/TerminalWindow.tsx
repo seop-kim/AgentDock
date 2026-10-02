@@ -1,5 +1,6 @@
 import { useParams } from 'react-router-dom';
 import TerminalView from '../components/TerminalView';
+import { CancelButton, useCancelNotice } from './Projects/ExecutionTree';
 import { currentExecution, currentTask, terminalState } from '../lib/terminal';
 import { useLiveRefresh } from '../lib/useLiveRefresh';
 import { useAgentDockStore } from '../store/AgentDockStore';
@@ -15,6 +16,7 @@ export default function TerminalWindow() {
   const { agentId } = useParams();
   const { agents, projects, workspaces, tasks, executions, loading, reload } = useAgentDockStore();
   useLiveRefresh(reload);
+  const [notice, setNotice] = useCancelNotice();
 
   const agent = agents.find((candidate) => candidate.id === Number(agentId)) ?? null;
   if (!agent) {
@@ -59,7 +61,9 @@ export default function TerminalWindow() {
             커밋 {execution.resultCommit}
           </span>
         )}
+        {execution && <CancelButton execution={execution} name={agent.name} onError={setNotice} />}
       </header>
+      {notice && <p className="errorText">{notice}</p>}
       <p className={styles.cwd}>{runDir ?? '워크스페이스가 없습니다'}</p>
       <TerminalView executionId={execution?.id ?? null} live={state === 'live'} className={styles.terminal} />
     </div>

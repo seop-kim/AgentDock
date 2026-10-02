@@ -10,6 +10,7 @@ export const STATUS_LABEL: Record<ExecutionStatus, string> = {
   WAITING_INPUT: '입력 대기',
   DONE: '완료',
   FAILED: '실패',
+  CANCELLED: '취소',
 };
 
 /** 배지 색을 고르는 묶음. CSS 에서 이 이름으로 클래스를 만든다. */
@@ -20,6 +21,7 @@ export const STATUS_TONE: Record<ExecutionStatus, 'wait' | 'active' | 'done' | '
   WAITING_INPUT: 'wait',
   DONE: 'done',
   FAILED: 'failed',
+  CANCELLED: 'wait',
 };
 
 /** 트리 결과 배지의 한국어 이름(실행 트리 창 루트 행·채팅 요약 카드·터미널 머리말이 함께 쓴다). */

@@ -105,7 +105,7 @@ export interface Task {
 }
 
 /** 실행 단위의 상태. 부모는 자식이 도는 동안 WAITING_CHILD 로, 사람에게 물으면 WAITING_INPUT 으로 멈춘다. */
-export type ExecutionStatus = 'QUEUED' | 'RUNNING' | 'WAITING_CHILD' | 'WAITING_INPUT' | 'DONE' | 'FAILED';
+export type ExecutionStatus = 'QUEUED' | 'RUNNING' | 'WAITING_CHILD' | 'WAITING_INPUT' | 'DONE' | 'FAILED' | 'CANCELLED';
 
 /**
  * 실행 출력의 **마지막 줄에 강제하는 계약**. 판단이 필요한 마스터·리더만 쓴다.
