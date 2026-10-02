@@ -1,8 +1,9 @@
-import { CSSProperties, useEffect, useState } from 'react';
+import { CSSProperties, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { SettingsIcon } from '../../components/icons';
 import { useAgentDockStore } from '../../store/AgentDockStore';
 import shared from '../../styles/shared.module.css';
+import { questionText } from '../../lib/executions';
 import type { ChatTarget } from '../../types';
 import AgentList from './AgentList';
 import ChatPanel from './ChatPanel';
@@ -69,6 +70,34 @@ export default function ProjectDetail() {
     watchExecutionTree(projectId, executionTreeRoot);
     return () => watchExecutionTree(projectId, null);
   }, [projectId, executionTreeRoot, watchExecutionTree]);
+
+  // 입력 대기가 새로 생기면 브라우저 알림으로 알린다 — 다른 탭을 보고 있어도 답할 때를 알게.
+  // 첫 로드(이미 대기 중이던 것)에서는 알리지 않고, 새로 생긴 순간에만 알린다.
+  const waitingKey = executions
+    .filter((execution) => execution.projectId === project?.id && execution.status === 'WAITING_INPUT')
+    .map((execution) => execution.id)
+    .join(',');
+  const askedRef = useRef<string | null>(null);
+  useEffect(() => {
+    const previous = askedRef.current;
+    askedRef.current = waitingKey;
+    if (previous === null || previous === waitingKey || waitingKey === '' || typeof Notification === 'undefined') {
+      return;
+    }
+    if (Notification.permission === 'default') {
+      void Notification.requestPermission();
+      return;
+    }
+    if (Notification.permission !== 'granted') return;
+    const asked = executions.filter(
+      (execution) => execution.projectId === project?.id && execution.status === 'WAITING_INPUT',
+    );
+    const first = asked[asked.length - 1];
+    const notification = new Notification(`입력 대기 — ${project?.name ?? '프로젝트'}`, {
+      body: first === undefined ? '에이전트가 사람의 답을 기다립니다.' : questionText(first),
+    });
+    notification.onclick = () => window.focus();
+  }, [waitingKey, executions, project?.id, project?.name]);
 
   if (!project) {
     return (
