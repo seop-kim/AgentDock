@@ -91,6 +91,8 @@ export interface AgentGroup {
   memberIds: number[];
   /** 그룹 프롬프트. 마스터 프롬프트 아래, 에이전트 프롬프트 위. */
   prompt: string;
+  /** 그룹 프롬프트와 별개인 **공유 노트**. 그룹 안 실행들이 함께 보는 맥락이라 트리가 끝날 때 자동으로 자란다. */
+  sharedNote: string;
 }
 
 export type TaskStatus = 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED';

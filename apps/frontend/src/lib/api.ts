@@ -119,6 +119,8 @@ export interface AgentGroup {
   id: number;
   projectId: number;
   name: string;
+  /** 그룹 프롬프트와 별개인 공유 노트(그룹 안 실행들이 함께 보는 맥락). */
+  sharedNote: string;
   description?: string | null;
   prompt: string | null;
   leader: AgentSummary | null;
@@ -255,8 +257,10 @@ export const api = {
   listGroups: (projectId: number) => request<AgentGroup[]>(`/groups?projectId=${projectId}`),
   createGroup: (data: { projectId: number; name: string; description?: string; leaderAgentId?: number }) =>
     request<AgentGroup>('/groups', { method: 'POST', body: JSON.stringify(data) }),
-  updateGroup: (id: number, data: { name: string; description?: string; prompt?: string; leaderAgentId?: number | null }) =>
-    request<AgentGroup>(`/groups/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  updateGroup: (
+    id: number,
+    data: { name: string; description?: string; prompt?: string; sharedNote?: string; leaderAgentId?: number | null },
+  ) => request<AgentGroup>(`/groups/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteGroup: (id: number) => request<void>(`/groups/${id}`, { method: 'DELETE' }),
   addGroupMember: (groupId: number, agentId: number) =>
     request<AgentGroup>(`/groups/${groupId}/members`, { method: 'POST', body: JSON.stringify({ agentId }) }),

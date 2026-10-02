@@ -80,6 +80,10 @@ public class GroupService {
         group.setName(request.name());
         group.setDescription(request.description());
         group.setPrompt(request.prompt() == null ? "" : request.prompt());
+        // 공유 노트는 보내지 않으면 기존 값을 지킨다(프롬프트만 저장할 때 노트가 날아가지 않게). 빈 문자열이면 지운다.
+        if (request.sharedNote() != null) {
+            group.setSharedNote(request.sharedNote());
+        }
         group.setLeaderAgent(request.leaderAgentId() == null ? null : requireAgent(request.leaderAgentId()));
         groupRepository.save(group);
         changeEvents.groupChanged(projectId);

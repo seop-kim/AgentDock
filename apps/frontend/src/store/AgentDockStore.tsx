@@ -82,6 +82,8 @@ interface AgentDockStore {
   removeGroupMember: (groupId: number, agentId: number) => void;
   setGroupLeader: (groupId: number, agentId: number | null) => void;
   setGroupPrompt: (groupId: number, prompt: string) => void;
+  /** 그룹 공유 노트(그룹 안 실행들이 함께 보는 맥락). 사람이 고쳐 저장한다. */
+  setGroupNote: (groupId: number, sharedNote: string) => void;
 
   sendCommand: (projectId: number, target: ChatTarget, text: string, attachments: AttachedFile[]) => void;
   /** 실행 트리의 워크트리를 정리한다(사람이 판단해 부른다). deleteBranch 면 전용 브랜치도 지운다. */
@@ -294,6 +296,7 @@ function mapGroup(group: ApiGroup): AgentGroup {
     leaderAgentId: group.leader?.id ?? null,
     memberIds: group.members.map((member) => member.id),
     prompt: text(group.prompt),
+    sharedNote: text(group.sharedNote),
   };
 }
 
@@ -976,6 +979,22 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
         if (group === undefined) return;
         setGroups((prev) => prev.map((candidate) => (candidate.id === groupId ? { ...candidate, prompt } : candidate)));
         call(() => api.updateGroup(groupId, { name: group.name, prompt, leaderAgentId: group.leaderAgentId }));
+      },
+      setGroupNote: (groupId, sharedNote) => {
+        const group = groups.find((candidate) => candidate.id === groupId);
+        if (group === undefined) return;
+        setGroups((prev) =>
+          prev.map((candidate) => (candidate.id === groupId ? { ...candidate, sharedNote } : candidate)),
+        );
+        // 노트만 바꾼다 — 프롬프트와 리더는 지금 값을 그대로 보내 덮어쓰지 않게 한다.
+        call(() =>
+          api.updateGroup(groupId, {
+            name: group.name,
+            prompt: group.prompt,
+            sharedNote,
+            leaderAgentId: group.leaderAgentId,
+          }),
+        );
       },
 
       sendCommand,
