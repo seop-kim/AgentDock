@@ -20,6 +20,7 @@ import com.agent.dock.runtime.dto.AgentExecutionResult;
 import com.agent.dock.runtime.dto.ExecutionMetrics;
 import com.agent.dock.runtime.interfaces.AgentRuntime;
 import com.agent.dock.runtime.service.RuntimeRegistry;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.function.Consumer;
@@ -28,9 +29,11 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -58,6 +61,13 @@ public class ExecutionService {
     private static final String STALE_EXECUTION_REASON = "서버 재기동으로 중단됨";
     /** 사람이 화면에서 취소한 실행에 남기는 사유. */
     private static final String MANUAL_CANCEL_REASON = "사용자가 취소함";
+
+    /** 사람의 답을 기다리다 만료된 실행의 사유(방치된 트리가 영원히 멈춰 있지 않게). */
+    private static final String WAITING_INPUT_EXPIRED_REASON = "답이 없어 만료됨";
+
+    /** 입력 대기 만료 기준(분). 이 시간을 넘긴 질문은 만료로 취소한다. */
+    @Value("${agentdock.delegation.waiting-input-ttl-minutes:720}")
+    private long waitingInputTtlMinutes;
 
     public ExecutionResponse findOne(Long id) {
         Execution execution = executionRepository.findById(id)
@@ -382,15 +392,15 @@ public class ExecutionService {
     public Map<String, Boolean> cancel(Long id) {
         Execution execution = executionRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Execution %d not found".formatted(id)));
-        return Map.of("cancelled", cancelSubtree(execution));
+        return Map.of("cancelled", cancelSubtree(execution, MANUAL_CANCEL_REASON));
     }
 
     /** 이 실행과 자손을 모두 취소한다(하나라도 실제로 전이했으면 true). */
-    private boolean cancelSubtree(Execution execution) {
-        boolean cancelled = cancelOne(execution);
+    private boolean cancelSubtree(Execution execution, String reason) {
+        boolean cancelled = cancelOne(execution, reason);
         for (Execution descendant : descendantsOf(execution)) {
             // 자손은 하나가 이미 끝나 있어도 나머지를 계속 멈춰야 하므로 숏컷하지 않는다.
-            cancelled = cancelOne(descendant) || cancelled;
+            cancelled = cancelOne(descendant, reason) || cancelled;
         }
         return cancelled;
     }
@@ -415,9 +425,32 @@ public class ExecutionService {
     }
 
     /** 실행 하나를 실제로 멈춘다: CLI 프로세스 종료 + 상태 전이. */
-    private boolean cancelOne(Execution execution) {
+    private boolean cancelOne(Execution execution, String reason) {
         killProcess(execution);
-        return cancelExecution(execution, MANUAL_CANCEL_REASON);
+        return cancelExecution(execution, reason);
+    }
+
+    /**
+     * 답이 오지 않은 채 오래된 입력 대기 질문을 만료 처리한다(취소).
+     * 답이 오면 이어서 도는 실행이라 방치하면 그 트리는 영원히 멈춰 있다 — 만료로 끝내 화면이 정리되게 한다.
+     * 주기 실행은 앱의 {@code @EnableScheduling} 이 켠다. 기준은 설정(기본 12시간)으로 바꾼다.
+     *
+     * @return 만료 처리한 실행 수
+     */
+    @Scheduled(fixedDelayString = "PT10M", initialDelayString = "PT1M")
+    public int expireStaleWaitingInputs() {
+        Instant deadline = Instant.now().minus(Duration.ofMinutes(waitingInputTtlMinutes));
+        List<Execution> stale = executionRepository.findAll().stream()
+                .filter(execution -> execution.getStatus() == ExecutionStatus.WAITING_INPUT)
+                .filter(execution -> execution.getUpdatedAt() == null || execution.getUpdatedAt().isBefore(deadline))
+                .toList();
+        for (Execution execution : stale) {
+            cancelSubtree(execution, WAITING_INPUT_EXPIRED_REASON);
+        }
+        if (!stale.isEmpty()) {
+            log.info("[execution] 입력 대기 만료로 {}건을 취소했습니다 (기준 {}분)", stale.size(), waitingInputTtlMinutes);
+        }
+        return stale.size();
     }
 
     /** 그 실행의 CLI 프로세스를 종료한다(에이전트를 못 찾아도 상태 전이는 계속한다). */
