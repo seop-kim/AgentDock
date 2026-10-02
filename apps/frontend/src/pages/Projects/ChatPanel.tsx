@@ -4,7 +4,6 @@ import remarkGfm from 'remark-gfm';
 import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ClipIcon, FileIcon } from '../../components/icons';
 import { unavailableReason } from '../../lib/agentAvailability';
 import { ATTACHMENT_FOLDER, hasAttachment } from '../../lib/attachments';
-import { questionText } from '../../lib/executions';
 import { useAgentDockStore } from '../../store/AgentDockStore';
 import attach from '../../styles/attachment.module.css';
 import shared from '../../styles/shared.module.css';
