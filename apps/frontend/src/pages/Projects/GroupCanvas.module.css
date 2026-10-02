@@ -300,6 +300,57 @@
   color: var(--color-warning);
 }
 
+/* 작업 중 뱃지는 누를 수 있다: 그 에이전트의 터미널 창을 연다(끌기/선택으로 번지지 않게 막는다). */
+.nodeStatusButton {
+  cursor: pointer;
+}
+
+.nodeStatusButton:hover {
+  background: var(--color-code-bg);
+  filter: none;
+}
+
+/*
+ * 작업 중인 노드에 마우스를 올리면 뜨는 작은 터미널 미리보기(body 포털).
+ * `pointer-events: none` 이라 클릭·끌기·선택을 가로채지 않는다 — 미리보기가 노드를 덮어도 노드는 늘 눌린다.
+ */
+.nodePreview {
+  position: fixed;
+  top: var(--top);
+  left: var(--left);
+  z-index: 320;
+  width: var(--preview-w);
+  height: var(--preview-h);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px 8px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius);
+  background: var(--color-output-bg);
+  box-shadow: var(--shadow-float);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.nodePreviewTitle {
+  color: var(--color-term-dim);
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 터미널 몸통은 미리보기 상자 안을 다 쓰게 한다(두 클래스로 좁혀 terminal.module.css 를 덮는다). */
+.nodePreview .nodePreviewBody {
+  flex: 1 1 0;
+  min-height: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 11px;
+}
+
 /* 노드의 "⋮" 메뉴 버튼. 리더로 지정 / 그룹에서 제거 / 구성도에서 빼기를 여기에 모은다. */
 .nodeMenuButton {
   flex-shrink: 0;

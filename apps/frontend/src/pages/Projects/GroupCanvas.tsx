@@ -13,7 +13,7 @@ import { unavailableReason } from '../../lib/agentAvailability';
 import { agentStatus } from '../../lib/agentStatus';
 import { layoutCanvas, NODE_H, NODE_W, type CanvasNode } from '../../lib/canvasLayout';
 import { isAgentDrag, readAgentDrag } from '../../lib/dnd';
-import { waitingInputs } from '../../lib/executions';
+import { isLive, waitingInputs } from '../../lib/executions';
 import { useGroupDrop } from '../../lib/useGroupDrop';
 import { useAgentDockStore } from '../../store/AgentDockStore';
 import { openTerminalWindow } from '../../lib/windowSync';
@@ -22,6 +22,8 @@ import type { Agent, Execution, Project } from '../../types';
 import AgentNodeMenu from './AgentNodeMenu';
 import GroupCardMenu from './GroupCardMenu';
 import GroupPromptModal from './GroupPromptModal';
+import NodeTerminalPreview from './NodeTerminalPreview';
+import WaitingInputBanner from './WaitingInput';
 import WaitingInputPopup from './WaitingInputPopup';
 import styles from './GroupCanvas.module.css';
 import waiting from './WaitingInput.module.css';
@@ -106,6 +108,14 @@ export default function GroupCanvas({
     });
     return map;
   }, [executions, project.id]);
+  // 에이전트마다 "지금 돌고 있는" 실행 하나. 노드 뱃지(터미널 열기)와 hover 미리보기가 함께 쓴다.
+  const runningByAgent = useMemo(() => {
+    const map = new Map<number, Execution>();
+    executions
+      .filter((execution) => execution.projectId === project.id && isLive(execution.status))
+      .forEach((execution) => map.set(execution.agentId, execution));
+    return map;
+  }, [executions, project.id]);
   const layout = useMemo(
     () => layoutCanvas(placedAgents, projectGroups, nodePositions, groupPositions),
     [placedAgents, projectGroups, nodePositions, groupPositions],
@@ -120,6 +130,9 @@ export default function GroupCanvas({
   const [promptGroupId, setPromptGroupId] = useState<number | null>(null);
   // 노드의 말풍선(💬)을 누르면 그 자리에 뜨는 입력 대기 팝업.
   const [waitingPopup, setWaitingPopup] = useState<{ execution: Execution; rect: DOMRect } | null>(null);
+  // 작업 중인 노드에 마우스를 올리면 뜨는 작은 터미널 미리보기(그 노드의 지금 실행).
+  const [preview, setPreview] = useState<{ execution: Execution; agentName: string; rect: DOMRect } | null>(null);
+  const previewTimer = useRef<number | undefined>(undefined);
   // 노드나 그룹 상자를 끌어 위치를 옮긴다(노드를 그룹 상자 위에 놓으면 그 그룹으로 들어간다).
   type DragTarget = { kind: 'node'; agentId: number } | { kind: 'group'; groupId: number };
   const [dragTarget, setDragTarget] = useState<DragTarget | null>(null);
@@ -196,6 +209,23 @@ export default function GroupCanvas({
   }, [focusSeq]);
 
   useEffect(() => () => window.clearTimeout(smoothTimer.current), []);
+
+  // hover 미리보기가 남지 않게 창을 정리한다(노드가 사라져도 남지 않는다).
+  useEffect(() => () => window.clearTimeout(previewTimer.current), []);
+
+  /** 노드에 마우스를 올리면 잠깐 뒤 그 실행의 작은 터미널을 띄운다(스쳐 지나갈 때 깜빡이지 않게). */
+  const showPreview = (execution: Execution, agentName: string, el: HTMLElement) => {
+    window.clearTimeout(previewTimer.current);
+    previewTimer.current = window.setTimeout(
+      () => setPreview({ execution, agentName, rect: el.getBoundingClientRect() }),
+      300,
+    );
+  };
+
+  const hidePreview = () => {
+    window.clearTimeout(previewTimer.current);
+    setPreview(null);
+  };
 
   // 휠은 페이지 스크롤이 아니라 캔버스 확대/축소로 쓴다(preventDefault 가 필요해 passive 로 등록하지 않는다).
   useEffect(() => {
@@ -307,6 +337,8 @@ export default function GroupCanvas({
   ) => {
     if (e.button !== 0) return;
     if ((e.target as HTMLElement).closest('button')) return;
+    // 끌기 시작하면 hover 미리보기는 접는다(끄는 동안 따라다니지 않게).
+    hidePreview();
     e.stopPropagation();
     // 손으로 옮기기 시작하면 자동 맞춤을 멈춘다(놓을 때 화면이 튀지 않게).
     touchedRef.current = true;
@@ -480,6 +512,8 @@ export default function GroupCanvas({
             const isSelected = node.agentId === selectedAgentId;
             // 이 노드의 에이전트가 사람의 답을 기다리면 말풍선(💬)을 붙인다.
             const pending = waitingByAgent.get(node.agentId) ?? null;
+            // 지금 돌고 있는 실행(있으면 뱃지가 터미널 열기 버튼이 되고, hover 하면 미리보기가 뜬다).
+            const running = runningByAgent.get(node.agentId) ?? null;
             // 끌고 있는 동안에는 포인터를 따라간다.
             const manual = nodePositions[node.agentId];
             const dragging = dragTarget?.kind === 'node' && dragTarget.agentId === node.agentId;
@@ -500,6 +534,13 @@ export default function GroupCanvas({
                 onPointerDown={(e) =>
                   startDrag(e, { kind: 'node', agentId: node.agentId }, { x: nodeX, y: nodeY }, node.groupId)
                 }
+                // 작업 중이면 마우스를 올린 자리 아래에 그 실행의 작은 터미널을 띄운다(포인터는 통과한다).
+                onMouseEnter={
+                  running ? (e) => showPreview(running, agent.name, e.currentTarget) : undefined
+                }
+                onMouseLeave={running ? hidePreview : undefined}
+                data-agent-id={node.agentId}
+                data-agent-name={agent.name}
                 style={vars({ '--x': `${nodeX}px`, '--y': `${nodeY}px` })}
                 title={reason ?? undefined}
               >
@@ -515,11 +556,27 @@ export default function GroupCanvas({
                   </span>
                 </div>
                 {agent.id === project.masterAgentId && <span className={styles.masterTag}>마스터</span>}
-                {status.kind !== 'IDLE' && (
-                  <span className={`${styles.nodeStatus} ${statusClass}`} title={`상태: ${status.label}`}>
-                    {status.label}
-                  </span>
-                )}
+                {status.kind !== 'IDLE' &&
+                  (running ? (
+                    // 작업 중 뱃지는 누를 수 있다: 그 에이전트의 터미널 창을 연다(끌기·선택으로 번지지 않게 막는다).
+                    <button
+                      type="button"
+                      className={`${styles.nodeStatus} ${statusClass} ${styles.nodeStatusButton}`}
+                      aria-label={`${agent.name} 터미널 열기`}
+                      title={`${status.label} · 눌러서 터미널 열기`}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openTerminalWindow(agent.id);
+                      }}
+                    >
+                      {status.label}
+                    </button>
+                  ) : (
+                    <span className={`${styles.nodeStatus} ${statusClass}`} title={`상태: ${status.label}`}>
+                      {status.label}
+                    </span>
+                  ))}
                 {reason && <span className={styles.warnDot} aria-label={reason} />}
                 {/* 입력 대기 말풍선: 누르면 그 노드에 붙은 팝업에서 질문에 답한다. 끌기/이동으로 번지지 않게 막는다. */}
                 {pending !== null && (
@@ -538,21 +595,21 @@ export default function GroupCanvas({
                   </button>
                 )}
                 {isSelected && <span className={styles.selectedTag}>선택됨</span>}
-                {/* 마스터는 그룹에 속하지 않고 구성도에서 뺄 수도 없어 노드에 할 동작이 없다 */}
-                {agent.id !== project.masterAgentId && (
-                  <button
-                    type="button"
-                    className={styles.nodeMenuButton}
-                    aria-label={`${agent.name} 메뉴`}
-                    aria-haspopup="menu"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setNodeMenu({ node, agent, rect: e.currentTarget.getBoundingClientRect() });
-                    }}
-                  >
-                    ⋮
-                  </button>
-                )}
+                {/* 마스터도 메뉴를 갖는다(터미널 보기만) — 구성도에서 빼기·삭제는 여전히 없다(불변). */}
+                <button
+                  type="button"
+                  className={styles.nodeMenuButton}
+                  aria-label={`${agent.name} 메뉴`}
+                  aria-haspopup="menu"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    hidePreview();
+                    setNodeMenu({ node, agent, rect: e.currentTarget.getBoundingClientRect() });
+                  }}
+                >
+                  ⋮
+                </button>
               </div>
             );
           })}
@@ -565,6 +622,9 @@ export default function GroupCanvas({
           </div>
         )}
       </div>
+
+      {/* 아래 가운데(패널 사이의 빈 곳 가운데)에 떠 있는 입력 대기 알약. 확대/축소 도구 바로 위에 온다. */}
+      <WaitingInputBanner project={project} insetLeft={insetLeft} insetRight={insetRight} />
 
       {/* 아래 가운데(패널 사이의 빈 곳 가운데)에 떠 있는 확대/축소 도구 */}
       <div
@@ -630,6 +690,7 @@ export default function GroupCanvas({
           anchor={nodeMenu.rect}
           inGroup={nodeMenu.node.groupId !== null}
           isLeader={nodeMenu.node.isLeader}
+          isMaster={nodeMenu.agent.id === project.masterAgentId}
           onClose={() => setNodeMenu(null)}
           onSetLeader={() => {
             const { node } = nodeMenu;
@@ -650,6 +711,16 @@ export default function GroupCanvas({
             openTerminalWindow(nodeMenu.agent.id);
             setNodeMenu(null);
           }}
+        />
+      )}
+
+      {/* 작업 중인 노드에 마우스를 올리면 뜨는 작은 터미널(포인터는 통과해 클릭을 막지 않는다). */}
+      {preview && (
+        <NodeTerminalPreview
+          executionId={preview.execution.id}
+          live={isLive(preview.execution.status)}
+          agentName={preview.agentName}
+          anchor={preview.rect}
         />
       )}
     </section>

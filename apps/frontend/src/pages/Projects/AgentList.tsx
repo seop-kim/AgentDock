@@ -2,7 +2,7 @@ import { DragEvent, useEffect, useRef, useState } from 'react';
 import { unavailableReason } from '../../lib/agentAvailability';
 import { agentStatus } from '../../lib/agentStatus';
 import { isAgentDrag, readAgentDrag, startAgentDrag } from '../../lib/dnd';
-import { waitingInputs } from '../../lib/executions';
+import { isLive, waitingInputs } from '../../lib/executions';
 import { openTerminalWindow } from '../../lib/windowSync';
 import { ChevronDownIcon, ChevronUpIcon, PlusIcon } from '../../components/icons';
 import { useAgentDockStore } from '../../store/AgentDockStore';
@@ -29,12 +29,15 @@ const HOVER_DELAY_MS = 250;
 export default function AgentList({
   project,
   selectedAgentId,
+  focusSeq,
   onSelectAgent,
   open,
   onToggle,
 }: {
   project: Project;
   selectedAgentId: number | null;
+  /** 값이 바뀔 때마다 선택된 에이전트의 카드를 보이는 자리로 스크롤한다(구성도에서 노드를 눌렀을 때). */
+  focusSeq: number;
   onSelectAgent: (agentId: number) => void;
   /** 패널을 펼쳐 둘지(접으면 머리말만 남는다) */
   open: boolean;
@@ -50,6 +53,8 @@ export default function AgentList({
   // 카드의 말풍선(💬)을 누르면 그 자리에 뜨는 입력 대기 팝업.
   const [waitingPopup, setWaitingPopup] = useState<{ execution: Execution; rect: DOMRect } | null>(null);
   const hoverTimer = useRef<number | undefined>(undefined);
+  /** 카드 DOM. 구성도에서 노드를 누르면 그 카드로 스크롤하려고 들고 있는다. */
+  const cardRefs = useRef(new Map<number, HTMLDivElement>());
 
   const projectAgents = agents.filter((a) => a.projectId === project.id);
   // 에이전트마다 답을 기다리는 첫 실행(부모·자식 모두 포함). 그 에이전트 카드에 말풍선을 붙인다.
@@ -59,6 +64,14 @@ export default function AgentList({
   });
 
   useEffect(() => () => window.clearTimeout(hoverTimer.current), []);
+
+  // 구성도에서 노드를 눌렀을 때(반대 방향): 그 에이전트 카드를 보이는 자리로 스크롤한다.
+  // 카드 강조는 선택 상태(selectedAgentId)가 이미 하므로 여기서는 스크롤만 맡는다.
+  useEffect(() => {
+    if (focusSeq === 0 || selectedAgentId === null) return;
+    cardRefs.current.get(selectedAgentId)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusSeq]);
 
   const showHover = (agent: Agent, el: HTMLElement) => {
     window.clearTimeout(hoverTimer.current);
@@ -159,9 +172,18 @@ export default function AgentList({
             }[status.kind];
             const selected = selectedAgentId === agent.id;
             const pending = waitingByAgent.get(agent.id) ?? null;
+            // 지금 돌고 있는 실행(있으면 상태 배지가 터미널 열기 버튼이 된다).
+            const running =
+              executions.find((execution) => execution.agentId === agent.id && isLive(execution.status)) ?? null;
             return (
               <div
                 key={agent.id}
+                ref={(el) => {
+                  if (el) cardRefs.current.set(agent.id, el);
+                  else cardRefs.current.delete(agent.id);
+                }}
+                data-agent-id={agent.id}
+                data-agent-name={agent.name}
                 className={`${styles.card} ${selected ? styles.cardSelected : ''}`}
                 draggable
                 aria-pressed={selected}
@@ -197,9 +219,26 @@ export default function AgentList({
                     💬
                   </button>
                 )}
-                <span className={`${styles.status} ${statusClass}`} title={`상태: ${status.label}`}>
-                  {status.label}
-                </span>
+                {running ? (
+                  // 작업 중 상태 배지는 누를 수 있다: 그 에이전트의 터미널 창을 연다(카드 선택·끌기로 번지지 않게 막는다).
+                  <button
+                    type="button"
+                    className={`${styles.status} ${statusClass} ${styles.statusButton}`}
+                    aria-label={`${agent.name} 터미널 열기`}
+                    title={`${status.label} · 눌러서 터미널 열기`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      hideHover();
+                      openTerminalWindow(agent.id);
+                    }}
+                  >
+                    {status.label}
+                  </button>
+                ) : (
+                  <span className={`${styles.status} ${statusClass}`} title={`상태: ${status.label}`}>
+                    {status.label}
+                  </span>
+                )}
                 {reason && <span className={styles.warnDot} aria-label={reason} />}
                 <button
                   type="button"

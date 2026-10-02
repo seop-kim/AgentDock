@@ -197,6 +197,16 @@
   color: var(--color-muted);
 }
 
+/* 작업 중 상태 배지는 누를 수 있다: 그 에이전트의 터미널 창을 연다(카드 선택·끌기로 번지지 않게 막는다). */
+.statusButton {
+  cursor: pointer;
+}
+
+.statusButton:hover {
+  background: var(--color-code-bg);
+  filter: none;
+}
+
 .warnDot {
   width: 7px;
   height: 7px;
