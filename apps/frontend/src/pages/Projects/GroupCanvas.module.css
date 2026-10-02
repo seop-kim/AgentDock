@@ -330,7 +330,8 @@
   background: var(--color-output-bg);
   box-shadow: var(--shadow-float);
   overflow: hidden;
-  pointer-events: none;
+  /* 마우스가 이 위에 있는 동안 미리보기는 닫히지 않고, 안에서 스크롤·선택할 수 있다. */
+  pointer-events: auto;
 }
 
 .nodePreviewTitle {
@@ -341,10 +342,12 @@
   text-overflow: ellipsis;
 }
 
-/* 터미널 몸통은 미리보기 상자 안을 다 쓰게 한다(두 클래스로 좁혀 terminal.module.css 를 덮는다). */
+/* 터미널 몸통은 미리보기 상자 안을 다 쓰게 하고, 길면 그 안에서 스크롤한다(두 클래스로 좁혀 terminal.module.css 를 덮는다). */
 .nodePreview .nodePreviewBody {
   flex: 1 1 0;
   min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
   padding: 0;
   border-radius: 0;
   background: transparent;
