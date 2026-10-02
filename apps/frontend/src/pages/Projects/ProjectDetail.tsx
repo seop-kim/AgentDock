@@ -12,7 +12,6 @@ import GroupCanvas from './GroupCanvas';
 import GroupList from './GroupList';
 import styles from './ProjectDetail.module.css';
 import ProjectSettingsModal from './ProjectSettingsModal';
-import WaitingInputBanner from './WaitingInput';
 
 const NOTICE_MS = 2500;
 /** 에이전트 패널 너비(320) + 왼쪽 여백(16) + 호흡(16). 구성도 맞춤이 이만큼을 비켜 간다. */
@@ -45,6 +44,8 @@ export default function ProjectDetail() {
   // 선택된 에이전트: 왼쪽 카드와 구성도 노드가 함께 강조된다. focusSeq 가 오를 때마다 구성도가 그쪽으로 이동한다.
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
   const [focusSeq, setFocusSeq] = useState(0);
+  /** 구성도에서 노드를 눌렀을 때 값이 오른다: 왼쪽 에이전트 목록이 그 카드로 스크롤한다(반대 방향). */
+  const [cardFocusSeq, setCardFocusSeq] = useState(0);
 
   const project = projects.find((p) => String(p.id) === id);
   const masterAgentId = project?.masterAgentId ?? null;
@@ -117,7 +118,14 @@ export default function ProjectDetail() {
         insetBottom={BOTTOM_INSET}
         selectedAgentId={activeAgentId}
         focusSeq={focusSeq}
-        onSelectAgent={(agentId) => selectAgent(agentId, false)}
+        // 구성도에서 고른 에이전트를 왼쪽 목록에서도 찾을 수 있게, 카드가 보이도록 스크롤시킨다(반대 방향).
+        onSelectAgent={(agentId) => {
+          if (agentId !== activeAgentId) {
+            setAgentsOpen(true);
+            setCardFocusSeq((prev) => prev + 1);
+          }
+          selectAgent(agentId, false);
+        }}
         onNotice={setNotice}
       />
 
@@ -157,12 +165,11 @@ export default function ProjectDetail() {
           </div>
         </header>
 
-        {/* 답을 기다리는 질문이 있으면 헤더 카드 아래에 가장 눈에 띄게 둔다(없으면 스스로 사라진다). */}
-        <WaitingInputBanner project={project} />
-
+        {/* 입력 대기 알약은 왼쪽이 아니라 **구성도 아래 가운데**에 뜬다(GroupCanvas 가 확대/축소 도구 위에 그린다). */}
         <AgentList
           project={project}
           selectedAgentId={activeAgentId}
+          focusSeq={cardFocusSeq}
           onSelectAgent={(agentId) => selectAgent(agentId, true)}
           open={agentsOpen}
           onToggle={() => setAgentsOpen((prev) => !prev)}

@@ -1,15 +1,33 @@
-/* 입력 대기 표시: 프로젝트 상세의 배너 · 구성도 노드/에이전트 카드의 말풍선 · 그 말풍선에서 여는 팝업. */
+/* 입력 대기 표시: 구성도 아래 가운데의 알약 · 구성도 노드/에이전트 카드의 말풍선 · 그 말풍선에서 여는 팝업. */
 
-/* 헤더 카드 아래에 뜨는 배너. 답을 기다리는 실행이 있을 때만 그린다. */
+/*
+ * 구성도 아래 가운데(확대/축소 도구 바로 위)에 뜨는 자리.
+ * 좌우 패널을 뺀 빈 곳의 가운데에 오도록 확대/축소 도구와 같은 식을 쓴다.
+ * 자리(글래스 없음)만 잡고 클릭은 알약에만 준다 — 빈 곳은 구성도 조작이 그대로 통과한다.
+ */
+.dock {
+  position: absolute;
+  bottom: calc(var(--spacing-md) + 46px);
+  left: calc((100% + var(--inset-left, 0px) - var(--inset-right, 0px)) / 2);
+  transform: translateX(-50%);
+  display: flex;
+  justify-content: center;
+  max-width: calc(100% - var(--inset-left, 0px) - var(--inset-right, 0px) - 32px);
+  pointer-events: none;
+}
+
+/* 알약. 답을 기다리는 실행이 있을 때만 그린다. 누르면 질문·보기·답 입력까지 펼쳐진다. */
 .banner {
   composes: glass from '../../styles/glass.module.css';
   display: flex;
   flex-direction: column;
   gap: 6px;
+  max-width: 100%;
   padding: 8px 10px;
   border-radius: var(--radius-lg);
   /* 글래스(블러) 요소에는 overflow 를 두지 않는다 — 길면 안쪽 목록이 스크롤한다. */
   box-shadow: var(--shadow-float), var(--glass-highlight), inset 3px 0 0 var(--color-warning);
+  pointer-events: auto;
 }
 
 /* 머리말 줄 전체가 접기/펴기 버튼이다 */
@@ -54,7 +72,7 @@
   margin: 0;
   padding: 0;
   list-style: none;
-  max-height: 42vh;
+  max-height: min(42vh, 240px);
   overflow-y: auto;
 }
 
