@@ -2,28 +2,46 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { questionText, waitingInputs } from '../../lib/executions';
 import { useAgentDockStore } from '../../store/AgentDockStore';
-import modal from '../../styles/modal.module.css';
 import type { Execution, Project } from '../../types';
 import panel from './RequestsPanel.module.css';
-import { WaitingInputItem } from './WaitingInputPopup';
+
+/** "무시" 한 트리(실행 id)를 담아 두는 열쇠. 알림만 끄는 것이라 서버 상태는 건드리지 않는다. */
+const DISMISSED_KEY = 'agentdock.dismissedMerges';
+
+function readDismissed(): number[] {
+  try {
+    const raw = window.localStorage.getItem(DISMISSED_KEY);
+    return raw === null ? [] : (JSON.parse(raw) as number[]);
+  } catch {
+    return [];
+  }
+}
 
 /**
  * 사람에게 **요청하는 것**을 한 자리에 모은다.
  *  - 입력 대기: 에이전트가 계약 `ask` 로 답을 기다리는 실행
  *  - 수동 병합: 자동 병합이 막혀(메인 저장소에 변경이 있음) 판단이 필요한 트리
  *
- * <p>화면 아래 가운데 알약을 누르면 **아래에서 올라오는 창**이 열리고, 왼쪽 목록에서 고른 요청의
- * 상세를 오른쪽에서 바로 처리한다(답 보내기 / 지금 병합). 둘 다 "사람이 해 줘야 하는 일"이라
- * 자리를 나누지 않고 한 창에 모았다.
+ * <p>화면 아래 가운데 알약을 누르면 **화면 중앙에서 창이 위로 올라온다**(뒤를 흐리지 않아 캔버스가 그대로 보인다).
+ * 왼쪽 목록에서 요청을 고르고 오른쪽 상세에서 처리한다.
+ *
+ * <p>입력 대기의 보기는 **한 행씩 고르는 선택지**다 — 누른 즉시 보내지 않고 `답 보내기` 를 눌러야 전송된다
+ * (잘못 눌러 엉뚱한 답이 가는 일을 막는다). 수동 병합은 `무시` 로 알림만 접을 수 있다(병합 자체는 그대로 남는다).
  */
 export default function RequestsPanel({ project }: { project: Project }) {
-  const { executions, agents, retryMerge } = useAgentDockStore();
+  const { executions, agents, retryMerge, answerExecution } = useAgentDockStore();
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  const [dismissed, setDismissed] = useState<number[]>(readDismissed);
+  // 상세에서 고른 보기 / 직접 입력한 답. `답 보내기` 를 눌러야 실제로 나간다.
+  const [choice, setChoice] = useState<string | null>(null);
+  const [text, setText] = useState('');
 
   const mine = executions.filter((execution) => execution.projectId === project.id);
   const waits = waitingInputs(mine);
-  const merges = mine.filter((execution) => execution.mergeStatus === 'MANUAL');
+  const merges = mine.filter(
+    (execution) => execution.mergeStatus === 'MANUAL' && !dismissed.includes(execution.id),
+  );
   const items: { key: string; kind: 'ask' | 'merge'; execution: Execution }[] = [
     ...waits.map((execution) => ({ key: `ask-${execution.id}`, kind: 'ask' as const, execution })),
     ...merges.map((execution) => ({ key: `merge-${execution.id}`, kind: 'merge' as const, execution })),
@@ -32,6 +50,34 @@ export default function RequestsPanel({ project }: { project: Project }) {
 
   const nameOf = (agentId: number) => agents.find((agent) => agent.id === agentId)?.name ?? '에이전트';
   const current = items.find((item) => item.key === selected) ?? items[0];
+
+  const pick = (key: string) => {
+    setSelected(key);
+    setChoice(null);
+    setText('');
+  };
+
+  const sendAnswer = (execution: Execution) => {
+    const value = (choice ?? text).trim();
+    if (value === '') return;
+    answerExecution(execution.id, value);
+    setChoice(null);
+    setText('');
+    setSelected(null);
+  };
+
+  const dismiss = (executionId: number) => {
+    const next = [...dismissed, executionId];
+    setDismissed(next);
+    try {
+      window.localStorage.setItem(DISMISSED_KEY, JSON.stringify(next));
+    } catch {
+      // 저장하지 못해도 이번 화면에서는 접힌다.
+    }
+    setSelected(null);
+  };
+
+  const canSend = (choice ?? text).trim() !== '';
 
   return (
     <>
@@ -52,7 +98,8 @@ export default function RequestsPanel({ project }: { project: Project }) {
 
       {open &&
         createPortal(
-          <div className={modal.overlay} onClick={() => setOpen(false)}>
+          // 뒤를 흐리지 않는다 — 빈 곳을 누르면 닫히도록 투명한 판만 깐다.
+          <div className={panel.backdrop} onClick={() => setOpen(false)}>
             <section
               className={panel.sheet}
               role="dialog"
@@ -73,7 +120,7 @@ export default function RequestsPanel({ project }: { project: Project }) {
                       <button
                         type="button"
                         className={`${panel.row} ${item.key === current.key ? panel.rowActive : ''}`}
-                        onClick={() => setSelected(item.key)}
+                        onClick={() => pick(item.key)}
                       >
                         <span className={panel.rowKind}>{item.kind === 'ask' ? '입력 대기' : '수동 병합'}</span>
                         <span className={panel.rowText}>
@@ -88,10 +135,61 @@ export default function RequestsPanel({ project }: { project: Project }) {
 
                 <div className={panel.detail}>
                   {current.kind === 'ask' ? (
-                    <WaitingInputItem
-                      execution={current.execution}
-                      agentName={nameOf(current.execution.agentId)}
-                    />
+                    <>
+                      <p className={panel.detailTitle}>{nameOf(current.execution.agentId)} 가 묻습니다</p>
+                      <p className={panel.detailText}>{questionText(current.execution)}</p>
+
+                      {current.execution.options.length > 0 && (
+                        <ul className={panel.options}>
+                          {current.execution.options.map((option) => (
+                            <li key={option}>
+                              <button
+                                type="button"
+                                className={`${panel.optionRow} ${choice === option ? panel.optionRowOn : ''}`}
+                                aria-pressed={choice === option}
+                                onClick={() => {
+                                  setChoice(option);
+                                  setText('');
+                                }}
+                              >
+                                <span className={panel.optionMark} aria-hidden="true">
+                                  {choice === option ? '●' : '○'}
+                                </span>
+                                {option}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+
+                      <form
+                        className={panel.answerRow}
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          sendAnswer(current.execution);
+                        }}
+                      >
+                        <input
+                          value={text}
+                          onChange={(e) => {
+                            setText(e.target.value);
+                            setChoice(null);
+                          }}
+                          placeholder={
+                            current.execution.options.length > 0 ? '또는 직접 입력' : '답을 입력하세요'
+                          }
+                          aria-label="답변 입력"
+                        />
+                        <button type="submit" className={panel.sendButton} disabled={!canSend}>
+                          답 보내기
+                        </button>
+                      </form>
+                      <p className={panel.hint}>
+                        {canSend
+                          ? `보낼 답: ${(choice ?? text).trim()}`
+                          : '보기를 고르거나 답을 입력한 뒤 답 보내기를 누르세요.'}
+                      </p>
+                    </>
                   ) : (
                     <>
                       <p className={panel.detailTitle}>트리 #{current.execution.id} 자동 병합이 막혔습니다</p>
@@ -102,13 +200,23 @@ export default function RequestsPanel({ project }: { project: Project }) {
                       {current.execution.decision?.action === 'done' && (
                         <p className={panel.detailText}>{current.execution.decision.summary}</p>
                       )}
-                      <button
-                        type="button"
-                        className={panel.mergeButton}
-                        onClick={() => retryMerge(current.execution.id)}
-                      >
-                        지금 병합
-                      </button>
+                      <div className={panel.actions}>
+                        <button
+                          type="button"
+                          className={panel.dismiss}
+                          onClick={() => dismiss(current.execution.id)}
+                          title="이 알림만 접습니다(브랜치와 병합 상태는 그대로 남습니다)"
+                        >
+                          무시
+                        </button>
+                        <button
+                          type="button"
+                          className={panel.mergeButton}
+                          onClick={() => retryMerge(current.execution.id)}
+                        >
+                          지금 병합
+                        </button>
+                      </div>
                     </>
                   )}
                 </div>

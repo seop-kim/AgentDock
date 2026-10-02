@@ -1,4 +1,4 @@
-/* 내가 처리할 요청: 아래 가운데 알약 + 아래에서 올라오는 창(왼쪽 목록 / 오른쪽 상세). */
+/* 내가 처리할 요청: 아래 가운데 알약 + 화면 중앙에서 올라오는 창(왼쪽 목록 / 오른쪽 상세). */
 
 .dock {
   position: absolute;
@@ -32,29 +32,38 @@
   font-weight: 500;
 }
 
-/* 아래에서 올라오는 창. 화면 아래에 붙고 위로 자란다. */
+/* 뒤를 흐리지 않는 투명한 판(빈 곳을 누르면 닫힌다). */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 320;
+  background: transparent;
+}
+
+/* 화면 중앙에서 위로 올라온다. 뒤 배경은 그대로 보인다. */
 .sheet {
   composes: glassStrong from '../../styles/glass.module.css';
   position: fixed;
-  bottom: 0;
+  top: 50%;
   left: 50%;
-  z-index: 320;
   width: min(880px, calc(100vw - 32px));
-  max-height: min(72vh, 560px);
+  max-height: min(74vh, 560px);
   display: flex;
   flex-direction: column;
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-float), var(--glass-highlight);
-  animation: rise 160ms ease-out;
+  /* 애니메이션이 끝난 뒤에도 중앙에 머물도록 기준 위치를 잡아 둔다. */
+  transform: translate(-50%, -50%);
+  animation: rise 170ms ease-out;
 }
 
 @keyframes rise {
   from {
-    transform: translate(-50%, 28px);
+    transform: translate(-50%, calc(-50% + 28px));
     opacity: 0;
   }
   to {
-    transform: translate(-50%, 0);
+    transform: translate(-50%, -50%);
     opacity: 1;
   }
 }
@@ -152,6 +161,87 @@
   color: var(--color-muted);
   font-size: 12px;
   overflow-wrap: anywhere;
+}
+
+/* 입력 대기: 보기는 한 행씩 고르는 선택지다(누른 즉시 보내지 않는다). */
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 var(--spacing-sm);
+  padding: 0;
+  list-style: none;
+}
+
+.optionRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.optionRow:hover {
+  background: var(--color-code-bg);
+  filter: none;
+}
+
+.optionRowOn {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.optionMark {
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.answerRow {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.answerRow input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-input-bg);
+  color: var(--color-text);
+  font-size: 12px;
+}
+
+.sendButton {
+  flex-shrink: 0;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.hint {
+  margin: 8px 0 0;
+  color: var(--color-muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+/* 수동 병합: 무시(알림만 접기) + 지금 병합 */
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.dismiss {
+  font-size: 12px;
 }
 
 .mergeButton {
