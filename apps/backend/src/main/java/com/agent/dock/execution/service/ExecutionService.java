@@ -26,7 +26,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -36,6 +39,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ExecutionService {
     private final ExecutionRepository executionRepository;
     private final ExecutionLogRepository logRepository;
@@ -341,6 +345,18 @@ public class ExecutionService {
             cancelExecution(orphan, STALE_EXECUTION_REASON);
         }
         return orphans.size();
+    }
+
+    /**
+     * 서버 기동 시 한 번 고아 실행을 정리한다(상시 감시는 하지 않는다).
+     * WorkspaceService 의 기동 워밍업과 같은 방식으로 ApplicationReadyEvent 에 붙인다.
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    void cleanupOrphansOnStartup() {
+        int cleaned = cleanupOrphanExecutions();
+        if (cleaned > 0) {
+            log.info("cleaned up {} orphan execution(s) from a previous run", cleaned);
+        }
     }
 
     public Map<String, Boolean> cancel(Long id) {
