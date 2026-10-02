@@ -85,7 +85,13 @@ public class ExecutionStreamHub {
                 emitter.send(SseEmitter.event().name("exit").data(exit));
                 emitter.complete();
             } catch (IOException ex) {
-                emitter.completeWithError(ex);
+                // 구독자가 이미 떠났으면 **오류를 컨테이너로 넘기지 않고** 조용히 닫는다 —
+                // completeWithError 는 그 예외를 요청 스레드로 다시 던져 ERROR 로그를 쌓는다(전역 이벤트 허브에서 실측).
+                try {
+                    emitter.complete();
+                } catch (RuntimeException ignored) {
+                    // 이미 닫힌 emitter — 더 할 일이 없다.
+                }
             }
         }
     }

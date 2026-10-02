@@ -25,6 +25,10 @@ public class ProcessService {
             fullCommand.add(Executables.resolve(command));
             fullCommand.addAll(args);
             ProcessBuilder builder = new ProcessBuilder(fullCommand);
+            // 없는 디렉터리에서 spawn 하면 원인을 알 수 없는 실패가 된다(예: 정리된 워크트리로 다시 병합).
+            if (!new File(cwd).isDirectory()) {
+                throw new IllegalStateException("작업 디렉터리가 없습니다: " + cwd);
+            }
             builder.directory(new File(cwd));
             builder.environment().putAll(System.getenv());
             Process process = builder.start();

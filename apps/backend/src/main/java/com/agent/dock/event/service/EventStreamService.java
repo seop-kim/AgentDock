@@ -102,10 +102,16 @@ public class EventStreamService {
         }
     }
 
+    /**
+     * 끊긴 구독자를 버린다. **오류를 컨테이너로 넘기지 않는다** —
+     * `completeWithError` 는 그 예외를 요청/하트비트 스레드로 다시 던져 ERROR 로그를 쌓는다
+     * (2026-10-02 실측: "event stream subscriber is gone" + "Servlet.service() threw exception").
+     * 보낼 상대가 없을 뿐이므로 조용히 정상 종료한다.
+     */
     private void drop(SseEmitter emitter) {
         emitters.remove(emitter);
         try {
-            emitter.completeWithError(new IOException("event stream subscriber is gone"));
+            emitter.complete();
         } catch (RuntimeException ex) {
             log.debug("failed to complete a dead event stream subscriber: {}", ex.getMessage());
         }
