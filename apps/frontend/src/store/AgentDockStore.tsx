@@ -140,12 +140,11 @@ function executionStatus(status: string): Execution['status'] {
       return 'QUEUED';
     case 'SUCCEEDED':
       return 'DONE';
-    case 'CANCELLED':
-      return 'FAILED';
     case 'RUNNING':
     case 'WAITING_CHILD':
     case 'WAITING_INPUT':
     case 'FAILED':
+    case 'CANCELLED':
       return status;
     default:
       return 'QUEUED';
@@ -421,7 +420,7 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
           const tree = await api.getExecutionTree(rootExecutionId);
           const rows = tree.nodes.map((node) => executionOf(node.execution, projectId));
           const root = tree.nodes.find((node) => node.depth === 0)?.execution;
-          const finished = root !== undefined && (root.status === 'SUCCEEDED' || root.status === 'FAILED');
+          const finished = root !== undefined && (root.status === 'SUCCEEDED' || root.status === 'FAILED' || root.status === 'CANCELLED');
           setExecutions((prev) => [...prev.filter((execution) => execution.projectId !== projectId), ...rows]);
           setChats((prev) =>
             prev.map((message) =>

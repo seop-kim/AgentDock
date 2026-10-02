@@ -1,5 +1,14 @@
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080';
 
+/** 서버가 2xx 가 아닌 응답을 주면 던진다. 404 같은 상태를 호출부가 구분할 수 있게 status 를 담는다. */
+class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -8,7 +17,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`${res.status} ${res.statusText}: ${body}`);
+    throw new ApiError(res.status, `${res.status} ${res.statusText}: ${body}`);
   }
   if (res.status === 204) {
     return undefined as T;
@@ -264,7 +273,19 @@ export const api = {
   getExecution: (id: number) => request<Execution>(`/executions/${id}`),
   getExecutionTree: (id: number) => request<ExecutionTree>(`/executions/${id}/tree`),
   getExecutionLogs: (id: number) => request<ExecutionLogEntry[]>(`/executions/${id}/logs`),
-  cancelExecution: (id: number) => request<{ cancelled: boolean }>(`/executions/${id}/cancel`, { method: 'POST' }),
+  /**
+   * 실행 하나를 취소한다(프로세스 종료 + 상태 전이는 서버가 한다).
+   * 이미 없어진 실행(404)은 오류로 보지 않고 `{cancelled:false}` 로 돌려준다 —
+   * 화면은 실제 상태를 다시 읽어 보여 준다.
+   */
+  cancelExecution: async (id: number) => {
+    try {
+      return await request<{ cancelled: boolean }>(`/executions/${id}/cancel`, { method: 'POST' });
+    } catch (ex) {
+      if (ex instanceof ApiError && ex.status === 404) return { cancelled: false };
+      throw ex;
+    }
+  },
   /** 워크트리 정리(사람이 판단해 부른다). deleteBranch 면 전용 브랜치도 함께 지운다. 도는 실행이면 409. */
   removeExecutionWorktree: (id: number, deleteBranch = false) =>
     request<void>(`/executions/${id}/worktree${deleteBranch ? '?branch=true' : ''}`, { method: 'DELETE' }),
