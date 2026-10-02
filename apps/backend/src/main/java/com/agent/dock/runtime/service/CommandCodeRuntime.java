@@ -93,6 +93,13 @@ public class CommandCodeRuntime implements AgentRuntime {
             args.add("--permission-mode");
             args.add(request.mode());
         }
+        // 세션 이어받기: 같은 실행의 다음 스텝은 자기 세션을 이어받아 앞 스텝의 맥락을 다시 설명하지 않는다.
+        // cmdc 에는 분기(--fork-session) 플래그가 확인되지 않아(추측 금지) **자식은 새 세션**으로 시작한다 —
+        // 자식에게 넘길 맥락은 지시 파일(.agentdock/prompts)과 그룹 공유 노트가 맡는다.
+        if (!request.forkSession() && request.resumeSessionId() != null && !request.resumeSessionId().isBlank()) {
+            args.add("--resume");
+            args.add(request.resumeSessionId());
+        }
         return args;
     }
 

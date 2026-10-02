@@ -49,4 +49,19 @@ class CommandCodeRuntimeTest {
         assertThat(runtime.buildArgs(request("   ", "")))
                 .doesNotContain("--model", "--permission-mode");
     }
+
+    /** 같은 실행의 다음 스텝은 자기 세션을 이어받는다. 자식은 분기 플래그가 없어 새 세션으로 시작한다. */
+    @Test
+    void resumesItsOwnSessionButStartsChildrenFresh() {
+        assertThat(runtime.buildArgs(request(null, null))).doesNotContain("--resume");
+
+        AgentExecutionRequest resumed = new AgentExecutionRequest("exec-1", "prompt", "C:\\Temp", null, null, null,
+                null, (chunk, stream) -> { }, "session-1", false);
+        assertThat(runtime.buildArgs(resumed)).containsSequence("--resume", "session-1");
+
+        // cmdc 에는 --fork-session 이 확인되지 않는다(추측 금지) — 자식은 새 세션으로 시작한다.
+        AgentExecutionRequest child = new AgentExecutionRequest("exec-1", "prompt", "C:\\Temp", null, null, null,
+                null, (chunk, stream) -> { }, "session-1", true);
+        assertThat(runtime.buildArgs(child)).doesNotContain("--resume");
+    }
 }

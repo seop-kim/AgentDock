@@ -101,6 +101,15 @@ public class ClaudeCodeRuntime implements AgentRuntime {
             args.add("--max-budget-usd");
             args.add(request.maxBudgetUsd().toPlainString());
         }
+        // 세션 이어받기: 같은 실행의 다음 스텝은 앞 스텝의 대화를 그대로 물려받는다(맥락 재설명 = 토큰 낭비).
+        // 자식 실행은 --fork-session 으로 부모 대화에서 갈라져 자기 대화를 갖는다.
+        if (request.resumeSessionId() != null && !request.resumeSessionId().isBlank()) {
+            args.add("--resume");
+            args.add(request.resumeSessionId());
+            if (request.forkSession()) {
+                args.add("--fork-session");
+            }
+        }
         return args;
     }
 

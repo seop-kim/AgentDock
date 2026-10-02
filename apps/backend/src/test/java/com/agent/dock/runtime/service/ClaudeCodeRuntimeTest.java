@@ -22,6 +22,21 @@ class ClaudeCodeRuntimeTest {
         assertThat(args).doesNotContain("prompt");
     }
 
+    /** 같은 실행의 다음 스텝은 자기 세션을 이어받고, 자식은 `--fork-session` 으로 갈라진다(입력 토큰 절약). */
+    @Test
+    void resumesThePriorSessionAndForksWhenAsked() {
+        assertThat(runtime.buildArgs(request(null, null, null, null))).doesNotContain("--resume");
+
+        AgentExecutionRequest resumed = new AgentExecutionRequest("exec-1", "prompt", "C:\\Temp", null, null, null,
+                null, (chunk, stream) -> { }, "session-1", false);
+        assertThat(runtime.buildArgs(resumed)).containsSequence("--resume", "session-1");
+        assertThat(runtime.buildArgs(resumed)).doesNotContain("--fork-session");
+
+        AgentExecutionRequest forked = new AgentExecutionRequest("exec-1", "prompt", "C:\\Temp", null, null, null,
+                null, (chunk, stream) -> { }, "session-1", true);
+        assertThat(runtime.buildArgs(forked)).containsSequence("--resume", "session-1", "--fork-session");
+    }
+
     @Test
     void passesSystemPromptAsAppendedSystemPrompt() {
         List<String> args = runtime.buildArgs(request("마스터 규칙\n\n내 역할", null, null, null));
