@@ -1,0 +1,159 @@
+/* 내가 처리할 요청: 아래 가운데 알약 + 아래에서 올라오는 창(왼쪽 목록 / 오른쪽 상세). */
+
+.dock {
+  position: absolute;
+  /* 확대/축소 도구(51px) + 사이(8px) 만큼 띄운다 — 도구 위에 겹치지 않게. */
+  bottom: calc(var(--spacing-md) + 51px + 8px);
+  left: calc((100% + var(--inset-left, 0px) - var(--inset-right, 0px)) / 2);
+  transform: translateX(-50%);
+  display: flex;
+  justify-content: center;
+  max-width: calc(100% - 32px);
+  pointer-events: none;
+}
+
+.pill {
+  composes: glass from '../../styles/glass.module.css';
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float), var(--glass-highlight), inset 3px 0 0 var(--color-warning);
+  color: var(--color-warning);
+  font-size: 13px;
+  font-weight: 600;
+  pointer-events: auto;
+}
+
+.pillDetail {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* 아래에서 올라오는 창. 화면 아래에 붙고 위로 자란다. */
+.sheet {
+  composes: glassStrong from '../../styles/glass.module.css';
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  z-index: 320;
+  width: min(880px, calc(100vw - 32px));
+  max-height: min(72vh, 560px);
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: var(--shadow-float), var(--glass-highlight);
+  animation: rise 160ms ease-out;
+}
+
+@keyframes rise {
+  from {
+    transform: translate(-50%, 28px);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  padding: 10px 14px;
+  color: var(--color-text);
+}
+
+.close {
+  font-size: 12px;
+}
+
+.body {
+  display: flex;
+  gap: var(--spacing-sm);
+  min-height: 0;
+  padding: 0 14px 14px;
+}
+
+/* 왼쪽: 요청 목록 */
+.list {
+  flex: 0 0 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.row:hover {
+  background: var(--color-code-bg);
+  filter: none;
+}
+
+.rowActive {
+  border-color: var(--color-warning);
+  background: var(--color-code-bg);
+}
+
+.rowKind {
+  color: var(--color-warning);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.rowText {
+  overflow: hidden;
+  color: var(--color-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 오른쪽: 고른 요청의 상세(답 입력 또는 병합) */
+.detail {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  overflow-y: auto;
+}
+
+.detailTitle {
+  margin: 0 0 6px;
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.detailText {
+  margin: 0 0 8px;
+  color: var(--color-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.mergeButton {
+  font-size: 12px;
+}
