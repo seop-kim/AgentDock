@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { api } from '../../lib/api';
 import {
   MERGE_LABEL,
   MERGE_TONE,
@@ -8,6 +9,7 @@ import {
   formatCost,
   formatDuration,
   formatTokens,
+  isLive,
   summarize,
   treeOrder,
 } from '../../lib/executions';
@@ -20,6 +22,61 @@ import type { Execution, ExecutionStatus } from '../../types';
 /** 실행 상태 배지. 채팅 카드와 실행 트리 창이 함께 쓴다. */
 export function ExecutionBadge({ status }: { status: ExecutionStatus }) {
   return <span className={`${exec.badge} ${exec[STATUS_TONE[status]]}`}>{STATUS_LABEL[status]}</span>;
+}
+
+const NOTICE_MS = 2500;
+
+/** 취소 실패 안내를 잠깐 보여 주는 상태(ProjectDetail 의 notice 패턴과 같다). */
+export function useCancelNotice(): [string | null, (message: string | null) => void] {
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (notice === null) return;
+    const timer = window.setTimeout(() => setNotice(null), NOTICE_MS);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+  return [notice, setNotice];
+}
+
+/**
+ * 실행 취소 버튼. `isLive`(대기·실행 중·하위 대기·입력 대기) 4종에만 보인다.
+ * 누르면 확인 → `취소 중…` + disabled → 취소 요청 → **성공/실패 모두** `reload()` 로 실제 상태를 반영한다.
+ * 취소는 전파하지 않으므로 **이 실행 하나만** 멈춘다.
+ */
+export function CancelButton({
+  execution,
+  name,
+  onError,
+}: {
+  execution: Execution;
+  name: string;
+  /** 네트워크/5xx 오류 안내(404 는 `api.cancelExecution` 이 오류로 만들지 않는다). */
+  onError?: (message: string) => void;
+}) {
+  const { reload } = useAgentDockStore();
+  const [pending, setPending] = useState(false);
+  if (!isLive(execution.status)) return null;
+
+  const cancel = async () => {
+    const ok = window.confirm(
+      `"${name}"의 실행을 취소할까요?\n지금 도는 이 실행만 멈춥니다. 하위·다른 실행은 계속 돕니다.`,
+    );
+    if (!ok) return;
+    setPending(true);
+    try {
+      await api.cancelExecution(execution.id);
+    } catch (ex) {
+      onError?.(`실행을 취소하지 못했습니다: ${String(ex)}`);
+    } finally {
+      await reload();
+      setPending(false);
+    }
+  };
+
+  return (
+    <button type="button" className={exec.cardButton} onClick={cancel} disabled={pending}>
+      {pending ? '취소 중…' : '취소'}
+    </button>
+  );
 }
 
 /**
@@ -110,6 +167,7 @@ export function ExecutionSummaryCard({
   onOpen: () => void;
 }) {
   const { agents } = useAgentDockStore();
+  const [notice, setNotice] = useCancelNotice();
   const rows = treeOrder(executions, rootExecutionId);
   if (rows.length === 0) return null;
 
@@ -138,9 +196,11 @@ export function ExecutionSummaryCard({
             <ExecutionBadge status={execution.status} />
             <span className={exec.stepName}>{nameOf(execution.agentId)}</span>
             <span className={exec.stepAction}>{actionLabel(execution, nameOf)}</span>
+            <CancelButton execution={execution} name={nameOf(execution.agentId)} onError={setNotice} />
           </li>
         ))}
       </ul>
+      {notice && <p className="errorText">{notice}</p>}
       <TreeResultLine execution={rows[0].execution} />
       <span className={exec.note}>지표는 CLI 가 돌려준 실제 값입니다.</span>
     </div>
@@ -160,6 +220,7 @@ export default function ExecutionTreeModal({
   onClose: () => void;
 }) {
   const { agents, removeWorktree } = useAgentDockStore();
+  const [notice, setNotice] = useCancelNotice();
   const rows = treeOrder(executions, rootExecutionId);
   if (rows.length === 0) return null;
 
@@ -221,6 +282,7 @@ export default function ExecutionTreeModal({
                       )} · 세션 ${execution.sessionId.slice(0, 8)}`
                     : '실행 중…'}
                 </span>
+                <CancelButton execution={execution} name={nameOf(execution.agentId)} onError={setNotice} />
               </div>
               {execution.worktreeBranch && (
                 <p className={exec.rowFiles} title={execution.worktreePath ?? undefined}>
@@ -246,6 +308,8 @@ export default function ExecutionTreeModal({
           값이고, 실제 구현에서는 CLI 의 <code>--output-format json</code> 이 돌려주는 usage / total_cost_usd / duration_ms 를
           씁니다. 판단 실행(마스터·리더)은 한 실행 안에서 판단과 취합 두 스텝을 돌기 때문에 호출량이 두 배로 잡힙니다.
         </p>
+
+        {notice && <p className="errorText">{notice}</p>}
 
         <div className={modal.actions}>
           <button type="button" onClick={onClose}>
