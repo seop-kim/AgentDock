@@ -66,6 +66,20 @@
   }
 }
 
+/* 닫을 때: 아래로 부드럽게 내려간 뒤 사라진다(끝난 뒤 화면에서 감춘다). */
+.sheetClosing {
+  animation: sink 180ms ease-in forwards;
+}
+
+@keyframes sink {
+  from {
+    transform: translate(-50%, 0);
+  }
+  to {
+    transform: translate(-50%, 100%);
+  }
+}
+
 .head {
   display: flex;
   align-items: center;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { questionText, waitingInputs } from '../../lib/executions';
 import { useAgentDockStore } from '../../store/AgentDockStore';
@@ -7,6 +7,9 @@ import panel from './RequestsPanel.module.css';
 
 /** "무시" 한 트리(실행 id)를 담아 두는 열쇠. 알림만 끄는 것이라 서버 상태는 건드리지 않는다. */
 const DISMISSED_KEY = 'agentdock.dismissedMerges';
+
+/** 닫힘 애니메이션이 끝나기를 기다리는 시간(ms). CSS 의 sink 길이와 맞춘다. */
+const CLOSE_MS = 180;
 
 function readDismissed(): number[] {
   try {
@@ -22,20 +25,33 @@ function readDismissed(): number[] {
  *  - 입력 대기: 에이전트가 계약 `ask` 로 답을 기다리는 실행
  *  - 수동 병합: 자동 병합이 막혀(메인 저장소에 변경이 있음) 판단이 필요한 트리
  *
- * <p>화면 아래 가운데 알약을 누르면 **화면 중앙에서 창이 위로 올라온다**(뒤를 흐리지 않아 캔버스가 그대로 보인다).
- * 왼쪽 목록에서 요청을 고르고 오른쪽 상세에서 처리한다.
+ * <p>화면 하단에 붙은 긴 패널이 **아래에서 위로 올라오고**, 닫을 때는 **부드럽게 아래로 내려간 뒤** 사라진다
+ * (닫힘 애니메이션이 끝날 때까지 화면에 남겨 둔다). 뒤를 흐리지 않아 캔버스가 그대로 보이고, 빈 곳을 누르면 닫힌다.
  *
- * <p>입력 대기의 보기는 **한 행씩 고르는 선택지**다 — 누른 즉시 보내지 않고 `답 보내기` 를 눌러야 전송된다
- * (잘못 눌러 엉뚱한 답이 가는 일을 막는다). 수동 병합은 `무시` 로 알림만 접을 수 있다(병합 자체는 그대로 남는다).
+ * <p>입력 대기의 보기는 **한 행씩 고르는 선택지**다 — 누른 즉시 보내지 않고 `답 보내기` 를 눌러야 전송된다.
+ * 수동 병합은 `무시` 로 알림만 접을 수 있다(병합 자체는 그대로 남는다).
  */
 export default function RequestsPanel({ project }: { project: Project }) {
   const { executions, agents, retryMerge, answerExecution } = useAgentDockStore();
   const [open, setOpen] = useState(false);
+  /** 닫히는 중(아래로 내려가는 애니메이션 동안 화면에 남긴다). */
+  const [closing, setClosing] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<number[]>(readDismissed);
   // 상세에서 고른 보기 / 직접 입력한 답. `답 보내기` 를 눌러야 실제로 나간다.
   const [choice, setChoice] = useState<string | null>(null);
   const [text, setText] = useState('');
+  const closeTimer = useRef<number | null>(null);
+
+  // 닫히는 도중에 컴포넌트가 사라져도 타이머가 남지 않게.
+  useEffect(
+    () => () => {
+      if (closeTimer.current !== null) {
+        window.clearTimeout(closeTimer.current);
+      }
+    },
+    [],
+  );
 
   const mine = executions.filter((execution) => execution.projectId === project.id);
   const waits = waitingInputs(mine);
@@ -50,6 +66,28 @@ export default function RequestsPanel({ project }: { project: Project }) {
 
   const nameOf = (agentId: number) => agents.find((agent) => agent.id === agentId)?.name ?? '에이전트';
   const current = items.find((item) => item.key === selected) ?? items[0];
+
+  const openPanel = () => {
+    if (closeTimer.current !== null) {
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+    setClosing(false);
+    setOpen(true);
+  };
+
+  /** 닫기: 아래로 내려가는 애니메이션이 끝난 뒤 실제로 감춘다. */
+  const close = () => {
+    if (closeTimer.current !== null) {
+      window.clearTimeout(closeTimer.current);
+    }
+    setClosing(true);
+    closeTimer.current = window.setTimeout(() => {
+      closeTimer.current = null;
+      setOpen(false);
+      setClosing(false);
+    }, CLOSE_MS);
+  };
 
   const pick = (key: string) => {
     setSelected(key);
@@ -85,7 +123,7 @@ export default function RequestsPanel({ project }: { project: Project }) {
         <button
           type="button"
           className={panel.pill}
-          onClick={() => setOpen(true)}
+          onClick={openPanel}
           aria-label="내가 처리할 요청 열기"
         >
           <span aria-hidden="true">💬</span> 내가 처리할 요청 {items.length}건
@@ -99,16 +137,16 @@ export default function RequestsPanel({ project }: { project: Project }) {
       {open &&
         createPortal(
           // 뒤를 흐리지 않는다 — 빈 곳을 누르면 닫히도록 투명한 판만 깐다.
-          <div className={panel.backdrop} onClick={() => setOpen(false)}>
+          <div className={panel.backdrop} onClick={close}>
             <section
-              className={panel.sheet}
+              className={`${panel.sheet} ${closing ? panel.sheetClosing : ''}`}
               role="dialog"
               aria-label="내가 처리할 요청"
               onClick={(e) => e.stopPropagation()}
             >
               <header className={panel.head}>
                 <strong>내가 처리할 요청 {items.length}건</strong>
-                <button type="button" className={panel.close} onClick={() => setOpen(false)}>
+                <button type="button" className={panel.close} onClick={close}>
                   닫기
                 </button>
               </header>
