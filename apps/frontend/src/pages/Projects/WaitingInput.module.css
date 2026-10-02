@@ -17,6 +17,34 @@
   pointer-events: none;
 }
 
+/* 입력 대기 알약이 함께 떠 있으면 수동 병합 알약은 그만큼 위로 올린다(서로 가리지 않게). */
+.dockLifted {
+  composes: dock;
+  bottom: calc(var(--spacing-md) + 51px + 8px + 88px);
+}
+
+/* 수동 병합 한 줄: 어떤 트리인지 + 지금 병합 버튼 */
+.mergeRow {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-width: 0;
+}
+
+.mergeText {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--color-text);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.mergeButton {
+  flex-shrink: 0;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 /* 알약. 답을 기다리는 실행이 있을 때만 그린다. 누르면 질문·보기·답 입력까지 펼쳐진다. */
 .banner {
   composes: glass from '../../styles/glass.module.css';

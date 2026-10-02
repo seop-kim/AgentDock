@@ -23,6 +23,7 @@ import AgentNodeMenu from './AgentNodeMenu';
 import GroupCardMenu from './GroupCardMenu';
 import GroupPromptModal from './GroupPromptModal';
 import NodeTerminalPreview from './NodeTerminalPreview';
+import MergeAttention from './MergeAttention';
 import WaitingInputBanner from './WaitingInput';
 import WaitingInputPopup from './WaitingInputPopup';
 import styles from './GroupCanvas.module.css';
@@ -689,6 +690,9 @@ export default function GroupCanvas({
 
       {/* 아래 가운데(패널 사이의 빈 곳 가운데)에 떠 있는 입력 대기 알약. 확대/축소 도구 바로 위에 온다. */}
       <WaitingInputBanner project={project} insetLeft={insetLeft} insetRight={insetRight} />
+
+      {/* 자동 병합이 막힌 트리를 물어보는 알약(입력 대기 알약이 떠 있으면 그 위로 올린다). */}
+      <MergeAttention project={project} lifted={waitingByAgent.size > 0} />
 
       {/* 아래 가운데(패널 사이의 빈 곳 가운데)에 떠 있는 확대/축소 도구 */}
       <div
