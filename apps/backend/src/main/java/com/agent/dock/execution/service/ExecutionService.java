@@ -374,14 +374,60 @@ public class ExecutionService {
         }
     }
 
+    /**
+     * 실행 취소. 그 실행과 **그 아래 위임 자식들**을 모두 멈춘다 —
+     * 자식들은 각자 CLI 프로세스를 갖고 있어 부모만 멈추면 계속 돌고, 사용자 눈에는 취소가 안 된 것처럼 보인다.
+     * 이미 끝난 실행은 상태를 건드리지 않지만, 그 아래에서 아직 도는 것은 멈춘다.
+     */
     public Map<String, Boolean> cancel(Long id) {
         Execution execution = executionRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Execution %d not found".formatted(id)));
-        Agent agent = agentRepository.findByIdWithRelations(execution.getAgentId())
-                .orElseThrow(() -> new NotFoundException("Agent %d not found".formatted(execution.getAgentId())));
-        AgentRuntime runtime = runtimeRegistry.resolve(agent.getProvider().getKey().name());
-        runtime.cancel(String.valueOf(execution.getId()));
-        return Map.of("cancelled", cancelExecution(execution, MANUAL_CANCEL_REASON));
+        return Map.of("cancelled", cancelSubtree(execution));
+    }
+
+    /** 이 실행과 자손을 모두 취소한다(하나라도 실제로 전이했으면 true). */
+    private boolean cancelSubtree(Execution execution) {
+        boolean cancelled = cancelOne(execution);
+        for (Execution descendant : descendantsOf(execution)) {
+            // 자손은 하나가 이미 끝나 있어도 나머지를 계속 멈춰야 하므로 숏컷하지 않는다.
+            cancelled = cancelOne(descendant) || cancelled;
+        }
+        return cancelled;
+    }
+
+    /** 이 실행 아래의 자손 전부(자식 → 손자 순). 위임 트리는 부모 링크로만 이어진다. */
+    private List<Execution> descendantsOf(Execution execution) {
+        Long rootId = execution.getRootExecutionId() == null ? execution.getId() : execution.getRootExecutionId();
+        List<Execution> tree = executionRepository.findByRootExecutionIdOrderByIdAsc(rootId);
+        List<Execution> descendants = new ArrayList<>();
+        List<Long> pending = new ArrayList<>();
+        pending.add(execution.getId());
+        for (int i = 0; i < pending.size(); i++) {
+            Long parentId = pending.get(i);
+            for (Execution candidate : tree) {
+                if (parentId.equals(candidate.getParentExecutionId())) {
+                    descendants.add(candidate);
+                    pending.add(candidate.getId());
+                }
+            }
+        }
+        return descendants;
+    }
+
+    /** 실행 하나를 실제로 멈춘다: CLI 프로세스 종료 + 상태 전이. */
+    private boolean cancelOne(Execution execution) {
+        killProcess(execution);
+        return cancelExecution(execution, MANUAL_CANCEL_REASON);
+    }
+
+    /** 그 실행의 CLI 프로세스를 종료한다(에이전트를 못 찾아도 상태 전이는 계속한다). */
+    private void killProcess(Execution execution) {
+        if (execution.getAgentId() == null) {
+            return;
+        }
+        agentRepository.findByIdWithRelations(execution.getAgentId()).ifPresent(agent ->
+                runtimeRegistry.resolve(agent.getProvider().getKey().name())
+                        .cancel(String.valueOf(execution.getId())));
     }
 
     /** 실행을 CANCELLED 로 전이하고 사유를 남긴다(이미 끝난 실행은 건드리지 않는다).

@@ -181,6 +181,34 @@ class ExecutionCancelCleanupTest {
         assertThatThrownBy(() -> service.cancel(99L)).isInstanceOf(NotFoundException.class);
     }
 
+    /** 부모만 멈추면 자식 CLI 가 계속 돈다 — 취소는 자손까지 내려가야 한다. */
+    @Test
+    void cancelAlsoStopsTheRunningDescendants() {
+        Execution root = execution(50L, ExecutionStatus.RUNNING, null, 100L);
+        root.setAgentId(9L);
+        Execution child = execution(51L, ExecutionStatus.RUNNING, 50L, null);
+        child.setAgentId(16L);
+        child.setParentExecutionId(50L);
+        Execution grandChild = execution(52L, ExecutionStatus.WAITING_CHILD, 50L, null);
+        grandChild.setAgentId(15L);
+        grandChild.setParentExecutionId(51L);
+        when(executionRepository.findById(50L)).thenReturn(Optional.of(root));
+        when(executionRepository.findByRootExecutionIdOrderByIdAsc(50L)).thenReturn(List.of(child, grandChild));
+        when(executionRepository.save(any(Execution.class))).thenAnswer(call -> call.getArgument(0));
+        stubAgentAndRuntime(9L);
+        stubAgentAndRuntime(16L);
+        stubAgentAndRuntime(15L);
+
+        service.cancel(50L);
+
+        assertThat(root.getStatus()).isEqualTo(ExecutionStatus.CANCELLED);
+        assertThat(child.getStatus()).isEqualTo(ExecutionStatus.CANCELLED);
+        assertThat(grandChild.getStatus()).isEqualTo(ExecutionStatus.CANCELLED);
+        verify(runtime).cancel("50");
+        verify(runtime).cancel("51");
+        verify(runtime).cancel("52");
+    }
+
     private void stubAgentAndRuntime(Long agentId) {
         AiProvider provider = new AiProvider();
         provider.setKey(ProviderKey.CLAUDE_CODE);
