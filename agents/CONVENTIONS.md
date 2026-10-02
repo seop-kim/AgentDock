@@ -21,7 +21,7 @@ Command Code처럼 위 세 파일 중 아무것도 자동으로 읽지 않는 �
 - Backend: **Java 25 + Spring Boot 4.1.1** + Gradle(Groovy DSL) + Spring Data JPA(Hibernate) + QueryDSL + Flyway + Lombok + PostgreSQL (`apps/backend`)
 - Frontend: **Vite 5 + React 18 + React Router 6** + TypeScript + CSS Modules (`apps/frontend`, 순수 SPA)
 - Local Runtime 실행: `ProcessBuilder` (shell 미경유), 브라우저가 CLI를 직접 실행하지 않음
-- 실시간 로그/출력: SSE (Server-Sent Events, `SseEmitter`)
+- 실시간 로그/출력: SSE (Server-Sent Events, `SseEmitter`) — 실행 로그는 `GET /executions/{id}/stream`, **데이터 변경 알림은 전역 `GET /events/stream`**
 
 ## 핵심 설계 원칙 (스펙 33장)
 
@@ -144,6 +144,7 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
 - `runtime/` — `interfaces/` `AgentRuntime` · `service/`(ClaudeCodeRuntime, CommandCodeRuntime, RuntimeRegistry) · `dto/`(AgentExecutionRequest/Result, ExecutionMetrics) · `util/` `ClaudeStreamJson`(stream-json → 로그·계측) · `CommandCodeStreamJson`(cmdc NDJSON → 로그·계측) · `JsonObjects`(결과 텍스트에서 JSON 객체 찾기 — Claude/Command Code 공용)
 - `execution/` — `domain/`(Execution, ExecutionStatus, ExecutionDecision, ExecutionLog, LogStream) · `controller/` · `service/`(ExecutionService, ExecutionGuard, ExecutionFactory, ExecutionRunner, ExecutionStreamHub, **WorktreeService**) · `repository/` · `dto/`(응답·트리·이벤트 등)
 - `delegation/` — `controller/`(ProjectCommandController) · `service/`(DelegationService, RuleRouter) · `dto/`(DelegationContract) · `util/`(ContractSchemas, DelegationPrompts)
+- `event/` — 전역 데이터 변경 스트림. `controller/`(`GET /events/stream`) · `service/`(EventStreamService 허브, EventPublisher) · `dto/`(`DataChangedEvent`, `EventTypes`). 알림은 **페이로드가 아니다** — `{"type","projectId","executionId","taskId"}` 만 실어 보내고 화면이 바뀐 조각만 REST 로 다시 읽는다(타입: `execution.changed`·`task.changed`·`agent.changed`·`group.changed`·`project.changed`·`workspace.changed`·`runtime.changed`·`attachment.changed`). 구독 직후 `hello` 한 번, 이후 25초마다 하트비트 주석 줄. 발행은 **서비스 계층에서 데이터가 실제로 바뀌는 자리에만** 한다(예: `ExecutionService.update` 가 모든 상태·계약·결과 저장을 지나므로 그 한 곳에서 `execution.changed`). AOP 는 쓰지 않는다.
 
 ## DB 스키마
 
@@ -256,6 +257,7 @@ DB 확인: `C:\Program Files\PostgreSQL\17\bin\psql.exe -U postgres -d AGENT_DOC
 - 오래 걸리는 작업(probe, 로그인 세션)에는 `@Transactional` 을 붙이지 않는다. 필요한 관계는 fetch join 으로 조회 시점에 함께 읽는다.
 - POST 는 **201**, 삭제는 **204**(프론트 `request()` 가 204 를 따로 처리).
 - 변하지 않는 규칙(권한, 런타임 enabled, 폴더 상태)은 백엔드가 강제하고, 자주 변하는 값(모델/모드)은 데이터로 두고 CLI 에 위임한다.
+- **실시간 갱신은 이벤트 스트림(SSE) 우선, 폴링은 보조(느린 주기·포커스 시)로만.** 화면은 `GET /events/stream` 을 한 번 구독해 "무엇이 바뀌었는지"를 받고 **바뀐 조각만 기존 REST 로 다시 읽는다**(주기적 전체 폴링 금지 — 3초마다 ~20건을 부르던 방식은 쓰지 않는다). 새 화면·새 갱신도 이 규칙을 따른다.
 
 ## 브랜치 흐름과 커밋 컨벤션
 
