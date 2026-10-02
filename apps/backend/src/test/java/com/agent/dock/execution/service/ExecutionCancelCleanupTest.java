@@ -42,7 +42,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 중단된 실행 정리: 기동 시 고아 4종 전이 + 루트 Task 동기화, cancel 의 상태 전이와 종료 상태 불변 가드.
+ * 중단된 실행 정리: 기동 시 고아(PENDING/RUNNING/WAITING_CHILD) 전이 + 루트 Task 동기화,
+ * cancel 의 상태 전이와 종료 상태 불변 가드. 사람의 답을 기다리는 WAITING_INPUT 은 고아가 아니므로 남긴다.
  */
 @ExtendWith(MockitoExtension.class)
 class ExecutionCancelCleanupTest {
@@ -84,18 +85,20 @@ class ExecutionCancelCleanupTest {
 
         int cleaned = service.cleanupOrphanExecutions();
 
-        assertThat(cleaned).isEqualTo(4);
+        // 사람의 답을 기다리는 WAITING_INPUT 은 고아가 아니다(답을 주면 이어서 돈다) — 남는다.
+        assertThat(cleaned).isEqualTo(3);
         assertThat(pending.getStatus()).isEqualTo(ExecutionStatus.CANCELLED);
         assertThat(running.getStatus()).isEqualTo(ExecutionStatus.CANCELLED);
         assertThat(waitingChild.getStatus()).isEqualTo(ExecutionStatus.CANCELLED);
-        assertThat(waitingInput.getStatus()).isEqualTo(ExecutionStatus.CANCELLED);
+        assertThat(waitingInput.getStatus()).isEqualTo(ExecutionStatus.WAITING_INPUT);
+        assertThat(waitingInput.getErrorMessage()).isNull();
         assertThat(pending.getErrorMessage()).isEqualTo("서버 재기동으로 중단됨");
         assertThat(pending.getFinishedAt()).isNotNull();
         assertThat(succeeded.getStatus()).isEqualTo(ExecutionStatus.SUCCEEDED);
         assertThat(failed.getStatus()).isEqualTo(ExecutionStatus.FAILED);
         assertThat(cancelled.getStatus()).isEqualTo(ExecutionStatus.CANCELLED);
         assertThat(succeeded.getErrorMessage()).isNull();
-        verify(executionRepository, times(4)).save(any(Execution.class));
+        verify(executionRepository, times(3)).save(any(Execution.class));
     }
 
     @Test

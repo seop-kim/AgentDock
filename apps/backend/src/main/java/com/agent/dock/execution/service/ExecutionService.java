@@ -219,6 +219,14 @@ public class ExecutionService {
     }
 
     /**
+     * 기동 때 정리할 고아인지. **사람의 답을 기다리는 것(WAITING_INPUT)은 고아가 아니다** —
+     * 답을 주면 같은 실행이 이어서 돌기 때문에, 기동했다고 취소하면 사람이 답할 기회를 잃는다.
+     */
+    private static boolean isOrphan(ExecutionStatus status) {
+        return isRunning(status) && status != ExecutionStatus.WAITING_INPUT;
+    }
+
+    /**
      * 판단 실행이 사람에게 물어 보고 멈춘다(실행은 끝나지 않는다). 질문(과 보기)을 저장하고 상태를 `WAITING_INPUT` 으로 둔다.
      * 답이 오면(`answer`) 같은 실행의 판단 루프를 이어서 돈다. `options` 는 비어 있어도 된다(보기 없는 질문).
      */
@@ -337,15 +345,16 @@ public class ExecutionService {
         return streamHub.subscribe(Long.parseLong(executionId));
     }
 
-    /** 서버 기동 시 PENDING/RUNNING/WAITING_CHILD/WAITING_INPUT 로 남은 고아 실행을 일괄 CANCELLED 로 전이하고,
+    /** 서버 기동 시 PENDING/RUNNING/WAITING_CHILD 로 남은 고아 실행을 일괄 CANCELLED 로 전이하고,
      * 루트 실행이면 Task 도 publishFinished 경로로 종료한다. 이미 끝난 실행은 건드리지 않는다.
+     * 사람의 답을 기다리는 WAITING_INPUT 은 남긴다 — 답을 주면 같은 실행이 이어서 돌기 때문이다.
      * 기동 트리거가 부를 수 있도록 public 이다(기동 1회만, 상시 감시 없음).
      *
      * @return 정리한 실행 수
      */
     public int cleanupOrphanExecutions() {
         List<Execution> orphans = executionRepository.findAll().stream()
-                .filter(execution -> isRunning(execution.getStatus()))
+                .filter(execution -> isOrphan(execution.getStatus()))
                 .toList();
         for (Execution orphan : orphans) {
             cancelExecution(orphan, STALE_EXECUTION_REASON);
