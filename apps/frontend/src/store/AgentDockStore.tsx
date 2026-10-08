@@ -26,6 +26,9 @@ import type {
   Workspace,
 } from '../types';
 
+/** 채팅(명령) 한 페이지 크기. 이만큼만 태스크를 읽으므로 트리도 이만큼만 읽힌다(채팅 5 + 트리 5 = 10). */
+const CHAT_PAGE_SIZE = 5;
+
 export type NewAgentInput = Omit<Agent, 'id' | 'placed'>;
 export type AgentUpdateInput = Omit<Agent, 'id' | 'projectId' | 'placed'>;
 
@@ -579,7 +582,7 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
    */
   const loadProjectSlice = useCallback(
     async (projectId: number, forceTrees = false) => {
-      const rows = await api.listTasks(projectId);
+      const rows = await api.listTasks(projectId, CHAT_PAGE_SIZE);
       const taskList = rows.map((task) => mapTask(projectId, task));
       rows.forEach((task, index) => taskRootsRef.current.set(taskList[index].id, task.latestExecutionId));
       setTasks((prev) => [...prev.filter((task) => task.projectId !== projectId), ...taskList]);

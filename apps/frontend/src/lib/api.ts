@@ -267,7 +267,9 @@ export const api = {
   removeGroupMember: (groupId: number, agentId: number) =>
     request<AgentGroup>(`/groups/${groupId}/members/${agentId}`, { method: 'DELETE' }),
 
-  listTasks: (projectId: number) => request<Task[]>(`/tasks?projectId=${projectId}`),
+  /** 명령(태스크) 목록. `limit` 을 주면 최근 것부터 그만큼만 받는다(트리도 그만큼만 읽히게 된다). */
+  listTasks: (projectId: number, limit?: number) =>
+    request<Task[]>(`/tasks?projectId=${projectId}${limit === undefined ? '' : `&limit=${limit}`}`),
   sendCommand: (
     projectId: number,
     data: { text: string; targetAgentId?: number | null; groupId?: number | null; attachmentIds?: number[] },
