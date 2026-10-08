@@ -262,9 +262,9 @@
   box-shadow: var(--shadow-float);
 }
 
-/* 이어갈 작업 고르기 — 입력줄과 같은 줄에 작게 둔다(명령과 함께 보낼 맥락). */
+/* 이어갈 작업 고르기 — 채팅 위쪽(대상 선택 아래)에 전체 폭으로 둔다. */
 .continuePick {
-  flex: 0 1 160px;
+  width: 100%;
   min-width: 0;
   padding: 4px 6px;
   border: 1px solid var(--color-border);

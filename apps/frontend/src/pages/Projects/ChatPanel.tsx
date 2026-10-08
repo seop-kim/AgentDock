@@ -344,6 +344,31 @@ export default function ChatPanel({
         </select>
         {receiverHint && <span className={styles.hint}>{receiverHint}</span>}
 
+        {/* 이어갈 작업 고르기 — 채팅 위쪽에서 고르면 새 명령 앞에 그 작업의 내역을 붙여 보낸다. */}
+        <select
+          className={styles.continuePick}
+          value={continueFrom === null ? '' : String(continueFrom)}
+          onChange={(e) => setContinueFrom(e.target.value === '' ? null : Number(e.target.value))}
+          aria-label="이어갈 작업"
+          title="이어갈 작업을 고르면 그 작업 내역을 함께 보냅니다"
+        >
+          <option value="">이어가기 없음 — 새 작업으로 시작</option>
+          {chats
+            .filter(
+              (message) =>
+                message.projectId === project.id &&
+                message.role === 'user' &&
+                message.rootExecutionId !== null,
+            )
+            .slice(-10)
+            .reverse()
+            .map((message) => (
+              <option key={message.id} value={String(message.rootExecutionId)}>
+                #{message.rootExecutionId} {message.text.slice(0, 26)}
+              </option>
+            ))}
+        </select>
+
         <div ref={logRef} className={styles.log}>
           {/* 오래된 명령은 한 페이지(5개)씩만 읽는다 — 더 있으면 여기서 이어 읽는다. */}
           {chatHasMore[project.id] === true && (
@@ -445,30 +470,6 @@ export default function ChatPanel({
           title="위로 끌면 입력창이 커집니다"
           onPointerDown={startResize}
         />
-        {/* 이어갈 작업 고르기 — 고르면 새 명령 앞에 그 작업의 내역을 붙여 보낸다. */}
-        <select
-          className={styles.continuePick}
-          value={continueFrom === null ? '' : String(continueFrom)}
-          onChange={(e) => setContinueFrom(e.target.value === '' ? null : Number(e.target.value))}
-          aria-label="이어갈 작업"
-          title="이어갈 작업을 고르면 그 작업 내역을 함께 보냅니다"
-        >
-          <option value="">이어가기 없음</option>
-          {chats
-            .filter(
-              (message) =>
-                message.projectId === project.id &&
-                message.role === 'user' &&
-                message.rootExecutionId !== null,
-            )
-            .slice(-10)
-            .reverse()
-            .map((message) => (
-              <option key={message.id} value={String(message.rootExecutionId)}>
-                #{message.rootExecutionId} {message.text.slice(0, 26)}
-              </option>
-            ))}
-        </select>
         <button
           type="button"
           className={styles.attach}
