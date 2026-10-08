@@ -211,17 +211,18 @@
 }
 
 /* 목록 필터(검색어·상태·그룹) — 셋을 함께 걸 수 있다(복합 조건). */
+/* 검색줄 — 목록 카드와 같은 폭을 쓴다(좌우 여백 없음). 필터 아이콘은 인풋 안 오른쪽에 얹는다. */
 .filters {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 var(--spacing-sm) var(--spacing-sm);
+  padding: 0 0 var(--spacing-sm);
 }
 
-.filters input {
-  flex: 1;
-  min-width: 0;
-  padding: 5px 9px;
+.searchWrap {
+  position: relative;
+}
+
+.searchWrap input {
+  width: 100%;
+  padding: 5px 34px 5px 9px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-input-bg);
@@ -229,16 +230,18 @@
   font-size: 12px;
 }
 
-/* 필터 버튼 — 항목이 걸려 있으면 강조하고 개수를 보여 준다. */
+/* 필터 버튼 — 인풋 안 오른쪽에 얹는다. 항목이 걸려 있으면 강조한다. */
 .filterButton {
-  flex-shrink: 0;
-  padding: 5px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  padding: 2px 6px;
+  border: none;
+  border-radius: var(--radius);
   background: transparent;
-  color: var(--color-text);
+  color: var(--color-muted);
   font-size: 12px;
-  white-space: nowrap;
 }
 
 .filterButtonOn {

@@ -226,14 +226,15 @@ export default function AgentList({
       {/* 검색 + 필터 버튼. 상태·그룹은 버튼을 눌러 뜨는 팝업에서 고른다. */}
       {open && (
         <div className={styles.filters} onClick={(e) => e.stopPropagation()}>
-          <input
-            type="search"
-            value={filters.query}
-            onChange={(e) => setFilters((prev) => ({ ...prev, query: e.target.value }))}
-            placeholder="이름·역할·모델 검색"
-            aria-label="에이전트 검색"
-          />
-          <button
+          <div className={styles.searchWrap}>
+            <input
+              type="search"
+              value={filters.query}
+              onChange={(e) => setFilters((prev) => ({ ...prev, query: e.target.value }))}
+              placeholder="이름·역할·모델 검색"
+              aria-label="에이전트 검색"
+            />
+            <button
             type="button"
             ref={filterButtonRef}
             data-agent-filter-button
@@ -249,7 +250,8 @@ export default function AgentList({
             }
           >
             <FilterIcon />
-          </button>
+            </button>
+          </div>
         </div>
       )}
 
