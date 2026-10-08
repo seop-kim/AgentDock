@@ -42,5 +42,5 @@ agentdock:
     max-executions: 20      # 트리 하나(명령 하나)가 만들 수 있는 실행 수
     max-steps: 8           # 한 실행이 판단을 반복할 수 있는 횟수
     max-targets: 4          # 한 번에 맡길 수 있는 대상 수
-    max-concurrent: 4       # 동시에 도는 CLI 수
+    max-concurrent: 6       # 동시에 도는 CLI 수 (CLI 는 대부분 API 응답을 기다리므로 CPU 보다 메모리·요율이 한계다)
     max-cost-usd: 5         # 트리 하나의 예산 상한(달러)
