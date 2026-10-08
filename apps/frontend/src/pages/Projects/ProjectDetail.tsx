@@ -28,7 +28,8 @@ const BOTTOM_INSET = 24;
 export default function ProjectDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { projects, workspaces, agents, groups, tasks, executions, watchExecutionTree } = useAgentDockStore();
+  const { projects, workspaces, agents, groups, tasks, executions, reload, watchExecutionTree } =
+    useAgentDockStore();
   const [notice, setNotice] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   /** 실행 트리 창에 띄울 실행(채팅 응답에 딸린 루트 실행 id). */
@@ -170,6 +171,16 @@ export default function ProjectDetail() {
           </Link>
           <div className={styles.titleRow}>
             <h1 className={styles.title}>{project.name}</h1>
+            {/* 서버에서 다시 읽는다 — 캔버스·에이전트 목록·명령(채팅)까지 한 번에 갱신된다. */}
+            <button
+              type="button"
+              className={styles.settingsButton}
+              onClick={() => void reload()}
+              aria-label="새로고침"
+              title="캔버스·에이전트 목록·명령을 서버에서 다시 읽습니다"
+            >
+              ⟳
+            </button>
             <button
               type="button"
               className={styles.settingsButton}
