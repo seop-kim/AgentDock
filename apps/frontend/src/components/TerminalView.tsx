@@ -5,6 +5,16 @@ import filter from '../styles/logFilter.module.css';
 import term from '../styles/terminal.module.css';
 
 /**
+ * 한 화면에 동시에 열리는 로그 스트림(SSE) 수의 상한.
+ *
+ * 브라우저는 **오리진당 6개** 연결만 허용한다. 실행마다(터미널 창·미리보기) 스트림을 열면 이 6칸이 다 차고,
+ * 그러면 초기 로딩(`reload`) 요청이 큐에 갇혀 **화면이 "불러오는 중"에서 끝나지 않는다**(실측: 명령 수행 후
+ * 새로고침하면 API 는 2~168ms 로 정상인데도 로딩이 멈춰 있었다). 그래서 살아 있는 스트림을 이 수로 묶는다.
+ */
+const MAX_LIVE_STREAMS = 2;
+let liveStreams = 0;
+
+/**
  * 터미널 몸통(실행 출력). 그 실행의 **로그 스트림(SSE)** 을 직접 구독한다.
  * 서버는 구독할 때 지금까지의 로그를 먼저 재생하고(메모리 버퍼) 이어서 라이브로 보내며,
  * 실행이 끝나면 `exit` 이름의 이벤트를 보내고 닫는다. 그때까지 줄 끝에 커서가 깜빡인다.
@@ -32,6 +42,8 @@ export default function TerminalView({
 }) {
   const [lines, setLines] = useState<TerminalLine[]>([]);
   const [finished, setFinished] = useState(false);
+  /** 스트림 상한에 걸려 라이브 구독을 못 연 상태(다른 터미널이 쓰고 있다). */
+  const [held, setHeld] = useState(false);
   const [query, setQuery] = useState('');
   const logRef = useRef<HTMLOListElement>(null);
   // 사용자가 맨 아래(여유 24px 이내)에 있는지. trackTail 일 때만 본다.
@@ -41,11 +53,19 @@ export default function TerminalView({
   useEffect(() => {
     setLines([]);
     setFinished(false);
+    setHeld(false);
     atBottomRef.current = true;
   }, [executionId]);
 
   useEffect(() => {
     if (executionId === null) return;
+    // 상한을 넘으면 **구독을 열지 않는다** — 열어 두면 다른 요청이 큐에 갇힌다(브라우저 연결 6칸).
+    if (liveStreams >= MAX_LIVE_STREAMS) {
+      setHeld(true);
+      return;
+    }
+    setHeld(false);
+    liveStreams += 1;
     const source = new EventSource(`${api.base}/executions/${executionId}/stream`);
 
     // 재생 + 라이브 로그(이름 없는 메시지: `{stream, content}`)
@@ -67,7 +87,10 @@ export default function TerminalView({
     // exit 뒤 서버가 닫으면 onerror 가 오므로 조용히 닫는다(자동 재연결 방지).
     source.onerror = () => source.close();
 
-    return () => source.close();
+    return () => {
+      liveStreams -= 1;
+      source.close();
+    };
   }, [executionId]);
 
   useEffect(() => {
@@ -83,7 +106,11 @@ export default function TerminalView({
       ? lines
       : [
           {
-            text: executionId === null ? '지금 실행 중인 작업이 없습니다.' : '출력을 기다리는 중…',
+            text: held
+              ? '다른 터미널이 라이브 로그를 쓰고 있습니다 — 그 창을 닫으면 여기로 옵니다.'
+              : executionId === null
+                ? '지금 실행 중인 작업이 없습니다.'
+                : '출력을 기다리는 중…',
             kind: 'muted',
           },
         ];
