@@ -62,10 +62,16 @@ export default function GroupList({
     }, HOVER_DELAY_MS);
   };
 
+  /** 바로 닫지 않는다 — 정보 창으로 마우스를 옮기는 동안(250ms) 살아 있게. */
   const hideHover = () => {
     if (hoverTimer.current !== null) window.clearTimeout(hoverTimer.current);
+    hoverTimer.current = window.setTimeout(() => setHover(null), HOVER_DELAY_MS);
+  };
+
+  /** 정보 창에 마우스가 들어오면 닫힘 예약을 취소한다. */
+  const keepHover = () => {
+    if (hoverTimer.current !== null) window.clearTimeout(hoverTimer.current);
     hoverTimer.current = null;
-    setHover(null);
   };
 
   const projectGroups = groups.filter((g) => g.projectId === project.id);
@@ -238,7 +244,14 @@ export default function GroupList({
       </div>
       </div>
 
-      {hover && <GroupHoverCard group={hover.group} anchor={hover.rect} />}
+      {hover && (
+        <GroupHoverCard
+          group={hover.group}
+          anchor={hover.rect}
+          onKeepOpen={keepHover}
+          onLeave={hideHover}
+        />
+      )}
 
       {creating && <GroupFormModal project={project} onClose={() => setCreating(false)} />}
 

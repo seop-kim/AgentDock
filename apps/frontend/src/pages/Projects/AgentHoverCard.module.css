@@ -12,7 +12,8 @@
   border-radius: var(--radius-lg);
   color: var(--color-text);
   font-size: 13px;
-  pointer-events: none;
+  /* 정보 창으로 마우스를 옮겨 올 수 있어야 한다(옮기는 동안 꺼지지 않게) — 안에서 스크롤도 된다. */
+  pointer-events: auto;
 }
 
 .head {

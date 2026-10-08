@@ -10,17 +10,24 @@ const ESTIMATED_HEIGHT = 300;
 
 /**
  * 에이전트 카드에 마우스를 올리면 카드 오른쪽에 뜨는 정보 창: 이름, 역할, 소속 그룹, 연결된 에이전트, 프롬프트.
- * "연결된 에이전트"는 같은 그룹에 속한 다른 에이전트다(리더는 ★). 마우스 조작을 막지 않도록 클릭은 통과시킨다.
+ * "연결된 에이전트"는 같은 그룹에 속한 다른 에이전트다(리더는 ★).
+ * 마우스를 이 창으로 옮겨도 유지되고(옮기는 동안 꺼지지 않게), 길면 안에서 스크롤해 읽을 수 있다.
  */
 export default function AgentHoverCard({
   agent,
   project,
   anchor,
+  onKeepOpen,
+  onLeave,
 }: {
   agent: Agent;
   project: Project;
   /** 카드의 화면 좌표 */
   anchor: DOMRect;
+  /** 정보 창으로 마우스가 들어오면 닫힘 예약을 취소한다(옮겨 가는 동안 꺼지지 않게). */
+  onKeepOpen?: () => void;
+  /** 정보 창에서 마우스가 나가면 닫힘 예약을 건다. */
+  onLeave?: () => void;
 }) {
   const { agents, groups, providers, roles } = useAgentDockStore();
   const role = roles.find((r) => r.id === agent.roleId);
@@ -44,6 +51,8 @@ export default function AgentHoverCard({
     <div
       className={styles.card}
       role="tooltip"
+      onMouseEnter={onKeepOpen}
+      onMouseLeave={onLeave}
       style={{ '--top': `${top}px`, '--left': `${left}px` } as React.CSSProperties}
     >
       <div className={styles.head}>

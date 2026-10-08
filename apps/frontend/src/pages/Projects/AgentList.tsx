@@ -146,10 +146,14 @@ export default function AgentList({
     hoverTimer.current = window.setTimeout(() => setHover({ agent, rect: el.getBoundingClientRect() }), HOVER_DELAY_MS);
   };
 
+  /** 바로 닫지 않는다 — 정보 창으로 마우스를 옮기는 동안(250ms) 살아 있게. */
   const hideHover = () => {
     window.clearTimeout(hoverTimer.current);
-    setHover(null);
+    hoverTimer.current = window.setTimeout(() => setHover(null), HOVER_DELAY_MS);
   };
+
+  /** 정보 창에 마우스가 들어오면 닫힘 예약을 취소한다. */
+  const keepHover = () => window.clearTimeout(hoverTimer.current);
 
   const onDelete = (agent: Agent) => {
     const memberOf = groups.filter((g) => g.memberIds.includes(agent.id)).length;
@@ -432,7 +436,15 @@ export default function AgentList({
       </div>
       </div>
 
-      {hover && <AgentHoverCard agent={hover.agent} project={project} anchor={hover.rect} />}
+      {hover && (
+        <AgentHoverCard
+          agent={hover.agent}
+          project={project}
+          anchor={hover.rect}
+          onKeepOpen={keepHover}
+          onLeave={hideHover}
+        />
+      )}
       {menu && (
         <AgentCardMenu
           anchor={menu.rect}

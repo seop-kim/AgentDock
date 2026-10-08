@@ -13,7 +13,19 @@ const ESTIMATED_HEIGHT = 220;
  * 정작 그 그룹의 규칙을 찾기 어렵다. (공유 노트는 프롬프트 편집 창에서 본다.)
  * 마우스 조작을 막지 않도록 클릭은 통과시킨다(에이전트 호버 카드와 같은 스타일을 쓴다).
  */
-export default function GroupHoverCard({ group, anchor }: { group: AgentGroup; anchor: DOMRect }) {
+export default function GroupHoverCard({
+  group,
+  anchor,
+  onKeepOpen,
+  onLeave,
+}: {
+  group: AgentGroup;
+  anchor: DOMRect;
+  /** 정보 창으로 마우스가 들어오면 닫힘 예약을 취소한다(옮겨 가는 동안 꺼지지 않게). */
+  onKeepOpen?: () => void;
+  /** 정보 창에서 마우스가 나가면 닫힘 예약을 건다. */
+  onLeave?: () => void;
+}) {
   // 화면 밖으로 나가지 않게: 오른쪽에 자리가 없으면 카드 왼쪽에 붙이고, 위아래도 안쪽으로 당긴다.
   const roomRight = window.innerWidth - anchor.right - 12;
   const left = roomRight >= CARD_WIDTH ? anchor.right + 12 : Math.max(8, anchor.left - CARD_WIDTH - 12);
@@ -23,6 +35,8 @@ export default function GroupHoverCard({ group, anchor }: { group: AgentGroup; a
     <div
       className={styles.card}
       role="tooltip"
+      onMouseEnter={onKeepOpen}
+      onMouseLeave={onLeave}
       style={{ '--top': `${top}px`, '--left': `${left}px` } as React.CSSProperties}
     >
       <div className={styles.head}>
