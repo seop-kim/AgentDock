@@ -23,6 +23,7 @@ import AgentNodeMenu from './AgentNodeMenu';
 import GroupCardMenu from './GroupCardMenu';
 import GroupPromptModal from './GroupPromptModal';
 import NodeTerminalPreview from './NodeTerminalPreview';
+import { askConfirm } from '../../components/ConfirmDialog';
 import RequestsPanel from './RequestsPanel';
 import WaitingInputPopup from './WaitingInputPopup';
 import styles from './GroupCanvas.module.css';
@@ -373,8 +374,9 @@ export default function GroupCanvas({
     touchedRef.current = true;
   };
 
-  const onDeleteGroup = (id: number, groupName: string) => {
-    if (!window.confirm(`"${groupName}" 그룹을 삭제할까요? 에이전트는 삭제되지 않습니다.`)) return;
+  const onDeleteGroup = async (id: number, groupName: string) => {
+    const ok = await askConfirm(`"${groupName}" 그룹을 삭제할까요? 에이전트는 삭제되지 않습니다.`, '삭제');
+    if (!ok) return;
     deleteGroup(id);
   };
 

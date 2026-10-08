@@ -18,6 +18,7 @@ import exec from '../../styles/execution.module.css';
 import modal from '../../styles/modal.module.css';
 import shared from '../../styles/shared.module.css';
 import type { Execution, ExecutionStatus } from '../../types';
+import { askConfirm } from '../../components/ConfirmDialog';
 import ExecutionDetail from './ExecutionDetail';
 
 /** 실행 상태 배지. 채팅 카드와 실행 트리 창이 함께 쓴다. */
@@ -58,8 +59,9 @@ export function CancelButton({
   if (!isLive(execution.status)) return null;
 
   const cancel = async () => {
-    const ok = window.confirm(
+    const ok = await askConfirm(
       `"${name}"의 실행을 취소할까요?\n지금 도는 이 실행만 멈춥니다. 하위·다른 실행은 계속 돕니다.`,
+      '취소',
     );
     if (!ok) return;
     setPending(true);
@@ -234,8 +236,12 @@ export default function ExecutionTreeModal({
    * 워크트리 정리(사람이 판단해 부른다). 한 트리 = 한 워크트리라서 루트 행에서만 정리할 수 있다.
    * 자동 병합·자동 삭제는 없으므로 결과를 확인한 뒤 사람이 지운다.
    */
-  const cleanupWorktree = (execution: Execution) => {
-    if (!window.confirm(`워크트리와 전용 브랜치를 지울까요?\n${execution.worktreePath ?? ''}`)) return;
+  const cleanupWorktree = async (execution: Execution) => {
+    const ok = await askConfirm(
+      `워크트리와 전용 브랜치를 지울까요?\n${execution.worktreePath ?? ''}`,
+      '정리',
+    );
+    if (!ok) return;
     removeWorktree(execution.id, true);
   };
 

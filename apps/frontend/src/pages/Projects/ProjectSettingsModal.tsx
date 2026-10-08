@@ -1,5 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { useAgentDockStore } from '../../store/AgentDockStore';
+import { askConfirm } from '../../components/ConfirmDialog';
 import modal from '../../styles/modal.module.css';
 import shared from '../../styles/shared.module.css';
 import type { Project } from '../../types';
@@ -30,14 +31,15 @@ export default function ProjectSettingsModal({
     if (changed) renameProject(project.id, trimmed);
   };
 
-  const onDelete = () => {
+  const onDelete = async () => {
     const counts = [
       agents.filter((a) => a.projectId === project.id).length,
       groups.filter((g) => g.projectId === project.id).length,
       tasks.filter((t) => t.projectId === project.id).length,
     ];
     const message = `"${project.name}" 프로젝트를 삭제할까요?\n에이전트 ${counts[0]}개, 그룹 ${counts[1]}개, Task ${counts[2]}개도 함께 삭제됩니다.`;
-    if (!window.confirm(message)) return;
+    const ok = await askConfirm(message, '삭제');
+    if (!ok) return;
     deleteProject(project.id);
     onDeleted();
   };

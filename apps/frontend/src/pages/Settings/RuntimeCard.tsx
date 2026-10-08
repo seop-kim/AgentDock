@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { askConfirm } from '../../components/ConfirmDialog';
 import { useAgentDockStore } from '../../store/AgentDockStore';
 import shared from '../../styles/shared.module.css';
 import type { AiProvider } from '../../types';
@@ -28,8 +29,12 @@ export default function RuntimeCard({ provider }: { provider: AiProvider }) {
 
   const { models, modes, install: installSteps } = provider.capabilities;
 
-  const onDelete = () => {
-    if (!window.confirm('이 런타임을 쓰는 에이전트는 사용 불가가 되며 다른 런타임을 다시 할당해야 합니다. 삭제할까요?')) return;
+  const onDelete = async () => {
+    const ok = await askConfirm(
+      '이 런타임을 쓰는 에이전트는 사용 불가가 되며 다른 런타임을 다시 할당해야 합니다. 삭제할까요?',
+      '삭제',
+    );
+    if (!ok) return;
     deleteProvider(provider.id);
   };
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../../lib/api';
+import { askConfirm } from '../../components/ConfirmDialog';
 import { isLive } from '../../lib/executions';
 import { useAgentDockStore } from '../../store/AgentDockStore';
 import menu from '../../styles/menu.module.css';
@@ -68,9 +69,10 @@ export default function AgentNodeMenu({
    * 이 에이전트가 지금 돌리는 실행을 **강제 종료**한다.
    * 취소는 자손까지 전파되므로, 그 실행이 위임해 둔 자식 실행도 함께 멈춘다.
    */
-  const forceStop = (execution: Execution) => {
-    const ok = window.confirm(
+  const forceStop = async (execution: Execution) => {
+    const ok = await askConfirm(
       `실행 #${execution.id} 을(를) 강제 종료할까요? 그 아래 위임된 자식 실행도 함께 멈춥니다.`,
+      '강제 종료',
     );
     if (!ok) return;
     setStopping(true);

@@ -1,4 +1,5 @@
 import { DragEvent, useEffect, useRef, useState } from 'react';
+import { askConfirm } from '../../components/ConfirmDialog';
 import { isAgentDrag, startAgentDrag } from '../../lib/dnd';
 import { useGroupDrop } from '../../lib/useGroupDrop';
 import { ChevronDownIcon, ChevronUpIcon, PlusIcon } from '../../components/icons';
@@ -103,8 +104,9 @@ export default function GroupList({
     dropOnGroup(e, groupId);
   };
 
-  const onDelete = (id: number, groupName: string) => {
-    if (!window.confirm(`"${groupName}" 그룹을 삭제할까요? 에이전트는 삭제되지 않습니다.`)) return;
+  const onDelete = async (id: number, groupName: string) => {
+    const ok = await askConfirm(`"${groupName}" 그룹을 삭제할까요? 에이전트는 삭제되지 않습니다.`, '삭제');
+    if (!ok) return;
     deleteGroup(id);
   };
 

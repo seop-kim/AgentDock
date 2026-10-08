@@ -1,5 +1,6 @@
 import { DragEvent, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { askConfirm } from '../../components/ConfirmDialog';
 import { unavailableReason } from '../../lib/agentAvailability';
 import { agentStatus } from '../../lib/agentStatus';
 import { isAgentDrag, readAgentDrag, startAgentDrag } from '../../lib/dnd';
@@ -155,10 +156,11 @@ export default function AgentList({
   /** 정보 창에 마우스가 들어오면 닫힘 예약을 취소한다. */
   const keepHover = () => window.clearTimeout(hoverTimer.current);
 
-  const onDelete = (agent: Agent) => {
+  const onDelete = async (agent: Agent) => {
     const memberOf = groups.filter((g) => g.memberIds.includes(agent.id)).length;
     const extra = memberOf > 0 ? `\n${memberOf}개 그룹에서도 빠집니다.` : '';
-    if (!window.confirm(`"${agent.name}" 에이전트를 삭제할까요?${extra}`)) return;
+    const ok = await askConfirm(`"${agent.name}" 에이전트를 삭제할까요?${extra}`, '삭제');
+    if (!ok) return;
     deleteAgent(agent.id);
   };
 
