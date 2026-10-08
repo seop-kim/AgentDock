@@ -76,6 +76,16 @@ public final class DelegationPrompts {
             doc.append("\n## 첨부 파일\n\n");
             attachments.forEach(path -> doc.append("- ").append(path).append("\n"));
         }
+        doc.append("""
+
+                ## 함께 일하기
+
+                - 같은 명령으로 **다른 에이전트가 동시에** 돌고 있다(같은 작업 디렉터리를 쓴다).
+                - 네가 알아낸 것 중 남이 바로 쓸 만한 사실은 `.agentdock/share/<네 이름>.md` 한 장으로 남겨라 —
+                  형제와 다음 단계가 부모를 거치지 않고 곧바로 읽는다.
+                - 시작할 때 `.agentdock/share/`(다른 에이전트의 공유)와 `.agentdock/prompts/`(지시·지난 결과)에
+                  파일이 있으면 **먼저 읽어라**. 같은 팀의 맥락이 이미 파일로 와 있다.
+                """);
         return doc.toString();
     }
 

@@ -516,7 +516,14 @@ public class DelegationService {
         if (status != ExecutionStatus.WAITING_INPUT) {
             closeStream(child.getId(), status);
         }
-        return outcomeOf(childAgentId, status, child.getId());
+        DelegationPrompts.ChildOutcome outcome = outcomeOf(childAgentId, status, child.getId());
+        // 자식이 **끝나는 즉시** 그룹 공유 노트에 한 줄 남긴다 — 아직 도는 형제와 다음 스텝이
+        // 부모를 거치지 않고 이 맥락을 본다(트리가 끝날 때까지 기다리지 않는다).
+        if (status != ExecutionStatus.WAITING_INPUT && !outcome.summary().isBlank()) {
+            groupService.appendSharedNote(childAgentId,
+                    "#%d %s — %s".formatted(child.getId(), agentName(childAgentId), outcome.summary()));
+        }
+        return outcome;
     }
 
     private DelegationPrompts.ChildOutcome outcomeOf(Long agentId, ExecutionStatus status, Long executionId) {
