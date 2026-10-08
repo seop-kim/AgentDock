@@ -113,6 +113,29 @@ export default function ChatPanel({
     setAttachments((prev) => [...prev, ...uploaded.filter((file) => !hasAttachment(prev, file))]);
   };
 
+  /**
+   * 입력창에 이미지 붙여넣기(Ctrl+V). 클립보드의 이미지는 파일로 오므로 **드롭과 같은 경로**로 올린다.
+   * 이미지가 아니면(글자 붙여넣기) 기본 동작을 막지 않아 글자가 그대로 들어간다.
+   */
+  const onPaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (defaultWorkspaceId === null) return;
+    const files = Array.from(e.clipboardData.items)
+      .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => file !== null);
+    if (files.length === 0) return;
+    e.preventDefault();
+    // 붙여넣은 이미지는 파일 이름이 없다 — 알아볼 수 있게 이름을 붙여 준다(서버가 안전한 이름으로 저장한다).
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const named = files.map((file, index) => {
+      const extension = file.type.split('/')[1] === undefined ? 'png' : file.type.split('/')[1];
+      const suffix = index === 0 ? '' : `-${index + 1}`;
+      return new File([file], `붙여넣은-이미지-${stamp}${suffix}.${extension}`, { type: file.type });
+    });
+    const uploaded = await uploadAttachments(defaultWorkspaceId, named);
+    setAttachments((prev) => [...prev, ...uploaded.filter((file) => !hasAttachment(prev, file))]);
+  };
+
   const onDragOver = (e: DragEvent<HTMLElement>) => {
     e.preventDefault();
     setDragging(true);
@@ -332,6 +355,7 @@ export default function ChatPanel({
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onInputKeyDown}
+          onPaste={onPaste}
           placeholder={target ? '명령을 입력하고 Enter (Shift+Enter 로 줄바꿈)' : '먼저 대상을 선택하세요'}
           aria-label="명령 입력"
         />
