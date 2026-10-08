@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { questionText, waitingInputs } from '../../lib/executions';
+import { api } from '../../lib/api';
 import { useAgentDockStore } from '../../store/AgentDockStore';
 import type { Execution, Project } from '../../types';
 import panel from './RequestsPanel.module.css';
@@ -31,8 +32,26 @@ function readDismissed(): number[] {
  * <p>입력 대기의 보기는 **한 행씩 고르는 선택지**다 — 누른 즉시 보내지 않고 `답 보내기` 를 눌러야 전송된다.
  * 수동 병합은 `무시` 로 알림만 접을 수 있다(병합 자체는 그대로 남는다).
  */
+/**
+ * 같은 질문이 **부모와 자식에 함께** 걸린다(자식이 물으면 부모도 입력 대기로 전파된다).
+ * 같은 질문은 하나만 남기고, 답은 트리 위쪽(부모)에 보낸다 — 그래야 그 실행이 이어서 돈다.
+ */
+function dedupeAsks(waits: Execution[]): Execution[] {
+  const seen = new Set<string>();
+  const ordered = [...waits].sort(
+    (left, right) =>
+      (left.parentExecutionId === null ? -1 : 0) - (right.parentExecutionId === null ? -1 : 0),
+  );
+  return ordered.filter((execution) => {
+    const key = questionText(execution).trim();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export default function RequestsPanel({ project }: { project: Project }) {
-  const { executions, agents, retryMerge, answerExecution } = useAgentDockStore();
+  const { executions, agents, retryMerge, answerExecution, reload } = useAgentDockStore();
   const [open, setOpen] = useState(false);
   /** 닫히는 중(아래로 내려가는 애니메이션 동안 화면에 남긴다). */
   const [closing, setClosing] = useState(false);
@@ -54,7 +73,7 @@ export default function RequestsPanel({ project }: { project: Project }) {
   );
 
   const mine = executions.filter((execution) => execution.projectId === project.id);
-  const waits = waitingInputs(mine);
+  const waits = dedupeAsks(waitingInputs(mine));
   const merges = mine.filter(
     (execution) => execution.mergeStatus === 'MANUAL' && !dismissed.includes(execution.id),
   );
@@ -101,6 +120,16 @@ export default function RequestsPanel({ project }: { project: Project }) {
     answerExecution(execution.id, value);
     setChoice(null);
     setText('');
+    setSelected(null);
+  };
+
+  /** 답하는 대신 그 실행을 멈춘다(위임된 자식도 함께 멈춘다). */
+  const stopExecution = (execution: Execution) => {
+    const ok = window.confirm(
+      `실행 #${execution.id} 을(를) 중지할까요? 위임된 자식 실행도 함께 멈춥니다.`,
+    );
+    if (!ok) return;
+    void api.cancelExecution(execution.id).then(() => reload());
     setSelected(null);
   };
 
@@ -227,6 +256,17 @@ export default function RequestsPanel({ project }: { project: Project }) {
                           ? `보낼 답: ${(choice ?? text).trim()}`
                           : '보기를 고르거나 답을 입력한 뒤 답 보내기를 누르세요.'}
                       </p>
+                      {/* 답하기 어려운 질문이면 답하는 대신 그 실행을 멈출 수 있게 한다. */}
+                      <div className={panel.actions}>
+                        <button
+                          type="button"
+                          className={panel.dismiss}
+                          onClick={() => stopExecution(current.execution)}
+                          title="이 실행을 중지합니다(위임된 자식도 함께)"
+                        >
+                          에이전트 중지
+                        </button>
+                      </div>
                     </>
                   ) : (
                     <>
