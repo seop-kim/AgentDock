@@ -710,29 +710,37 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
    * 조각 로더를 그대로 조립하고, 실행 트리도 같은 규칙(아직 모르는 것만)으로 읽는다.
    */
   const reload = useCallback(async () => {
-    try {
-      const [projectList] = await Promise.all([
-        loadProjects(),
-        loadProviders(),
-        loadWorkspaces(),
-        loadAgents(),
-        loadCatalog(),
-      ]);
-
-      // 목록에는 프로젝트별 상세(그룹·태스크·트리)를 읽지 않는다 — **지금 열려 있는 프로젝트**만 읽는다.
-      const openProjectId = openProjectRef.current;
-      if (openProjectId !== null && projectList.some((project) => project.id === openProjectId)) {
-        await loadGroups(openProjectId);
-        await loadProjectSlice(openProjectId);
+    /**
+     * 한 엔드포인트가 실패해도 나머지는 갱신한다. 예전에는 `Promise.all` 이라 하나만 죽어도
+     * 새로고침 전체가 실패한 것처럼 보였다(구버전 서버에서 `/runtimes` 404 하나로 화면이 '모두 에러'처럼 보였다).
+     */
+    const tolerantly = async <T,>(name: string, load: () => Promise<T>, fallback: T): Promise<T> => {
+      try {
+        return await load();
+      } catch (ex) {
+        console.warn(`[AgentDock] ${name} 를 갱신하지 못했습니다`, ex);
+        return fallback;
       }
+    };
 
-      setLoading(false);
-      setError(null);
-    } catch (ex) {
-      setLoading(false);
-      fail(ex);
+    const [projectList] = await Promise.all([
+      tolerantly<Project[]>('프로젝트 목록', loadProjects, []),
+      tolerantly('제공자 목록', loadProviders, undefined),
+      tolerantly('워크스페이스 목록', loadWorkspaces, undefined),
+      tolerantly('에이전트 목록', loadAgents, undefined),
+      tolerantly('모델 목록', loadCatalog, undefined),
+    ]);
+
+    // 목록에는 프로젝트별 상세(그룹·태스크·트리)를 읽지 않는다 — **지금 열려 있는 프로젝트**만 읽는다.
+    const openProjectId = openProjectRef.current;
+    if (openProjectId !== null && projectList.some((project) => project.id === openProjectId)) {
+      await tolerantly('팀 목록', () => loadGroups(openProjectId), undefined);
+      await tolerantly('프로젝트 상세', () => loadProjectSlice(openProjectId), undefined);
     }
-  }, [fail, loadAgents, loadCatalog, loadGroups, loadProjectSlice, loadProjects, loadProviders, loadWorkspaces]);
+
+    setLoading(false);
+    setError(null);
+  }, [loadAgents, loadCatalog, loadGroups, loadProjectSlice, loadProjects, loadProviders, loadWorkspaces]);
 
   useEffect(() => {
     void reload();
