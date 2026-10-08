@@ -7,7 +7,7 @@ import { openTerminalWindow } from '../../lib/windowSync';
 import { ChevronDownIcon, ChevronUpIcon, PlusIcon } from '../../components/icons';
 import { useAgentDockStore } from '../../store/AgentDockStore';
 import shared from '../../styles/shared.module.css';
-import type { Agent, Execution, Project } from '../../types';
+import type { Agent, AgentGroup, AgentRole, Execution, Project, Task } from '../../types';
 import AgentCardMenu from './AgentCardMenu';
 import AgentFormModal from './AgentFormModal';
 import AgentHoverCard from './AgentHoverCard';
@@ -17,6 +17,42 @@ import waiting from './WaitingInput.module.css';
 
 /** 마우스를 올린 뒤 정보 창이 뜨기까지의 지연(스쳐 지나갈 때 깜빡이지 않게) */
 const HOVER_DELAY_MS = 250;
+
+/** 에이전트 목록 필터. 셋을 **함께**(AND) 만족해야 보인다 — 복합 조건. */
+interface AgentFilters {
+  /** 이름·역할·모델에서 찾는 검색어 */
+  query: string;
+  status: 'all' | 'WORKING' | 'UNPLACED' | 'IDLE' | 'WAITING';
+  groupId: number | 'all';
+}
+
+const NO_FILTERS: AgentFilters = { query: '', status: 'all', groupId: 'all' };
+
+/** 이 에이전트가 지금 조건에 맞는지(검색어 AND 상태 AND 그룹). */
+function matchesFilters(
+  agent: Agent,
+  filters: AgentFilters,
+  groups: AgentGroup[],
+  roles: AgentRole[],
+  tasks: Task[],
+  executions: Execution[],
+): boolean {
+  const needle = filters.query.trim().toLowerCase();
+  if (needle !== '') {
+    const roleName = roles.find((role) => role.id === agent.roleId)?.name ?? '';
+    const haystack = `${agent.name} ${roleName} ${agent.model ?? ''}`.toLowerCase();
+    if (!haystack.includes(needle)) return false;
+  }
+  if (filters.status !== 'all' && agentStatus(agent, tasks, executions).kind !== filters.status) {
+    return false;
+  }
+  if (filters.groupId !== 'all') {
+    const group = groups.find((candidate) => candidate.id === filters.groupId);
+    const memberIds = group === undefined ? [] : group.memberIds;
+    if (!memberIds.includes(agent.id) && group?.leaderAgentId !== agent.id) return false;
+  }
+  return true;
+}
 
 /**
  * 프로젝트 상세에서 구성도 위에 떠 있는 에이전트 패널. 카드는 이름과 역할만 보이는 작은 카드다.
@@ -45,6 +81,10 @@ export default function AgentList({
 }) {
   const { agents, groups, providers, tasks, executions, roles, removeGroupMember, deleteAgent, setAgentPlaced } =
     useAgentDockStore();
+  /** 목록 필터(검색어·상태·그룹) — 복합으로 걸린다. */
+  const [filters, setFilters] = useState<AgentFilters>(NO_FILTERS);
+  const filtering =
+    filters.query.trim() !== '' || filters.status !== 'all' || filters.groupId !== 'all';
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Agent | null>(null);
   const [dropActive, setDropActive] = useState(false);
@@ -155,12 +195,71 @@ export default function AgentList({
         </button>
       </div>
 
+      {/* 검색 + 상태/그룹 필터 — 셋을 함께(AND) 걸 수 있다. */}
+      {open && (
+        <div className={styles.filters} onClick={(e) => e.stopPropagation()}>
+          <input
+            type="search"
+            value={filters.query}
+            onChange={(e) => setFilters((prev) => ({ ...prev, query: e.target.value }))}
+            placeholder="이름·역할·모델 검색"
+            aria-label="에이전트 검색"
+          />
+          <select
+            value={filters.status}
+            onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value as AgentFilters['status'] }))}
+            aria-label="상태 필터"
+            title="상태로 거르기"
+          >
+            <option value="all">상태 전체</option>
+            <option value="WORKING">작업 중만</option>
+            <option value="WAITING">작업 대기중</option>
+            <option value="IDLE">작업 없음</option>
+            <option value="UNPLACED">미배치</option>
+          </select>
+          <select
+            value={filters.groupId === 'all' ? 'all' : String(filters.groupId)}
+            onChange={(e) =>
+              setFilters((prev) => ({
+                ...prev,
+                groupId: e.target.value === 'all' ? 'all' : Number(e.target.value),
+              }))
+            }
+            aria-label="그룹 필터"
+            title="그룹으로 거르기"
+          >
+            <option value="all">그룹 전체</option>
+            {groups
+              .filter((group) => group.projectId === project.id)
+              .map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name}
+                </option>
+              ))}
+          </select>
+          <span className={styles.filterCount}>
+            {projectAgents.filter((agent) => matchesFilters(agent, filters, groups, roles, tasks, executions)).length}{' '}
+            / {projectAgents.length}
+          </span>
+          {filtering && (
+            <button type="button" className={styles.filterReset} onClick={() => setFilters(NO_FILTERS)}>
+              초기화
+            </button>
+          )}
+        </div>
+      )}
+
       <div className={styles.body}>
         <div className={styles.cards}>
           {projectAgents.length === 0 && (
             <p className={shared.muted}>에이전트가 없습니다. + 버튼으로 만들어 보세요.</p>
           )}
-          {projectAgents.map((agent) => {
+          {projectAgents.length > 0 && filtering && (
+            <p className={shared.muted}>조건에 맞는 에이전트가 없습니다 — 필터를 풀어 보세요.</p>
+          )}
+          {projectAgents
+            .filter((agent) => matchesFilters(agent, filters, groups, roles, tasks, executions))
+            .map((agent) => {
             const role = roles.find((r) => r.id === agent.roleId);
             const reason = unavailableReason(agent, providers, project);
             const status = agentStatus(agent, tasks, executions);
