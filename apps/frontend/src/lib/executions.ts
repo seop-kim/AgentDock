@@ -88,7 +88,12 @@ export function summarize(executions: Execution[]): ExecutionTotals {
   const root = executions.find((execution) => execution.parentExecutionId === null);
   return {
     executions: executions.length,
-    delegations: executions.filter((execution) => execution.decision?.action === 'delegate').length,
+    /*
+     * 위임 = 부모가 계약으로 맡긴 실행(자식)의 수.
+     * 실행의 **마지막 결정**(decision)으로 세면 항상 0 이 된다 — 위임한 부모는 자식 결과를 모아
+     * `done` 으로 끝나면서 그 결정이 덮어써지기 때문이다. 자식이 있다는 사실이 위임의 증거다.
+     */
+    delegations: executions.filter((execution) => execution.parentExecutionId !== null).length,
     costUsd: sum((e) => e.metrics?.costUsd ?? 0, (a, b) => a + b, 0),
     durationMs: root?.metrics?.durationMs ?? 0,
     inputTokens: sum((e) => e.metrics?.inputTokens ?? 0, (a, b) => a + b, 0),
