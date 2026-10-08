@@ -1,5 +1,6 @@
 import { Navigate, Outlet, Route, Routes, useMatch } from 'react-router-dom';
 import styles from './layout.module.css';
+import AppStatus from './components/AppStatus';
 import ConfirmDialog from './components/ConfirmDialog';
 import Sidebar from './components/Sidebar';
 import Toaster from './components/Toaster';
@@ -43,7 +44,9 @@ export default function App() {
           </Route>
         </Route>
       </Routes>
-      {/* 작업 알림(토스트)과 확인 창은 화면 어디서든 뜨도록 여기서 한 번만 그린다. */}
+      {/* 첫 로딩·서버 오류 표시는 화면 어디서든 뜨도록 여기서 한 번만 그린다. */}
+      <AppStatus />
+      {/* 작업 알림(토스트)과 확인 창도 여기서 한 번만 그린다. */}
       <Toaster />
       <ConfirmDialog />
     </>

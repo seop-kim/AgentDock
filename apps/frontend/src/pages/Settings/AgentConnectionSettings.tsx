@@ -6,7 +6,7 @@ import RuntimeCard from './RuntimeCard';
 import styles from './Settings.module.css';
 
 export default function AgentConnectionSettings() {
-  const { providers } = useAgentDockStore();
+  const { providers, loading } = useAgentDockStore();
   const [adding, setAdding] = useState(false);
 
   return (
@@ -20,7 +20,8 @@ export default function AgentConnectionSettings() {
         실행되는가"는 워크스페이스 화면에서 폴더별로 확인합니다.
       </p>
 
-      {providers.length === 0 && <p className={shared.muted}>등록된 런타임이 없습니다.</p>}
+      {loading && <p className={shared.muted}>불러오는 중…</p>}
+      {!loading && providers.length === 0 && <p className={shared.muted}>등록된 런타임이 없습니다.</p>}
       {providers.map((provider) => (
         <RuntimeCard key={provider.id} provider={provider} />
       ))}

@@ -29,7 +29,7 @@ const BOTTOM_INSET = 24;
 export default function ProjectDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { projects, workspaces, agents, groups, tasks, executions, reload, watchExecutionTree } =
+  const { projects, workspaces, agents, groups, tasks, executions, loading, reload, watchExecutionTree } =
     useAgentDockStore();
   const [notice, setNotice] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -107,7 +107,7 @@ export default function ProjectDetail() {
         <Link to="/projects" className={styles.back}>
           ← 프로젝트 목록
         </Link>
-        <h1>프로젝트를 찾을 수 없습니다</h1>
+        <h1>{loading ? '불러오는 중…' : '프로젝트를 찾을 수 없습니다'}</h1>
       </div>
     );
   }
