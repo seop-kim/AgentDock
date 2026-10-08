@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import com.agent.dock.runtime.service.StreamPumps;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicReference;
@@ -385,8 +386,10 @@ public class WorktreeService {
         Process process = processService.spawn("worktree-" + UUID.randomUUID(), "git", args, cwd);
         AtomicReference<String> stdout = new AtomicReference<>("");
         AtomicReference<String> stderr = new AtomicReference<>("");
-        CompletableFuture<Void> out = CompletableFuture.runAsync(() -> stdout.set(read(process.getInputStream())));
-        CompletableFuture<Void> err = CompletableFuture.runAsync(() -> stderr.set(read(process.getErrorStream())));
+        CompletableFuture<Void> out = CompletableFuture.runAsync(() -> stdout.set(read(process.getInputStream())),
+                StreamPumps.pool());
+        CompletableFuture<Void> err = CompletableFuture.runAsync(() -> stderr.set(read(process.getErrorStream())),
+                StreamPumps.pool());
         int exitCode = process.waitFor();
         CompletableFuture.allOf(out, err).join();
         return new GitResult(exitCode, (stdout.get() + stderr.get()).strip());

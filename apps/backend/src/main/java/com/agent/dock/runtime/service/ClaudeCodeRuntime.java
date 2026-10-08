@@ -48,9 +48,9 @@ public class ClaudeCodeRuntime implements AgentRuntime {
 
         AtomicReference<ClaudeStreamJson.Outcome> outcome = new AtomicReference<>();
         CompletableFuture<Void> stdout = CompletableFuture.runAsync(
-                () -> pumpStdout(process.getInputStream(), request, outcome));
+                () -> pumpStdout(process.getInputStream(), request, outcome), StreamPumps.pool());
         CompletableFuture<Void> stderr = CompletableFuture.runAsync(
-                () -> pumpRaw(process.getErrorStream(), "stderr", request));
+                () -> pumpRaw(process.getErrorStream(), "stderr", request), StreamPumps.pool());
 
         int exitCode = process.waitFor();
         CompletableFuture.allOf(stdout, stderr).join();
