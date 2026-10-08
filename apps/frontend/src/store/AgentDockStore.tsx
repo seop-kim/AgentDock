@@ -1,5 +1,6 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { toast, type ToastTone } from '../components/Toaster';
+import { subscribeEvents } from '../lib/liveChannel';
 import {
   Attachment as ApiAttachment,
   Execution as ApiExecution,
@@ -770,8 +771,8 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
    * 끊기면 EventSource 가 스스로 다시 붙고, 그동안은 폴링 안전망이 빨라진다(`streamConnected`).
    */
   useEffect(() => {
-    const source = new EventSource(`${api.base}/events/stream`);
-
+    // 실제 SSE 연결은 **탭 중 리더 하나만** 연다(Web Locks + BroadcastChannel) — 팔로워 탭은 채널로 받는다.
+    // 탭마다 스트림을 열면 브라우저 연결(오리진당 6개)이 차서 초기 로딩 요청이 큐에 갇힌다.
     const flush = () => {
       flushRef.current = null;
       const events = [...pendingRef.current.values()];
@@ -787,24 +788,17 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
       flushRef.current = window.setTimeout(flush, EVENT_DEBOUNCE_MS);
     };
 
-    // 붙었다는 인사(`hello`)와 연결 열림을 연결 상태로 쓴다.
-    source.addEventListener('hello', () => setStreamConnected(true));
-    source.onopen = () => setStreamConnected(true);
-    source.onerror = () => setStreamConnected(false);
-    source.onmessage = (message) => {
-      try {
-        const event = JSON.parse(message.data as string) as DataChanged;
-        if (typeof event.type === 'string') queue(event);
-      } catch {
-        // 알림을 못 읽으면 무시한다(안전망 폴링이 따라잡는다).
-      }
-    };
+    const off = subscribeEvents({
+      // 채널은 구조가 같은 최소 타입으로 오므로 스토어 타입으로 좁혀 받는다.
+      onEvent: (event) => queue(event as DataChanged),
+      onConnection: (value) => setStreamConnected(value),
+    });
 
     return () => {
+      off();
       if (flushRef.current !== null) window.clearTimeout(flushRef.current);
       flushRef.current = null;
       pendingRef.current.clear();
-      source.close();
     };
   }, []);
 
