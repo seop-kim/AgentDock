@@ -245,10 +245,6 @@ export default function AgentList({
           >
             필터{activeFilterCount(filters) > 0 ? ` ${activeFilterCount(filters)}` : ''}
           </button>
-          <span className={styles.filterCount}>
-            {projectAgents.filter((agent) => matchesFilters(agent, filters, groups, roles, tasks, executions)).length}{' '}
-            / {projectAgents.length}
-          </span>
         </div>
       )}
 

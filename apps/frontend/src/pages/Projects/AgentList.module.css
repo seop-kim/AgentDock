@@ -286,14 +286,6 @@
   margin-top: 4px;
 }
 
-.filterCount {
-  flex-shrink: 0;
-  color: var(--color-muted);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
 .filterReset {
   flex-shrink: 0;
   font-size: 11px;
