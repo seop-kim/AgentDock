@@ -88,8 +88,6 @@ export default function AgentList({
     useAgentDockStore();
   /** 목록 필터(검색어·상태·그룹) — 복합으로 걸린다. */
   const [filters, setFilters] = useState<AgentFilters>(NO_FILTERS);
-  const filtering =
-    filters.query.trim() !== '' || filters.status !== 'all' || filters.groupId !== 'all';
   /** 필터 팝업을 띄울지(버튼 아래에 뜬다). */
   const [filterOpen, setFilterOpen] = useState(false);
   const filterButtonRef = useRef<HTMLButtonElement>(null);
@@ -328,9 +326,6 @@ export default function AgentList({
         <div className={styles.cards}>
           {projectAgents.length === 0 && (
             <p className={shared.muted}>에이전트가 없습니다. + 버튼으로 만들어 보세요.</p>
-          )}
-          {projectAgents.length > 0 && filtering && (
-            <p className={shared.muted}>조건에 맞는 에이전트가 없습니다 — 필터를 풀어 보세요.</p>
           )}
           {projectAgents
             .filter((agent) => matchesFilters(agent, filters, groups, roles, tasks, executions))
