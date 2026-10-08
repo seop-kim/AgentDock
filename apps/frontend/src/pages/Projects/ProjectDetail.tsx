@@ -171,25 +171,27 @@ export default function ProjectDetail() {
           </Link>
           <div className={styles.titleRow}>
             <h1 className={styles.title}>{project.name}</h1>
-            {/* 서버에서 다시 읽는다 — 캔버스·에이전트 목록·명령(채팅)까지 한 번에 갱신된다. */}
-            <button
-              type="button"
-              className={styles.settingsButton}
-              onClick={() => void reload()}
-              aria-label="새로고침"
-              title="캔버스·에이전트 목록·명령을 서버에서 다시 읽습니다"
-            >
-              ⟳
-            </button>
-            <button
-              type="button"
-              className={styles.settingsButton}
-              onClick={() => setSettingsOpen(true)}
-              aria-label="프로젝트 설정"
-              title="프로젝트 설정"
-            >
-              <SettingsIcon />
-            </button>
+            {/* 새로고침·설정은 한 묶음으로 붙여 둔다(space-between 이 가운데로 벌리지 않게). */}
+            <div className={styles.titleActions}>
+              <button
+                type="button"
+                className={styles.settingsButton}
+                onClick={() => void reload()}
+                aria-label="새로고침"
+                title="캔버스·에이전트 목록·명령을 서버에서 다시 읽습니다"
+              >
+                ⟳
+              </button>
+              <button
+                type="button"
+                className={styles.settingsButton}
+                onClick={() => setSettingsOpen(true)}
+                aria-label="프로젝트 설정"
+                title="프로젝트 설정"
+              >
+                <SettingsIcon />
+              </button>
+            </div>
           </div>
           <div className={styles.meta}>
             <span className={styles.workspace}>
