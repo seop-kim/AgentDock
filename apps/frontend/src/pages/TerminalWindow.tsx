@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import TerminalView from '../components/TerminalView';
 import { CancelButton, useCancelNotice } from './Projects/ExecutionTree';
@@ -14,10 +15,21 @@ import styles from './TerminalWindow.module.css';
  */
 export default function TerminalWindow() {
   const { agentId } = useParams();
-  const { agents, projects, workspaces, tasks, executions, loading } = useAgentDockStore();
+  const { agents, projects, workspaces, tasks, executions, loading, watchExecutionTree } = useAgentDockStore();
   const [notice, setNotice] = useCancelNotice();
 
   const agent = agents.find((candidate) => candidate.id === Number(agentId)) ?? null;
+  const agentProjectId = agent?.projectId ?? null;
+
+  /*
+   * 이 창은 프로젝트 상세 **밖**(별도 라우트)에서 열리므로 상세 화면이 slice 를 읽어 주지 않는다.
+   * 그래서 터미널이 자기 에이전트의 프로젝트를 직접 열어 달라고 알린다 — 안 하면 실행 목록이 비어
+   * "작업 없음" 으로 보인다(2026-10-08 실측). 스토어는 같은 프로젝트면 다시 읽지 않으므로 중복 호출은 없다.
+   */
+  useEffect(() => {
+    if (agentProjectId !== null) watchExecutionTree(agentProjectId, null);
+  }, [agentProjectId, watchExecutionTree]);
+
   if (!agent) {
     return (
       <div className={styles.page}>
