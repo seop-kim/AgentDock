@@ -27,6 +27,7 @@ import com.agent.dock.project.repository.ProjectRepository;
 import com.agent.dock.runtime.dto.AgentExecutionResult;
 import com.agent.dock.runtime.util.JsonObjects;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -37,6 +38,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -92,7 +94,24 @@ public class DelegationService {
 
     /** CLI 를 동시에 돌리는 수. 부모가 자식을 기다리는 동안에도 잡지 않으므로 교착이 없다. */
     private Semaphore cliSlots;
-    private final ExecutorService workers = Executors.newCachedThreadPool();
+    /** 워커 스레드 이름에 붙일 번호 — 로그에서 스레드를 구분한다. */
+    private static final AtomicInteger WORKER_SEQ = new AtomicInteger();
+
+    /**
+     * 실행을 돌리는 워커. **상한 없는 캐시 풀을 그대로 둔다** — 부모 실행이 자식을 기다리며 스레드를 잡고 있으므로,
+     * 고정 풀이면 모든 스레드가 대기하는 교착이 생길 수 있다(대신 CLI 동시 실행 수는 `cliSlots` 가 4로 묶는다).
+     * 다만 **이름을 붙인 데몬 스레드**로 두고 종료할 때 정리해, 로그 추적이 되고 앱이 바로 내려간다.
+     */
+    private final ExecutorService workers = Executors.newCachedThreadPool(runnable -> {
+        Thread thread = new Thread(runnable, "agentdock-worker-" + WORKER_SEQ.incrementAndGet());
+        thread.setDaemon(true);
+        return thread;
+    });
+
+    @PreDestroy
+    void shutdownWorkers() {
+        workers.shutdownNow();
+    }
 
     @PostConstruct
     void initSlots() {
@@ -116,12 +135,12 @@ public class DelegationService {
         Execution root = started.execution();
         streamHub.open(root.getId());
 
-        // 이 명령(트리) 전체를 워크스페이스 저장소의 git worktree 로 격리한다. 못 만들면 워크스페이스에서 계속 돈다.
-        ExecutionGuard.Target target = isolated(root, started.target());
-
         boolean judgement = isJudgementAgent(rootAgentId, projectId);
-        TreeState state = new TreeState(projectId, taskId, root.getId(), target.worktreePath(), target.worktreeBranch());
         workers.submit(() -> {
+            // 워크트리 격리(`git worktree add`)는 몇 초가 걸린다 — **요청 스레드에서 하지 않는다**.
+            // 명령 응답은 루트 실행 행만 만들고 즉시 돌려주고, 격리·실행·병합은 이 백그라운드 스레드가 맡는다.
+            ExecutionGuard.Target target = isolated(root, started.target());
+            TreeState state = new TreeState(projectId, taskId, root.getId(), target.worktreePath(), target.worktreeBranch());
             ExecutionStatus status = runExecution(root, target, text, judgement, 0, List.of(rootAgentId), state);
             // 사람의 답을 기다리는 중이면 트리는 끝난 것이 아니다 — 결과를 되돌리지도, 스트림을 닫지도 않는다.
             if (status == ExecutionStatus.WAITING_INPUT) {
@@ -164,13 +183,7 @@ public class DelegationService {
         Long agentId = asked.getAgentId();
         Long projectId = requireAgent(agentId).getProjectId();
         Long groupId = groupIdOf(agentId, projectId);
-        ExecutionGuard.Target prepared = guard.prepare(agentId, projectId, groupId);
-        ExecutionGuard.Target target = asked.getWorktreePath() == null || asked.getWorktreePath().isBlank()
-                ? prepared
-                : prepared.withWorktree(asked.getWorktreePath(), asked.getWorktreeBranch());
         Long rootId = asked.getRootExecutionId() == null ? asked.getId() : asked.getRootExecutionId();
-        TreeState state = new TreeState(projectId, asked.getTaskId(), rootId,
-                target.worktreePath(), target.worktreeBranch());
         int depth = depthOf(asked);
         List<Long> path = pathOf(asked);
         boolean judgement = isJudgementAgent(agentId, projectId);
@@ -178,6 +191,13 @@ public class DelegationService {
         String progress = DelegationPrompts.answerContext(asked.getQuestion(), answer);
 
         workers.submit(() -> {
+            // 격리 준비도 백그라운드에서 — 답변 응답을 git 때문에 기다리게 하지 않는다.
+            ExecutionGuard.Target prepared = guard.prepare(agentId, projectId, groupId);
+            ExecutionGuard.Target target = asked.getWorktreePath() == null || asked.getWorktreePath().isBlank()
+                    ? prepared
+                    : prepared.withWorktree(asked.getWorktreePath(), asked.getWorktreeBranch());
+            TreeState state = new TreeState(projectId, asked.getTaskId(), rootId,
+                    target.worktreePath(), target.worktreeBranch());
             ExecutionStatus status = judgement
                     ? runJudgement(asked, target, asked.getPrompt(), depth, path, state, progress)
                     : runWork(asked, target);

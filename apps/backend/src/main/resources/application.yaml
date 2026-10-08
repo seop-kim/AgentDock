@@ -1,11 +1,21 @@
 server:
   port: ${PORT:8080}
+  tomcat:
+    threads:
+      # 화면 요청(SSE 포함)과 에이전트 실행 API 가 같이 쓴다 — 기본값 그대로 두되 최소 여유는 확보한다.
+      max: 200
+      min-spare: 20
 
 spring:
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/AGENT_DOCK}
     username: ${DATABASE_USERNAME:postgres}
     password: ${DATABASE_PASSWORD:}
+    hikari:
+      # 기본 10 은 빠듯하다 — 에이전트 4개가 동시에 돌면서 SSE·화면 요청까지 커넥션을 쓰면 요청이 커넥션을 기다린다.
+      maximum-pool-size: 20
+      minimum-idle: 4
+      connection-timeout: 10000
   jpa:
     hibernate:
       ddl-auto: validate
