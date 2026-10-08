@@ -231,6 +231,31 @@ public class ProjectService {
         return findOne(projectId);
     }
 
+    /**
+     * 이미 할당된 워크스페이스를 기본으로 전환한다. 그 프로젝트에 할당되지 않았으면 404.
+     * 새 기본을 올리기 전에 기존 기본을 먼저 내려(clearOtherDefaults) 부분 유니크 인덱스
+     * (project_workspace_default_unique)를 잠깐도 위반하지 않는다 — assignWorkspace 와 같은 이유다.
+     * 스키마 변경은 필요 없다(is_default 컬럼과 기존 조회를 그대로 쓴다).
+     */
+    @Transactional
+    public ProjectResponse updateDefaultWorkspace(Long projectId, Long workspaceId) {
+        findProject(projectId);
+        ProjectWorkspace target = workspaceLinkRepository.findByProjectIdOrderByIdAsc(projectId).stream()
+                .filter(link -> link.getWorkspace().getId().equals(workspaceId))
+                .findFirst()
+                .orElseThrow(() -> new NotFoundException(
+                        "Workspace %d is not assigned to project %d".formatted(workspaceId, projectId)));
+        if (!target.isDefault()) {
+            // 기존 기본을 먼저 내린 뒤 대상만 기본으로 올린다.
+            clearOtherDefaults(projectId, target.getId());
+            workspaceLinkRepository.flush();
+            target.setDefault(true);
+            workspaceLinkRepository.save(target);
+        }
+        changeEvents.projectChanged(projectId);
+        return findOne(projectId);
+    }
+
     /** 할당을 해제한다. 기본 워크스페이스를 해제하면 남은 것 중 첫 번째가 기본이 된다. */
     @Transactional
     public void removeWorkspace(Long projectId, Long workspaceId) {

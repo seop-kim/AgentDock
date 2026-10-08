@@ -146,7 +146,7 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
 - `agent/` — `domain/` Agent(프로젝트 소속, 페르소나) · `service/` AgentService + `AgentAvailability` · `util/` `PromptLayers`(프롬프트 계층 조립) · `repository/`(QueryDSL fetch join) · `dto/`
 - `role/`, `permission/` — Role, PermissionProfile(도메인/서비스/리포지토리/DTO). `PermissionService.isAllowed(profile, action)` 가 enforcement primitive
 - `workspace/` — `domain/`(Workspace, WorkspaceRuntimeStatus) · `service/`(WorkspaceService, WorkspaceRuntimeService) · `util/` `WorkspaceFs`(폴더 브라우징·UNC 차단) · `repository/` · `dto/`
-- `project/` — `domain/`(Project, ProjectWorkspace) · `service/` ProjectService(`defaultWorkspace`, `updateMaster` — 기본 워크스페이스를 바꿀 때는 기존 기본을 먼저 내려야 부분 유니크 인덱스를 위반하지 않는다) · `repository/` · `dto/`
+- `project/` — `domain/`(Project, ProjectWorkspace) · `service/` ProjectService(`defaultWorkspace`, `updateMaster`, `updateDefaultWorkspace` — 기본 워크스페이스를 바꿀 때는 기존 기본을 먼저 내려야 부분 유니크 인덱스를 위반하지 않는다) · `repository/` · `dto/`
 - `group/` — `domain/`(AgentGroup, AgentGroupMember) · `service/` GroupService · `repository/` · `dto/`
 - `task/` — `domain/`(Task, TaskStatus) · `service/` TaskService(작업 실행·채팅 명령) · `repository/` · `dto/`
 - `process/` — `service/` `ProcessService`(ProcessBuilder 래퍼) · `util/` `Executables`(PATH/PATHEXT 해석)

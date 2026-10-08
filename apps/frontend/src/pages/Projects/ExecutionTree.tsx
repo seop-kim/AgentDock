@@ -311,9 +311,9 @@ export default function ExecutionTreeModal({
         </ol>
 
         <p className={shared.muted}>
-          상태 전이는 실제 순서(판단 → 위임 → 하위 실행 → 취합)를 그대로 따르지만, 화면에서는 빠르게 재생합니다. 지표는 모의
-          값이고, 실제 구현에서는 CLI 의 <code>--output-format json</code> 이 돌려주는 usage / total_cost_usd / duration_ms 를
-          씁니다. 판단 실행(마스터·리더)은 한 실행 안에서 판단과 취합 두 스텝을 돌기 때문에 호출량이 두 배로 잡힙니다.
+          상태는 실제 실행 순서(판단 → 위임 → 하위 실행 → 취합)를 그대로 따릅니다. 지표(토큰·비용·시간·세션)는 CLI 가
+          <code>--output-format json</code> 으로 돌려준 usage / total_cost_usd / duration_ms 실측값이고, 값이 없으면 '-' 입니다.
+          판단 실행(마스터·리더)은 한 실행 안에서 판단과 취합 두 스텝을 돌기 때문에 호출량이 두 배로 잡힙니다.
         </p>
 
         {notice && <p className="errorText">{notice}</p>}
