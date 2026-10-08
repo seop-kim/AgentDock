@@ -232,13 +232,34 @@
   background: var(--color-code-bg);
 }
 
-/* 붙여넣은 이미지의 칩 썸네일 — 아이콘 자리와 같은 크기로 둔다. */
+/* 붙여넣은 이미지의 칩 썸네일 — 어느 이미지인지 알아볼 수 있게 크게, 누르면 더 크게. */
 .chipThumb {
-  width: 20px;
-  height: 20px;
+  width: 56px;
+  height: 56px;
   flex-shrink: 0;
-  border-radius: 4px;
+  border-radius: 6px;
   object-fit: cover;
+  cursor: zoom-in;
+}
+
+/* 썸네일을 눌렀을 때 뜨는 큰 미리보기(클릭·Esc 로 닫는다). */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: var(--color-overlay);
+  cursor: zoom-out;
+}
+
+.lightboxImage {
+  max-width: 92vw;
+  max-height: 92vh;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-float);
 }
 
 /* 첨부(붙여넣기) 실패 안내 — 조용히 실패하지 않게 보여 준다. */

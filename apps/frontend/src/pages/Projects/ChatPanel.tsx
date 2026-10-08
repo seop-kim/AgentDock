@@ -117,6 +117,18 @@ export default function ChatPanel({
   const [uploadError, setUploadError] = useState<string | null>(null);
   /** 붙여넣거나 끌어온 이미지의 **미리보기 URL**(보낼 때까지). 서버에 올린 뒤에는 원본 파일이 없어 만들 수 없다. */
   const [previews, setPreviews] = useState<Record<string, string>>({});
+  /** 썸네일을 눌러 크게 보고 있는 이미지 URL. */
+  const [zoomImage, setZoomImage] = useState<string | null>(null);
+
+  // 크게 보기: Esc 로 닫는다.
+  useEffect(() => {
+    if (zoomImage === null) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') setZoomImage(null);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [zoomImage]);
 
   const previewKey = (file: AttachedFile) => `${file.workspaceId}:${file.path}`;
 
@@ -363,7 +375,13 @@ export default function ChatPanel({
               {previews[previewKey(file)] === undefined ? (
                 <FileIcon size={13} />
               ) : (
-                <img className={styles.chipThumb} src={previews[previewKey(file)]} alt={file.name} />
+                <img
+                  className={styles.chipThumb}
+                  src={previews[previewKey(file)]}
+                  alt={file.name}
+                  title="눌러서 크게 보기"
+                  onClick={() => setZoomImage(previews[previewKey(file)] ?? null)}
+                />
               )}
               <span className={attach.chipName}>{file.name}</span>
               <button
@@ -443,6 +461,18 @@ export default function ChatPanel({
             setPickerOpen(false);
           }}
         />
+      )}
+
+      {/* 썸네일을 누르면 뜨는 큰 미리보기 — 어느 이미지인지 확실히 알아보기 위해. 클릭·Esc 로 닫는다. */}
+      {zoomImage !== null && (
+        <div
+          className={styles.lightbox}
+          role="dialog"
+          aria-label="첨부 이미지 크게 보기"
+          onClick={() => setZoomImage(null)}
+        >
+          <img className={styles.lightboxImage} src={zoomImage} alt="첨부 이미지" />
+        </div>
       )}
     </section>
   );
