@@ -24,6 +24,7 @@ import com.agent.dock.group.dto.GroupResponse;
 import com.agent.dock.group.service.GroupService;
 import com.agent.dock.project.domain.Project;
 import com.agent.dock.project.repository.ProjectRepository;
+import com.agent.dock.execution.domain.MergeStatus;
 import com.agent.dock.runtime.dto.AgentExecutionResult;
 import com.agent.dock.runtime.util.JsonObjects;
 import jakarta.annotation.PostConstruct;
@@ -277,6 +278,17 @@ public class DelegationService {
         // 트리가 끝나면 그 그룹의 공유 노트에 한 줄 남긴다 —
         // 같은 팀의 다음 실행이 이 맥락을 이어받는다(런타임이 달라도 공유된다).
         groupService.appendSharedNote(fresh.getAgentId(), "#%d %s".formatted(rootId, message));
+        // **메인 저장소로 병합까지 끝난 트리**는 워크트리를 자동으로 정리한다(사람이 손으로 지우던 일).
+        // 되돌릴 수 없는 삭제라 조건을 좁힌다 — 자동 병합이 끝난 경우(MERGED)만. 아직 도는 트리면
+        // ExecutionService 가 409 로 막고, 정리 실패가 트리 결과를 망치지 않게 삼킨다.
+        if (result.status() == MergeStatus.MERGED) {
+            try {
+                executionService.removeWorktree(rootId, true);
+                streamHub.system(rootId, "⎿ 워크트리를 정리했습니다(브랜치까지)");
+            } catch (RuntimeException ex) {
+                log.warn("워크트리 자동 정리를 건너뜁니다(실행 {}): {}", rootId, ex.getMessage());
+            }
+        }
     }
 
     /** 커밋 제목: 루트 실행의 최종 요약(계약 done.summary / result_text)을 다듬어 쓴다. 없으면 `실행 #<id> 작업 결과`. */
