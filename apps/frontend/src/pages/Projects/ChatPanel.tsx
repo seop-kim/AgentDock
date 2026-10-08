@@ -143,6 +143,25 @@ export default function ChatPanel({
     setAttachments([]);
   };
 
+  /** 입력창 높이(px). 위쪽 손잡이를 **위로** 끌면 커진다(아래는 화면에 붙어 있어 아래로는 못 늘린다). */
+  const [inputHeight, setInputHeight] = useState(38);
+
+  const startResize = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startHeight = inputHeight;
+    const move = (event: PointerEvent) => {
+      const next = startHeight + (startY - event.clientY);
+      setInputHeight(Math.max(38, Math.min(next, Math.round(window.innerHeight * 0.7))));
+    };
+    const stop = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', stop);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', stop);
+  };
+
   return (
     <section
       className={`${styles.chat} ${wide ? styles.wide : ''} ${open ? '' : styles.collapsed} ${
@@ -283,6 +302,15 @@ export default function ChatPanel({
       )}
 
       <form onSubmit={onSubmit} className={styles.form}>
+        {/* 위쪽 손잡이: 위로 끌면 입력창이 커진다(아래쪽에 두면 화면 끝에 걸려 한계가 있었다). */}
+        <div
+          className={styles.resizeBar}
+          role="separator"
+          aria-label="입력창 높이 조절"
+          aria-orientation="horizontal"
+          title="위로 끌면 입력창이 커집니다"
+          onPointerDown={startResize}
+        />
         <button
           type="button"
           className={styles.attach}
@@ -300,6 +328,7 @@ export default function ChatPanel({
         <textarea
           ref={inputRef}
           rows={1}
+          style={{ height: `${inputHeight}px` }}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onInputKeyDown}
