@@ -266,6 +266,7 @@ export default function AgentList({
           anchor={menu.rect}
           placed={menu.agent.placed}
           isMaster={project.masterAgentId === menu.agent.id}
+          running={executions.find((execution) => execution.agentId === menu.agent.id && isLive(execution.status)) ?? null}
           onClose={() => setMenu(null)}
           onEdit={() => {
             setEditing(menu.agent);

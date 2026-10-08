@@ -758,6 +758,7 @@ export default function GroupCanvas({
           inGroup={nodeMenu.node.groupId !== null}
           isLeader={nodeMenu.node.isLeader}
           isMaster={nodeMenu.agent.id === project.masterAgentId}
+          running={runningByAgent.get(nodeMenu.agent.id) ?? null}
           onClose={() => setNodeMenu(null)}
           onSetLeader={() => {
             const { node } = nodeMenu;
