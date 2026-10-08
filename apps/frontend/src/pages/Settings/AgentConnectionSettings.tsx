@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PlusIcon } from '../../components/icons';
 import { useAgentDockStore } from '../../store/AgentDockStore';
 import shared from '../../styles/shared.module.css';
 import AddRuntimeModal from './AddRuntimeModal';
@@ -13,7 +14,15 @@ export default function AgentConnectionSettings() {
     <div>
       <div className={styles.sectionHeader}>
         <h1>에이전트 연결 설정</h1>
-        <button onClick={() => setAdding(true)}>+ 런타임 추가</button>
+        <button
+          type="button"
+          className={styles.iconButton}
+          onClick={() => setAdding(true)}
+          aria-label="런타임 추가"
+          title="런타임 추가"
+        >
+          <PlusIcon size={18} />
+        </button>
       </div>
       <p className={shared.hint}>
         여기서는 AI 런타임(claude/codex/…)을 켜고 끄고, 로그인과 모델/모드 목록만 관리합니다. "이 폴더에서 실제로

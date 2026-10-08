@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { askConfirm } from '../../components/ConfirmDialog';
+import { TerminalIcon, TrashIcon } from '../../components/icons';
 import { useAgentDockStore } from '../../store/AgentDockStore';
 import shared from '../../styles/shared.module.css';
 import type { AiProvider } from '../../types';
@@ -67,23 +68,29 @@ export default function RuntimeCard({ provider }: { provider: AiProvider }) {
         <h2 className={styles.cardTitle}>
           {provider.name} <span className={shared.muted}>({provider.key})</span>
         </h2>
-        <button className={shared.dangerButton} onClick={onDelete}>
+        <button className={`${shared.dangerButton} ${styles.dangerIcon}`} onClick={onDelete}>
+          <TrashIcon size={15} />
           런타임 삭제
         </button>
       </div>
 
       <div className={shared.statusRow}>
-        <span className={`${shared.badge} ${provider.enabled ? shared.badgeOk : shared.badgeError}`}>
-          {provider.enabled ? 'ON' : 'OFF'}
+        <span className={`${styles.statusPill} ${provider.enabled ? styles.statusPillOn : styles.statusPillOff}`}>
+          <span className={styles.statusDot} />
+          {provider.enabled ? '켜짐' : '꺼짐'}
         </span>
         <span className={shared.muted}>
-          {provider.enabled ? '켜짐 — 워크스페이스에서 폴더별 상태를 확인하세요' : '꺼짐 — 할당·실행에 쓰이지 않습니다'}
+          {provider.enabled ? '워크스페이스에서 폴더별 상태를 확인하세요' : '할당·실행에 쓰이지 않습니다'}
         </span>
       </div>
 
       <div className={shared.actions}>
-        <button onClick={() => toggleProvider(provider.id)}>{provider.enabled ? '끄기' : '켜기'}</button>
-        <button onClick={() => setCliOpen(true)}>CLI 확인</button>
+        <button className={styles.ghostButton} onClick={() => toggleProvider(provider.id)}>
+          {provider.enabled ? '끄기' : '켜기'}
+        </button>
+        <button className={styles.ghostButton} onClick={() => setCliOpen(true)}>
+          <TerminalIcon size={15} /> CLI 확인
+        </button>
       </div>
       {installSteps.length === 0 && (
         <p className={shared.muted}>
@@ -96,7 +103,10 @@ export default function RuntimeCard({ provider }: { provider: AiProvider }) {
         모델: {models.length > 0 ? models.join(', ') : '미등록'} / 모드: {modes.length > 0 ? modes.join(', ') : '미등록'}
       </p>
       <div className={shared.actions}>
-        <button onClick={() => (capabilitiesOpen ? setCapabilitiesOpen(false) : openCapabilities())}>
+        <button
+          className={styles.ghostButton}
+          onClick={() => (capabilitiesOpen ? setCapabilitiesOpen(false) : openCapabilities())}
+        >
           {capabilitiesOpen ? '설정 닫기' : '모델/모드/설치 편집'}
         </button>
       </div>

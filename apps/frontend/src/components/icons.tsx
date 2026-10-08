@@ -60,8 +60,8 @@ export const AlertIcon = () => (
   </Icon>
 );
 
-export const PlusIcon = () => (
-  <Icon>
+export const PlusIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
     <path d="M12 5v14M5 12h14" />
   </Icon>
 );
@@ -102,5 +102,56 @@ export const ChevronRightIcon = ({ size = 20 }: { size?: number }) => (
 export const ChevronDownIcon = () => (
   <Icon>
     <path d="M6 9l6 6 6-6" />
+  </Icon>
+);
+
+/** 에이전트 연결 설정(플러그) */
+export const PlugIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
+    <path d="M9 3v5M15 3v5" />
+    <path d="M6 8h12v3a6 6 0 0 1-12 0V8z" />
+    <path d="M12 17v4" />
+  </Icon>
+);
+
+/** 테마(명암 원) */
+export const ThemeIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none" />
+  </Icon>
+);
+
+/** 라이트 테마(해) */
+export const SunIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4" />
+  </Icon>
+);
+
+/** 다크 테마(달) */
+export const MoonIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
+    <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />
+  </Icon>
+);
+
+/** 터미널/CLI */
+export const TerminalIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <path d="M7 9l3 3-3 3" />
+    <path d="M13 15h4" />
+  </Icon>
+);
+
+/** 삭제(휴지통) */
+export const TrashIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
+    <path d="M4 7h16" />
+    <path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7" />
+    <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" />
+    <path d="M10 11v6M14 11v6" />
   </Icon>
 );
