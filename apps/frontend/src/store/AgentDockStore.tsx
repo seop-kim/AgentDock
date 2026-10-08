@@ -388,6 +388,8 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
   const taskRootsRef = useRef<Map<number, number | null>>(new Map());
   /** 채팅(명령) 페이지 크기. '이전 명령 더 보기' 로 늘어난다 — 콜백에서 최신 값을 읽으려고 ref 로도 둔다. */
   const chatPageSizeRef = useRef(CHAT_PAGE_SIZE);
+  /** 지금 **열려 있는 프로젝트**(상세 화면). 목록에서는 이 프로젝트의 slice 만 읽는다. */
+  const openProjectRef = useRef<number | null>(null);
   const [chatHasMore, setChatHasMore] = useState<Record<number, boolean>>({});
   /** 실행 트리 창을 열어 둔 트리(프로젝트 → 루트 실행). 그 트리만 계속 다시 읽는다. */
   const openTreesRef = useRef<Map<number, Set<number>>>(new Map());
@@ -701,12 +703,12 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
         loadCatalog(),
       ]);
 
-      await Promise.all(
-        projectList.map(async (project) => {
-          await loadGroups(project.id);
-          await loadProjectSlice(project.id);
-        }),
-      );
+      // 목록에는 프로젝트별 상세(그룹·태스크·트리)를 읽지 않는다 — **지금 열려 있는 프로젝트**만 읽는다.
+      const openProjectId = openProjectRef.current;
+      if (openProjectId !== null && projectList.some((project) => project.id === openProjectId)) {
+        await loadGroups(openProjectId);
+        await loadProjectSlice(openProjectId);
+      }
 
       setLoading(false);
       setError(null);
@@ -948,12 +950,16 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
       reload,
 
       watchExecutionTree: (projectId, rootExecutionId) => {
+        // 상세 화면이 들어올 때(트리 창이 닫혀 있어도) 이 프로젝트가 열려 있음을 기억한다.
+        // 목록에서는 어떤 프로젝트의 상세도 읽지 않고, **열린 프로젝트만** 그룹·태스크·트리를 읽는다.
+        openProjectRef.current = projectId;
         const next = new Map(openTreesRef.current);
         if (rootExecutionId === null) next.delete(projectId);
         else next.set(projectId, new Set([rootExecutionId]));
         openTreesRef.current = next;
-        // 창을 열면 그 트리를 곧바로 한 번 다시 읽는다(열자마자 최신 상태가 보이게).
-        if (rootExecutionId !== null) void loadProjectSlice(projectId, true);
+        // 상세에 들어오면 그 프로젝트를 곧바로 한 번 읽는다(목록에서는 읽지 않으므로 여기서 채운다).
+        void loadGroups(projectId);
+        void loadProjectSlice(projectId, true);
       },
 
       toggleProvider: (id) => {
