@@ -30,6 +30,7 @@ type LiveMessage =
   | { kind: 'event'; payload: LiveEvent }
   | { kind: 'connection'; connected: boolean }
   | { kind: 'log'; executionId: number; stream: string; text: string }
+  | { kind: 'replay'; executionId: number; lines: { stream: string; text: string }[] }
   | { kind: 'exit'; executionId: number; status: string }
   | { kind: 'want'; executionId: number }
   | { kind: 'drop'; executionId: number }
@@ -42,6 +43,8 @@ const eventHandlers = new Set<(event: LiveEvent) => void>();
 const connectionHandlers = new Set<(connected: boolean) => void>();
 interface LogHandlers {
   onLine: (line: { stream: string; text: string }) => void;
+  /** 나중에 구독했을 때 리더가 보내 주는 최근 로그(있으면 이걸로 다시 채운다). */
+  onReplay: (lines: { stream: string; text: string }[]) => void;
   onExit: () => void;
 }
 const logHandlers = new Map<number, Set<LogHandlers>>();
@@ -90,6 +93,8 @@ const eventSource = new Map<number, EventSource>();
 let globalSource: EventSource | null = null;
 let leaderActive = false;
 let connected = false;
+/** 리더 락 요청이 이미 줄에 서 있는지(중복 요청 방지 — pageshow 마다 다시 부르기 때문). */
+let electing = false;
 
 function send(message: LiveMessage): void {
   channel?.postMessage(message);
@@ -115,10 +120,15 @@ function apply(message: LiveMessage): void {
         handler.onLine({ stream: message.stream, text: message.text }),
       );
       return;
+    case 'replay':
+      logHandlers.get(message.executionId)?.forEach((handler) => handler.onReplay(message.lines));
+      return;
     case 'exit':
       logHandlers.get(message.executionId)?.forEach((handler) => handler.onExit());
       return;
     case 'want':
+      // 이미 열려 있으면 그 실행의 최근 줄을 다시 보내 준다(나중에 구독한 탭이 빈 화면을 보지 않게).
+      sendBuffered(message.executionId);
       openLog(message.executionId);
       return;
     case 'drop':
@@ -141,6 +151,26 @@ function apply(message: LiveMessage): void {
 }
 
 channel?.addEventListener('message', (event: MessageEvent<LiveMessage>) => apply(event.data));
+
+/** 리더가 유지하는 실행별 최근 로그. 나중에 구독한 탭에 되돌려 준다(서버 재생을 놓친 경우 대비). */
+const REPLAY_LINES = 400;
+const buffers = new Map<number, { stream: string; text: string }[]>();
+
+/** 리더만: 아직 열려 있는 실행이면 최근 줄을 되돌려 보낸다. */
+function sendBuffered(executionId: number): void {
+  if (!leaderActive || !eventSource.has(executionId)) return;
+  const lines = buffers.get(executionId) ?? [];
+  if (lines.length > 0) {
+    send({ kind: 'replay', executionId, lines: [...lines] });
+  }
+}
+
+function remember(executionId: number, line: { stream: string; text: string }): void {
+  const lines = buffers.get(executionId) ?? [];
+  lines.push(line);
+  if (lines.length > REPLAY_LINES) lines.splice(0, lines.length - REPLAY_LINES);
+  buffers.set(executionId, lines);
+}
 
 // ── 리더가 여는 스트림 ───────────────────────────────────────────────────────────
 
@@ -172,12 +202,10 @@ function openLog(executionId: number): void {
   source.onmessage = (event) => {
     try {
       const payload = JSON.parse(event.data as string) as { stream?: string; content?: string };
-      broadcast({
-        kind: 'log',
-        executionId,
-        stream: payload.stream ?? 'stdout',
-        text: payload.content ?? '',
-      });
+      const line = { stream: payload.stream ?? 'stdout', text: payload.content ?? '' };
+      // 최근 줄을 남겨 둔다 — 나중에 구독한 탭이나 승격한 리더가 이어서 볼 수 있게.
+      remember(executionId, line);
+      broadcast({ kind: 'log', executionId, ...line });
     } catch {
       // JSON 이 아니면 무시한다.
     }
@@ -195,7 +223,9 @@ function closeLog(executionId: number): void {
   const source = eventSource.get(executionId);
   if (!source) return;
   source.close();
+  // 닫을 때는 되돌려 줄 최근 줄도 버린다(구독자가 없어진 실행의 버퍼를 들고 있지 않는다).
   eventSource.delete(executionId);
+  buffers.delete(executionId);
 }
 
 function startLeading(): void {
@@ -225,19 +255,36 @@ function electLeader(): void {
     startLeading();
     return;
   }
+  if (electing) return;
+  electing = true;
   void navigator.locks
     .request(LOCK, { mode: 'exclusive' }, () => {
       startLeading();
-      // 리더인 동안 유지한다. 페이지가 사라지면 브라우저가 락을 풀고 다음 탭이 이어받는다.
+      // 리더인 동안 유지한다. 페이지가 사라지거나 뒤로/앞으로(bfcache)로 떠나면 놓는다 —
+      // bfcache 로 들어가면 브라우저가 연결을 끊으므로 붙잡고 있어도 손해다(돌아오면 다시 줄을 선다).
       return new Promise<void>((resolve) => {
-        window.addEventListener('pagehide', () => {
+        const release = () => {
+          electing = false;
           stopLeading();
+          window.removeEventListener('pagehide', release);
           resolve();
-        });
+        };
+        window.addEventListener('pagehide', release);
       });
     })
-    .catch(() => stopLeading());
+    .then(() => {
+      electing = false;
+    })
+    .catch(() => {
+      electing = false;
+      stopLeading();
+    });
 }
+
+// 뒤로/앞으로로 돌아왔으면(bfcache) 연결이 끊긴 상태다 — 다시 리더 줄에 선다(이미 리더면 그대로).
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) electLeader();
+});
 
 // 리더 선출을 시작한다(구독자가 생기면 그때 hello 로 상태를 확인한다).
 electLeader();

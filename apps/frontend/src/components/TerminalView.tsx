@@ -52,6 +52,9 @@ export default function TerminalView({
     return subscribeLog(executionId, {
       onLine: (line) =>
         setLines((prev) => [...prev, { text: line.text, kind: logLineKind(line.stream) }]),
+      // 늦게 구독했거나 리더가 바뀐 경우 — 리더가 최근 줄을 보내 주면 그걸로 다시 채운다.
+      onReplay: (lines) =>
+        setLines(lines.map((line) => ({ text: line.text, kind: logLineKind(line.stream) }))),
       onExit: () => setFinished(true),
     });
   }, [executionId]);
