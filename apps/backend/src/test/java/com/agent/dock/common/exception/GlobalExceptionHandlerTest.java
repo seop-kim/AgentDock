@@ -3,6 +3,7 @@ package com.agent.dock.common.exception;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.agent.dock.common.error.ServerErrorLog;
+import java.io.IOException;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -31,6 +32,20 @@ class GlobalExceptionHandlerTest {
         assertThat(errors.recent()).hasSize(1);
         assertThat(errors.recent().get(0).method()).isEqualTo("POST");
         assertThat(errors.recent().get(0).path()).isEqualTo("/projects/1/commands");
+    }
+
+    @Test
+    void doesNotRecordDisconnectedClient() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/events/stream");
+        // 실제로 올라오던 스택: AsyncRequestNotUsableException(연결 끊김) → 원인 IOException(연결 중단).
+        // 탭을 닫거나 새로고침할 때마다 이게 내부 오류로 기록되면 창이 계속 뜬다 — 기록하면 안 된다.
+        IOException broken = new IOException("현재 연결은 사용자의 호스트 시스템의 소프트웨어의 의해 중단되었습니다");
+
+        ResponseEntity<Map<String, Object>> response =
+                handler.handleUnhandled(new RuntimeException("disconnected", broken), request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        assertThat(errors.recent()).isEmpty();
     }
 
     @Test

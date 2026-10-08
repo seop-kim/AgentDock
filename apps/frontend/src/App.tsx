@@ -2,7 +2,6 @@ import { Navigate, Outlet, Route, Routes, useMatch } from 'react-router-dom';
 import styles from './layout.module.css';
 import AppStatus from './components/AppStatus';
 import ConfirmDialog from './components/ConfirmDialog';
-import ServerErrorDialog from './components/ServerErrorDialog';
 import Sidebar from './components/Sidebar';
 import Toaster from './components/Toaster';
 import Dashboard from './pages/Dashboard';
@@ -50,8 +49,6 @@ export default function App() {
       {/* 작업 알림(토스트)과 확인 창도 여기서 한 번만 그린다. */}
       <Toaster />
       <ConfirmDialog />
-      {/* 서버 내부 오류(5xx)는 원인을 보여 주고 에이전트에게 수정을 맡길지 고르게 한다. */}
-      <ServerErrorDialog />
     </>
   );
 }

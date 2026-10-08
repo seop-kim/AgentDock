@@ -263,3 +263,18 @@
 .mergeButton {
   font-size: 12px;
 }
+
+/* 서버 오류 스택 — 읽기만 하면 되므로 접지 않고 안에서 스크롤한다(창이 넘치지 않게). */
+.stack {
+  margin: 8px 0 0;
+  padding: 8px;
+  max-height: 220px;
+  border-radius: var(--radius);
+  background: var(--color-input-bg);
+  color: var(--color-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow: auto;
+}

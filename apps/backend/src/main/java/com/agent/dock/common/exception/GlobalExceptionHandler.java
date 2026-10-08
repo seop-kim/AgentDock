@@ -70,6 +70,12 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleUnhandled(Exception ex, HttpServletRequest request) {
+        // 클라이언트가 끊긴 경우(탭 닫기·새로고침·네트워크 절단)는 내부 오류가 아니다 — SSE·비동기 응답에서
+        // 흔히 나고, 고칠 것도 없다. 기록하지 않고 조용히 넘긴다(로그도 ERROR 로 올리지 않는다).
+        if (isDisconnectedClient(ex)) {
+            log.debug("client disconnected: {} {}", request.getMethod(), request.getRequestURI());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
+        }
         if (ex instanceof ResponseStatusException statusException) {
             String reason = statusException.getReason();
             return body(HttpStatus.valueOf(statusException.getStatusCode().value()),
@@ -79,6 +85,26 @@ public class GlobalExceptionHandler {
         log.error("unhandled error #{} {} {}: {}", entry.id(), entry.method(), entry.path(), entry.message(), ex);
         return body(HttpStatus.INTERNAL_SERVER_ERROR,
                 "%s: %s".formatted(ex.getClass().getSimpleName(), ex.getMessage()));
+    }
+
+    /**
+     * 클라이언트가 끊겨 생긴 예외인지. 스프링이 비동기(SSE) 응답에서 던지는
+     * {@code AsyncRequestNotUsableException} 과 톰캣의 {@code ClientAbortException}, 그리고 그 원인인 소켓 중단을 본다.
+     */
+    private static boolean isDisconnectedClient(Throwable ex) {
+        for (Throwable current = ex; current != null; current = current.getCause()) {
+            String name = current.getClass().getName();
+            if (name.equals("org.springframework.web.context.request.async.AsyncRequestNotUsableException")
+                    || name.equals("org.apache.catalina.connector.ClientAbortException")
+                    || name.equals("java.io.IOException") && current.getMessage() != null
+                            && current.getMessage().contains("중단")) {
+                return true;
+            }
+            if (current.getCause() == current) {
+                break;
+            }
+        }
+        return false;
     }
 
     private ResponseEntity<Map<String, Object>> body(HttpStatus status, String message) {
