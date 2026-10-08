@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { questionText, waitingInputs } from '../../lib/executions';
 import { api } from '../../lib/api';
+import { askConfirm } from '../../components/ConfirmDialog';
+import { toast } from '../../components/Toaster';
 import { useAgentDockStore } from '../../store/AgentDockStore';
 import type { Execution, Project } from '../../types';
 import panel from './RequestsPanel.module.css';
@@ -141,12 +143,14 @@ export default function RequestsPanel({ project }: { project: Project }) {
   };
 
   /** 답하는 대신 그 실행을 멈춘다(위임된 자식도 함께 멈춘다). */
-  const stopExecution = (execution: Execution) => {
-    const ok = window.confirm(
+  const stopExecution = async (execution: Execution) => {
+    const ok = await askConfirm(
       `실행 #${execution.id} 을(를) 중지할까요? 위임된 자식 실행도 함께 멈춥니다.`,
+      '중지',
     );
     if (!ok) return;
     void api.cancelExecution(execution.id).then(() => reload());
+    toast(`실행 #${execution.id} 중지를 요청했습니다`);
     setSelected(null);
   };
 
@@ -287,7 +291,7 @@ export default function RequestsPanel({ project }: { project: Project }) {
                         <button
                           type="button"
                           className={panel.dismiss}
-                          onClick={() => stopExecution(current.execution)}
+                          onClick={() => void stopExecution(current.execution)}
                           title="이 실행을 중지합니다(위임된 자식도 함께)"
                         >
                           에이전트 중지

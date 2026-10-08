@@ -1,0 +1,54 @@
+/* 작업 알림(토스트). 화면 오른쪽 아래에 쌓이고, 누르면 닫힌다. */
+
+.host {
+  position: fixed;
+  right: var(--spacing-md);
+  bottom: var(--spacing-md);
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-width: min(380px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.toast {
+  composes: glassStrong from '../styles/glass.module.css';
+  padding: 9px 12px;
+  border-radius: var(--radius);
+  color: var(--color-text);
+  font-size: 13px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  box-shadow: var(--shadow-float), var(--glass-highlight);
+  cursor: pointer;
+  pointer-events: auto;
+  animation: toastIn 160ms ease-out;
+}
+
+/* 왼쪽 색 띠로 종류를 구분한다(성공·실패·보통). */
+.info {
+  box-shadow: var(--shadow-float), var(--glass-highlight), inset 3px 0 0 var(--color-muted);
+}
+
+.success {
+  box-shadow: var(--shadow-float), var(--glass-highlight), inset 3px 0 0 var(--color-primary);
+}
+
+.error {
+  box-shadow: var(--shadow-float), var(--glass-highlight), inset 3px 0 0 var(--color-error);
+}
+
+@keyframes toastIn {
+  from {
+    transform: translateX(16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}

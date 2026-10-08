@@ -1,4 +1,5 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from '../components/Toaster';
 import {
   Attachment as ApiAttachment,
   Execution as ApiExecution,
@@ -10,7 +11,7 @@ import {
   type Provider as ApiProvider,
   type Task as ApiTask,
 } from '../lib/api';
-import { workLog } from '../lib/executions';
+import { formatDuration, workLog } from '../lib/executions';
 import { DEFAULT_PROVIDER_NAMES } from './seed';
 import type {
   Agent,
@@ -385,6 +386,36 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
   const flushRef = useRef<number | null>(null);
   const reloadRef = useRef<() => Promise<void>>(async () => {});
   const applyEventRef = useRef<(event: DataChanged) => Promise<void>>(async () => {});
+
+  /**
+   * 작업 알림: 실행 상태가 **바뀔 때** 토스트로 알린다(시작·완료·실패·취소·질문 대기).
+   * 사용자가 화면을 안 보고 있어도 무슨 일이 일어나는지 알 수 있게 한다.
+   */
+  const prevStatusRef = useRef<Map<number, Execution['status']>>(new Map());
+  useEffect(() => {
+    const previous = prevStatusRef.current;
+    const next = new Map<number, Execution['status']>();
+    executions.forEach((execution) => {
+      next.set(execution.id, execution.status);
+      const before = previous.get(execution.id);
+      if (before === undefined || before === execution.status) return;
+      const who = agentsRef.current.find((agent) => agent.id === execution.agentId)?.name ?? '에이전트';
+      const label = `#${execution.id} ${who}`;
+      if (execution.status === 'RUNNING') {
+        toast(`${label} 작업을 시작했습니다`);
+      } else if (execution.status === 'DONE') {
+        const ms = execution.metrics?.durationMs ?? 0;
+        toast(`${label} 작업 완료${ms > 0 ? ` (${formatDuration(ms)})` : ''}`, 'success');
+      } else if (execution.status === 'FAILED') {
+        toast(`${label} 작업이 실패했습니다`, 'error');
+      } else if (execution.status === 'CANCELLED') {
+        toast(`${label} 작업이 취소되었습니다`);
+      } else if (execution.status === 'WAITING_INPUT') {
+        toast(`${label} 답을 기다립니다 — 요청 창에서 답해 주세요`);
+      }
+    });
+    prevStatusRef.current = next;
+  }, [executions]);
 
   useEffect(() => {
     executionsRef.current = executions;

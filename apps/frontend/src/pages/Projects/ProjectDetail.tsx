@@ -4,6 +4,7 @@ import { SettingsIcon } from '../../components/icons';
 import { useAgentDockStore } from '../../store/AgentDockStore';
 import shared from '../../styles/shared.module.css';
 import { questionText } from '../../lib/executions';
+import { toast } from '../../components/Toaster';
 import type { ChatTarget } from '../../types';
 import AgentList from './AgentList';
 import ChatPanel from './ChatPanel';
@@ -176,7 +177,10 @@ export default function ProjectDetail() {
               <button
                 type="button"
                 className={styles.settingsButton}
-                onClick={() => void reload()}
+                onClick={() => {
+                // 다시 읽은 뒤 알려 준다(눌렀는데 아무 반응이 없어 보이지 않게).
+                void reload().then(() => toast('서버에서 다시 읽었습니다 — 캔버스·에이전트·명령을 갱신했습니다'));
+              }}
                 aria-label="새로고침"
                 title="캔버스·에이전트 목록·명령을 서버에서 다시 읽습니다"
               >
