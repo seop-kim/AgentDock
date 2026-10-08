@@ -13,9 +13,12 @@
   /* 왼쪽은 넓히기 화살표가 설 자리만 조금 남긴다(크게 비우지 않는다) */
   padding: 10px 12px 10px 14px;
   border-radius: var(--radius-lg);
-  /* 접기/펴기를 부드럽게: top·bottom 이 높이를 만들므로 bottom 을 애니메이션한다. 삐져나온 자식은 자른다. */
+  /* 접기/펴기 · 좌우 펼치기를 부드럽게: top·bottom·left 가 크기를 만들므로 그것들을 애니메이션한다. */
   overflow: hidden;
-  transition: bottom 220ms ease;
+  transition:
+    bottom 220ms ease,
+    left 220ms ease,
+    width 220ms ease;
 }
 
 /* 접었을 때: 머리말 높이만 남기고 위쪽에 붙는다(높이가 bottom 에서 파생되므로 애니메이션이 먹는다). */
@@ -33,10 +36,11 @@
   transition: opacity 160ms ease;
 }
 
-/* 크게 보기: 왼쪽 패널 옆부터 창 오른쪽까지 차지해 구성도를 덮는다(일시적). */
+/* 크게 보기: 왼쪽 패널 옆부터 창 오른쪽까지 차지해 구성도를 덮는다(일시적).
+   width 를 auto 로 두면 애니메이션이 안 먹으므로 식으로 적는다(100% - 왼쪽 패널 - 좌우 여백). */
 .wide {
   left: calc(var(--left-inset, 352px) + var(--spacing-md));
-  width: auto;
+  width: calc(100% - var(--left-inset, 352px) - var(--spacing-md) * 2);
 }
 
 /* 넓어져도 말풍선이 너무 길어지지 않게 한다. */
