@@ -77,3 +77,38 @@
 
 - `npm run build --workspace=apps/frontend` (`tsc --noEmit && vite build`) **통과**.
 - 화면 상태: 첫 로드(AppStatus "서버에서 불러오는 중…"), 요청 실패(AppStatus 오류 + "다시 시도"), SSE 끊김(AppStatus 안내, 5초 안전망 폴링), 목록/설정 빈 상태, 프로젝트 상세 로딩 상태를 반영했다.
+
+## 설정창 개편(디자인 반영, 실행 208) 배선 점검
+
+디자인 팀 확정안(실행 #175)은 **시각 변경만**이다 — 아이콘·메뉴 액센트·런타임 카드 상태 필·ghost/danger
+버튼·테마 옵션 아이콘. 즉 **설정 화면에 새 데이터나 새 API 가 필요하지 않고**, 화면이 쓰는 값은 이미
+전부 아래로 배선돼 있다(화면 담당 18 은 스토어·api 를 그대로 쓰면 된다).
+
+- 스토어(`useAgentDockStore`): `providers` `availableProviderKeys` `loading` `toggleProvider` `deleteProvider`
+  `addProvider` `updateCapabilities`. 전역 `loading`/`error`/`streamConnected` 는 `components/AppStatus.tsx` 가 띄운다.
+- 엔드포인트(모두 `src/lib/api.ts`): `GET/POST/DELETE /ai-providers` · `PUT /ai-providers/{id}/enabled` ·
+  `PUT /ai-providers/{id}/capabilities` · `GET /ai-providers/{id}/cli` · `POST /ai-providers/{id}/login` ·
+  `POST /ai-providers/{id}/install` · `GET /ai-providers/command-sessions/{id}/stream`(SSE, 화면이 직접 구독) ·
+  `POST .../input` · `DELETE /ai-providers/command-sessions/{id}`.
+- **고친 것**: 런타임 추가 시 기본 capabilities 가 통째로 비어 있던 문제. `store/seed.ts` 의
+  `DEFAULT_CAPABILITIES[key]` 를 `POST /ai-providers` 에 함께 보내도록 `api.createProvider` 에 `capabilities?`
+  를, `store.addProvider` 에서 그 값을 넘기도록 배선했다(목업 `MockStore` 의 `provider/add` 와 같은 동작).
+  이전에는 이 상수가 **아무 데서도 쓰이지 않아** 새 런타임이 모델/모드/설치 명령 없이 등록됐다.
+- `src/lib/api.ts` 밖의 화면들이 이미 `api` 클라이언트를 직접 쓰고 있어(ExecutionTree·RequestsPanel 등),
+  CLI/로그인/설치도 `CliPanel`/`CommandPanel` 이 `api` + SSE 를 직접 쓰는 현행을 유지했다(실행 로그와 같은 패턴).
+- 검증: `npm run build --workspace=apps/frontend`(`tsc --noEmit && vite build`) **통과**.
+
+### 설정 화면에 필요하지만 아직 없는 API (추측하지 않고 목록으로)
+
+1. **런타임 표시 이름 변경** — `PUT /ai-providers/{id}` 가 없다. 이름은 등록 때만 정하고 바꿀 수 없어
+   카드 제목을 편집하려면 필요하다.
+2. **CLI 상태 일괄 조회** — `GET /ai-providers/cli` 가 없다. `GET /ai-providers/{id}/cli` 는 호출마다
+   CLI 를 실행(`<cli> --version`, 10초 제한)하고 저장하지 않아, 카드마다 CLI 상태를 표시하면 느리고 N번 부른다.
+   (지금은 "CLI 확인" 창을 열 때만 읽으므로 문제 없다.)
+3. **등록 가능한 런타임 카탈로그** — `GET /ai-providers/catalog` 가 없다. 등록 가능한 키·표시 이름·기본
+   capabilities 가 프론트 `store/seed.ts` 에 하드코딩돼 백엔드 `ProviderKey` enum 과 이중 관리된다.
+   런타임 추가 창의 선택지·기본값도 백엔드가 주는 편이 안전하다.
+4. **capabilities 기본값 되돌리기** — 없다. 기본값은 프론트 `DEFAULT_CAPABILITIES` 에만 있어, 서버 기본값이나
+   reset 엔드포인트가 있으면 새 런타임이 항상 같은 상태로 시작한다.
+
+설정 화면과 무관한 기존 "없는 API"(채팅 첨부 복원·프로젝트 요청 조회·실행 목록)는 위 3건 참고.

@@ -304,7 +304,7 @@ export const api = {
     request<Execution>(`/executions/${id}/answer`, { method: 'POST', body: JSON.stringify({ text }) }),
 
   listProviders: () => request<Provider[]>('/ai-providers'),
-  createProvider: (data: { key: string; name: string }) =>
+  createProvider: (data: { key: string; name: string; capabilities?: Capabilities }) =>
     request<Provider>('/ai-providers', { method: 'POST', body: JSON.stringify(data) }),
   deleteProvider: (id: number) => request<void>(`/ai-providers/${id}`, { method: 'DELETE' }),
   setProviderEnabled: (id: number, enabled: boolean) =>

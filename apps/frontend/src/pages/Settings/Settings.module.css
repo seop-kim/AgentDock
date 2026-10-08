@@ -5,7 +5,7 @@
 }
 
 .menu {
-  width: 200px;
+  width: 220px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -23,11 +23,28 @@
 }
 
 .menuItem {
-  padding: 8px 12px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 8px 12px 8px 14px;
   border-radius: var(--radius);
   color: var(--color-muted);
   font-weight: 500;
   text-decoration: none;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.menuItem::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 2px;
+  background: transparent;
+  transition: background 0.12s ease;
 }
 
 .menuItem:hover {
@@ -39,6 +56,22 @@
 .menuItemActive:hover {
   background: var(--color-code-bg);
   color: var(--color-text);
+  font-weight: 600;
+}
+
+.menuItemActive::before {
+  background: var(--color-primary);
+}
+
+.menuIcon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-muted);
+}
+
+.menuItem:hover .menuIcon,
+.menuItemActive .menuIcon {
+  color: var(--color-primary);
 }
 
 .content {
@@ -50,6 +83,72 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.sectionHeader h1 {
+  margin: 0;
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+}
+
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.statusPillOn {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.statusPillOff {
+  background: var(--color-error);
+  color: var(--color-on-primary);
+}
+
+.statusDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 26%, transparent);
+}
+.withIcon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ghostButton {
+  composes: withIcon;
+  background: transparent;
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}
+
+.ghostButton:hover {
+  background: var(--color-code-bg);
+  filter: none;
+}
+
+.dangerIcon {
+  composes: withIcon;
 }
 
 .themeOptions {
@@ -67,6 +166,7 @@
   padding: var(--spacing-md);
   border-radius: var(--radius-lg);
   cursor: pointer;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
 .themeOption:hover {
@@ -83,6 +183,17 @@
   padding: 0;
 }
 
+.themeIcon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-muted);
+  transition: color 0.12s ease;
+}
+
+.themeOptionActive .themeIcon {
+  color: var(--color-primary);
+}
+
 .themeLabel {
   min-width: 56px;
   font-weight: 600;
@@ -91,7 +202,7 @@
 .card {
   composes: glass from '../../styles/glass.module.css';
   border-radius: var(--radius-lg);
-  padding: var(--spacing-md);
+  padding: var(--spacing-lg);
   margin-top: var(--spacing-md);
 }
 
@@ -102,14 +213,16 @@
 }
 
 .cardTitle {
-  margin-top: 0;
-  margin-bottom: var(--spacing-sm);
+  margin: 0;
+  font-size: 1.06rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
 }
 
 .editor {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .editor textarea,

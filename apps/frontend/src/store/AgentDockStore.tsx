@@ -12,7 +12,7 @@ import {
   type Task as ApiTask,
 } from '../lib/api';
 import { formatDuration, workLog } from '../lib/executions';
-import { DEFAULT_PROVIDER_NAMES } from './seed';
+import { DEFAULT_CAPABILITIES, DEFAULT_PROVIDER_NAMES } from './seed';
 import type {
   Agent,
   AgentGroup,
@@ -1004,7 +1004,8 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
         if (provider !== undefined) call(() => api.setProviderEnabled(id, !provider.enabled));
       },
       deleteProvider: (id) => call(() => api.deleteProvider(id)),
-      addProvider: (key, name) => call(() => api.createProvider({ key, name })),
+      addProvider: (key, name) =>
+        call(() => api.createProvider({ key, name, capabilities: DEFAULT_CAPABILITIES[key] })),
       updateCapabilities: (id, capabilities) => call(() => api.updateProviderCapabilities(id, capabilities)),
 
       createProject: (name) => call(() => api.createProject({ name })),
