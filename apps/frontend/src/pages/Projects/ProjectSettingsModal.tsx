@@ -45,7 +45,7 @@ export default function ProjectSettingsModal({
   return (
     <div className={modal.overlay} onClick={onClose}>
       <div
-        className={`${modal.modal} ${modal.wide}`}
+        className={`${modal.modal} ${styles.wide}`}
         role="dialog"
         aria-label="프로젝트 설정"
         onClick={(e) => e.stopPropagation()}
@@ -59,12 +59,22 @@ export default function ProjectSettingsModal({
 
         <section className={styles.section}>
           <h3 className={styles.sectionTitle}>기본 정보</h3>
-          <form onSubmit={onRename} className={styles.row}>
-            <input value={name} onChange={(e) => setName(e.target.value)} aria-label="프로젝트 이름" required />
-            <button type="submit" disabled={!changed}>
-              저장
-            </button>
-          </form>
+          <div className={modal.field}>
+            <label className={styles.fieldLabel} htmlFor="project-name">
+              프로젝트 이름
+            </label>
+            <form onSubmit={onRename} className={styles.row}>
+              <input
+                id="project-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+              <button type="submit" disabled={!changed}>
+                저장
+              </button>
+            </form>
+          </div>
         </section>
 
         <section className={styles.section}>
@@ -73,31 +83,46 @@ export default function ProjectSettingsModal({
             프로젝트 최상위 리더입니다. 프롬프트는 <strong>마스터 → 그룹 → 에이전트</strong> 순서로 겹쳐 적용됩니다.
             마스터는 그룹에 속하지 않습니다.
           </p>
-          {project.masterAgentId === null && <p className="errorText">마스터 에이전트를 지정해야 합니다.</p>}
-          <select
-            value={project.masterAgentId === null ? '' : String(project.masterAgentId)}
-            onChange={(e) => setProjectMaster(project.id, Number(e.target.value))}
-            aria-label="마스터 에이전트"
-          >
-            <option value="">마스터 선택</option>
-            {projectAgents.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
+          {project.masterAgentId === null && <p className={styles.error}>마스터 에이전트를 지정해야 합니다.</p>}
 
-          <label className={shared.muted}>마스터 프롬프트</label>
-          <textarea
-            rows={3}
-            value={masterPrompt}
-            onChange={(e) => setMasterPromptText(e.target.value)}
-            placeholder="요청을 어떻게 쪼개고 팀에 나눠 맡길지"
-          />
-          <div className={styles.row}>
-            <button type="button" onClick={() => setMasterPrompt(project.id, masterPrompt.trim())} disabled={!masterPromptChanged}>
-              프롬프트 저장
-            </button>
+          <div className={modal.field}>
+            <label className={styles.fieldLabel} htmlFor="project-master">
+              마스터 에이전트
+            </label>
+            <select
+              id="project-master"
+              value={project.masterAgentId === null ? '' : String(project.masterAgentId)}
+              onChange={(e) => setProjectMaster(project.id, Number(e.target.value))}
+            >
+              <option value="">마스터 선택</option>
+              {projectAgents.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className={modal.field}>
+            <label className={styles.fieldLabel} htmlFor="project-master-prompt">
+              마스터 프롬프트
+            </label>
+            <textarea
+              id="project-master-prompt"
+              rows={4}
+              value={masterPrompt}
+              onChange={(e) => setMasterPromptText(e.target.value)}
+              placeholder="요청을 어떻게 쪼개고 팀에 나눠 맡길지"
+            />
+            <div className={styles.actions}>
+              <button
+                type="button"
+                onClick={() => setMasterPrompt(project.id, masterPrompt.trim())}
+                disabled={!masterPromptChanged}
+              >
+                프롬프트 저장
+              </button>
+            </div>
           </div>
         </section>
 
