@@ -262,6 +262,18 @@
   box-shadow: var(--shadow-float);
 }
 
+/* 이어갈 작업 고르기 — 입력줄과 같은 줄에 작게 둔다(명령과 함께 보낼 맥락). */
+.continuePick {
+  flex: 0 1 160px;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-input-bg);
+  color: var(--color-text);
+  font-size: 12px;
+}
+
 /* 이전 명령 더 보기 — 기록 맨 위에 조용히 둔다(누르면 5개씩 더 읽는다). */
 .loadMore {
   align-self: center;

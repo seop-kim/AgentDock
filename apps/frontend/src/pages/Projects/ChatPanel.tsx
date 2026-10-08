@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ClipIcon, FileIcon } from '../../components/icons';
 import { unavailableReason } from '../../lib/agentAvailability';
 import { ATTACHMENT_FOLDER, hasAttachment } from '../../lib/attachments';
+import { workLog } from '../../lib/executions';
 import { useAgentDockStore } from '../../store/AgentDockStore';
 import attach from '../../styles/attachment.module.css';
 import shared from '../../styles/shared.module.css';
@@ -116,6 +117,17 @@ export default function ChatPanel({
 
   /** 이미지 업로드 실패를 화면에 보여 주기 위한 상태(조용히 실패하지 않게). */
   const [uploadError, setUploadError] = useState<string | null>(null);
+  /** 이어갈 작업(이전 실행 트리의 루트 id). 고르면 새 명령 앞에 그 작업 내역을 붙여 보낸다. */
+  const [continueFrom, setContinueFrom] = useState<number | null>(null);
+
+  /**
+   * 이어갈 작업의 맥락. 그 트리의 **작업 내역**(마스터 요약 + 에이전트별 작업 + 결과)을 짧게 붙여,
+   * 에이전트가 "무엇을 이어서 해야 하는지"를 알고 시작하게 한다(이전 결과를 다시 설명할 필요가 없다).
+   */
+  const continueBlock = (rootId: number): string => {
+    const log = workLog(executions, rootId, (agentId) => agents.find((a) => a.id === agentId)?.name ?? '에이전트');
+    return `이전 작업(실행 #${rootId})을 이어서 진행해 주세요.\n\n${log === '' ? '(이전 작업 내역을 찾지 못했습니다)' : log}\n\n[새 지시]\n`;
+  };
   /** 붙여넣거나 끌어온 이미지의 **미리보기 URL**(보낼 때까지). 서버에 올린 뒤에는 원본 파일이 없어 만들 수 없다. */
   const [previews, setPreviews] = useState<Record<string, string>>({});
   /** 썸네일을 눌러 크게 보고 있는 이미지 URL. */
@@ -233,8 +245,15 @@ export default function ChatPanel({
     const trimmed = text.trim();
     // 파일만 붙이고 보내도 되게 한다(그때는 지시를 기본 문장으로 채운다).
     if (trimmed === '' && attachments.length === 0) return;
-    sendCommand(project.id, target, trimmed === '' ? '첨부한 파일을 확인해줘' : trimmed, attachments);
+    const body = trimmed === '' ? '첨부한 파일을 확인해줘' : trimmed;
+    sendCommand(
+      project.id,
+      target,
+      continueFrom === null ? body : `${continueBlock(continueFrom)}${body}`,
+      attachments,
+    );
     setText('');
+    setContinueFrom(null);
     // 보낸 첨부의 미리보기 URL 은 더 쓸 일이 없으니 정리한다.
     Object.values(previews).forEach((url) => URL.revokeObjectURL(url));
     setPreviews({});
@@ -426,6 +445,30 @@ export default function ChatPanel({
           title="위로 끌면 입력창이 커집니다"
           onPointerDown={startResize}
         />
+        {/* 이어갈 작업 고르기 — 고르면 새 명령 앞에 그 작업의 내역을 붙여 보낸다. */}
+        <select
+          className={styles.continuePick}
+          value={continueFrom === null ? '' : String(continueFrom)}
+          onChange={(e) => setContinueFrom(e.target.value === '' ? null : Number(e.target.value))}
+          aria-label="이어갈 작업"
+          title="이어갈 작업을 고르면 그 작업 내역을 함께 보냅니다"
+        >
+          <option value="">이어가기 없음</option>
+          {chats
+            .filter(
+              (message) =>
+                message.projectId === project.id &&
+                message.role === 'user' &&
+                message.rootExecutionId !== null,
+            )
+            .slice(-10)
+            .reverse()
+            .map((message) => (
+              <option key={message.id} value={String(message.rootExecutionId)}>
+                #{message.rootExecutionId} {message.text.slice(0, 26)}
+              </option>
+            ))}
+        </select>
         <button
           type="button"
           className={styles.attach}
