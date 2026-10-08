@@ -110,11 +110,39 @@ export default function ChatPanel({
     const dropped = Array.from(e.dataTransfer.files).filter((_, index) => entries[index]?.isDirectory !== true);
     if (dropped.length === 0) return;
     const uploaded = await uploadAttachments(defaultWorkspaceId, dropped);
-    setAttachments((prev) => [...prev, ...uploaded.filter((file) => !hasAttachment(prev, file))]);
+    addUploaded(dropped, uploaded);
   };
 
   /** 이미지 업로드 실패를 화면에 보여 주기 위한 상태(조용히 실패하지 않게). */
   const [uploadError, setUploadError] = useState<string | null>(null);
+  /** 붙여넣거나 끌어온 이미지의 **미리보기 URL**(보낼 때까지). 서버에 올린 뒤에는 원본 파일이 없어 만들 수 없다. */
+  const [previews, setPreviews] = useState<Record<string, string>>({});
+
+  const previewKey = (file: AttachedFile) => `${file.workspaceId}:${file.path}`;
+
+  /** 업로드 결과를 첨부에 더하고, 이미지면 미리보기 URL 을 만들어 둔다(올린 순서가 같다고 본다). */
+  const addUploaded = (files: File[], uploaded: AttachedFile[]) => {
+    const added: Record<string, string> = {};
+    files.forEach((file, index) => {
+      const created = uploaded[index];
+      if (created === undefined || !file.type.startsWith('image/')) return;
+      added[`${created.workspaceId}:${created.path}`] = URL.createObjectURL(file);
+    });
+    setPreviews((prev) => ({ ...prev, ...added }));
+    setAttachments((prev) => [...prev, ...uploaded.filter((file) => !hasAttachment(prev, file))]);
+  };
+
+  /** 첨부를 뺄 때 미리보기 URL 도 함께 정리한다(메모리에 남지 않게). */
+  const removeAttachment = (file: AttachedFile) => {
+    setAttachments((prev) => prev.filter((item) => item !== file));
+    setPreviews((prev) => {
+      const url = prev[previewKey(file)];
+      if (url !== undefined) URL.revokeObjectURL(url);
+      const next = { ...prev };
+      delete next[previewKey(file)];
+      return next;
+    });
+  };
 
   /**
    * 클립보드의 이미지를 첨부로 올린다(드롭·파일 고르기와 같은 경로).
@@ -138,7 +166,7 @@ export default function ChatPanel({
     });
     try {
       const uploaded = await uploadAttachments(defaultWorkspaceId, named);
-      setAttachments((prev) => [...prev, ...uploaded.filter((file) => !hasAttachment(prev, file))]);
+      addUploaded(named, uploaded);
       setUploadError(null);
     } catch (error) {
       setUploadError(
@@ -194,6 +222,9 @@ export default function ChatPanel({
     if (trimmed === '' && attachments.length === 0) return;
     sendCommand(project.id, target, trimmed === '' ? '첨부한 파일을 확인해줘' : trimmed, attachments);
     setText('');
+    // 보낸 첨부의 미리보기 URL 은 더 쓸 일이 없으니 정리한다.
+    Object.values(previews).forEach((url) => URL.revokeObjectURL(url));
+    setPreviews({});
     setAttachments([]);
   };
 
@@ -328,12 +359,17 @@ export default function ChatPanel({
         <ul className={attach.chips}>
           {attachments.map((file) => (
             <li key={`${file.workspaceId}:${file.path}`} className={attach.chip} title={file.path}>
-              <FileIcon size={13} />
+              {/* 붙여넣거나 끌어온 이미지는 미리보기를 보여 준다(서버에서 다시 받아온 첨부는 아이콘만). */}
+              {previews[previewKey(file)] === undefined ? (
+                <FileIcon size={13} />
+              ) : (
+                <img className={styles.chipThumb} src={previews[previewKey(file)]} alt={file.name} />
+              )}
               <span className={attach.chipName}>{file.name}</span>
               <button
                 type="button"
                 className={attach.chipRemove}
-                onClick={() => setAttachments((prev) => prev.filter((item) => item !== file))}
+                onClick={() => removeAttachment(file)}
                 aria-label={`${file.name} 첨부 빼기`}
               >
                 ×
