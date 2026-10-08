@@ -950,14 +950,17 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
       reload,
 
       watchExecutionTree: (projectId, rootExecutionId) => {
-        // 상세 화면이 들어올 때(트리 창이 닫혀 있어도) 이 프로젝트가 열려 있음을 기억한다.
-        // 목록에서는 어떤 프로젝트의 상세도 읽지 않고, **열린 프로젝트만** 그룹·태스크·트리를 읽는다.
-        openProjectRef.current = projectId;
         const next = new Map(openTreesRef.current);
         if (rootExecutionId === null) next.delete(projectId);
         else next.set(projectId, new Set([rootExecutionId]));
         openTreesRef.current = next;
-        // 상세에 들어오면 그 프로젝트를 곧바로 한 번 읽는다(목록에서는 읽지 않으므로 여기서 채운다).
+        /*
+         * 상세에 **처음 들어올 때만** 그 프로젝트를 읽는다.
+         * 이 함수는 스토어 값 객체에 있어 렌더마다 새로 만들어지고, 상세 화면 효과가 이 함수를 의존성으로 다시
+         * 부르므로 여기서 매번 읽으면 tasks 가 무한 호출된다(2026-10-08 실측). 이미 열려 있으면 아무것도 하지 않는다.
+         */
+        if (openProjectRef.current === projectId) return;
+        openProjectRef.current = projectId;
         void loadGroups(projectId);
         void loadProjectSlice(projectId, true);
       },
