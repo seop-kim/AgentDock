@@ -267,19 +267,28 @@ export default function ChatPanel({
     }
   };
 
-  const onSubmit = (e: FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!target) return;
     const trimmed = text.trim();
     // 파일만 붙이고 보내도 되게 한다(그때는 지시를 기본 문장으로 채운다).
     if (trimmed === '' && attachments.length === 0) return;
     const body = trimmed === '' ? '첨부한 파일을 확인해줘' : trimmed;
-    sendCommand(
-      project.id,
-      target,
-      continueFrom === null ? body : `${continueBlock(continueFrom)}${body}`,
-      attachments,
-    );
+
+    // 이어가기: 이전 작업 내역을 **지시 파일(md)로 올리고** 프롬프트에는 짧은 참조만 남긴다
+    // (긴 내역이 프롬프트를 먹지 않게 — 위임 지시 파일과 같은 방식).
+    let allAttachments = attachments;
+    let prefix = '';
+    if (continueFrom !== null && defaultWorkspaceId !== null) {
+      const file = new File([continueBlock(continueFrom)], `이어가기-${continueFrom}.md`, {
+        type: 'text/markdown',
+      });
+      const uploaded = await uploadAttachments(defaultWorkspaceId, [file]);
+      allAttachments = [...attachments, ...uploaded.filter((item) => !hasAttachment(attachments, item))];
+      prefix = `이전 작업(실행 #${continueFrom})을 이어서 진행해 주세요. 첨부한 이어가기 파일을 읽고 그 내용대로 이어서 하세요.\n\n[새 지시]\n`;
+    }
+
+    sendCommand(project.id, target, `${prefix}${body}`, allAttachments);
     setText('');
     setContinueFrom(null);
     // 보낸 첨부의 미리보기 URL 은 더 쓸 일이 없으니 정리한다.
