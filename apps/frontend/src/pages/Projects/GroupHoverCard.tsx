@@ -4,7 +4,8 @@ import type { AgentGroup } from '../../types';
 import styles from './AgentHoverCard.module.css';
 
 const CARD_WIDTH = 320;
-const ESTIMATED_HEIGHT = 220;
+/** 정보 창의 고정 높이(CSS 의 .cardShort height 와 맞춘다) — 길어도 이 크기를 넘지 않는다. */
+const CARD_HEIGHT = 280;
 
 /**
  * 그룹 카드에 마우스를 올리면 카드 오른쪽에 뜨는 정보 창.
@@ -26,14 +27,15 @@ export default function GroupHoverCard({
   /** 정보 창에서 마우스가 나가면 닫힘 예약을 건다. */
   onLeave?: () => void;
 }) {
-  // 화면 밖으로 나가지 않게: 오른쪽에 자리가 없으면 카드 왼쪽에 붙이고, 위아래도 안쪽으로 당긴다.
+  // 화면 밖으로 나가지 않게: 오른쪽에 자리가 없으면 카드 왼쪽에, 아래에 자리가 없으면 **위로 펼친다**.
   const roomRight = window.innerWidth - anchor.right - 12;
   const left = roomRight >= CARD_WIDTH ? anchor.right + 12 : Math.max(8, anchor.left - CARD_WIDTH - 12);
-  const top = Math.max(8, Math.min(anchor.top, window.innerHeight - ESTIMATED_HEIGHT));
+  const fitsBelow = anchor.top + CARD_HEIGHT + 8 <= window.innerHeight;
+  const top = fitsBelow ? anchor.top : Math.max(8, anchor.bottom - CARD_HEIGHT);
 
   return createPortal(
     <div
-      className={styles.card}
+      className={`${styles.card} ${styles.cardShort}`}
       role="tooltip"
       onMouseEnter={onKeepOpen}
       onMouseLeave={onLeave}
@@ -43,10 +45,12 @@ export default function GroupHoverCard({
         <strong className={styles.name}>{group.name}</strong>
       </div>
       <div className={styles.promptLabel}>그룹 프롬프트</div>
-      <dl className={styles.rows}>
-        <dt>내용</dt>
-        <dd>{group.prompt || <span className={shared.muted}>비어 있음</span>}</dd>
-      </dl>
+      <div className={styles.promptBody}>
+        <dl className={styles.rows}>
+          <dt>내용</dt>
+          <dd>{group.prompt || <span className={shared.muted}>비어 있음</span>}</dd>
+        </dl>
+      </div>
     </div>,
     document.body,
   );

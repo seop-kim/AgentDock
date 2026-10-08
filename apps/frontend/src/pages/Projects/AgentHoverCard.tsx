@@ -6,7 +6,8 @@ import type { Agent, Project } from '../../types';
 import styles from './AgentHoverCard.module.css';
 
 const CARD_WIDTH = 320;
-const ESTIMATED_HEIGHT = 300;
+/** 정보 창의 고정 높이(CSS 의 height 와 맞춘다) — 내용이 길어도 이 크기를 넘지 않는다. */
+const CARD_HEIGHT = 360;
 
 /**
  * 에이전트 카드에 마우스를 올리면 카드 오른쪽에 뜨는 정보 창: 이름, 역할, 소속 그룹, 연결된 에이전트, 프롬프트.
@@ -42,10 +43,11 @@ export default function AgentHoverCard({
   );
   const uniqueLinked = linked.filter((l, i) => linked.findIndex((x) => x.id === l.id) === i);
 
-  // 화면 밖으로 나가지 않게: 오른쪽에 자리가 없으면 카드 왼쪽에 붙이고, 위아래도 안쪽으로 당긴다.
+  // 화면 밖으로 나가지 않게: 오른쪽에 자리가 없으면 카드 왼쪽에, 아래에 자리가 없으면 **위로 펼친다**.
   const roomRight = window.innerWidth - anchor.right - 12;
   const left = roomRight >= CARD_WIDTH ? anchor.right + 12 : Math.max(8, anchor.left - CARD_WIDTH - 12);
-  const top = Math.max(8, Math.min(anchor.top, window.innerHeight - ESTIMATED_HEIGHT));
+  const fitsBelow = anchor.top + CARD_HEIGHT + 8 <= window.innerHeight;
+  const top = fitsBelow ? anchor.top : Math.max(8, anchor.bottom - CARD_HEIGHT);
 
   return createPortal(
     <div
@@ -93,10 +95,12 @@ export default function AgentHoverCard({
       </dl>
 
       <div className={styles.promptLabel}>프롬프트</div>
-      <dl className={styles.rows}>
-        <dt>에이전트</dt>
-        <dd>{agent.persona || <span className={shared.muted}>없음</span>}</dd>
-      </dl>
+      <div className={styles.promptBody}>
+        <dl className={styles.rows}>
+          <dt>에이전트</dt>
+          <dd>{agent.persona || <span className={shared.muted}>없음</span>}</dd>
+        </dl>
+      </div>
     </div>,
     document.body,
   );
