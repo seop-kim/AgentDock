@@ -31,4 +31,10 @@ public class AttachmentController {
                                            @RequestParam("files") List<MultipartFile> files) {
         return service.upload(workspaceId, files);
     }
+
+    @DeleteMapping("/attachments/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable Long workspaceId, @PathVariable Long id) {
+        service.delete(id);
+    }
 }

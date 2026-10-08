@@ -145,6 +145,31 @@ public class AttachmentService {
         return prompt.toString();
     }
 
+    /**
+     * 첨부를 지운다: DB 기록과 워크스페이스 안 첨부 폴더의 복사본 파일을 함께 지운다.
+     * 없는 id 는 NotFoundException, 저장 경로가 워크스페이스 밖이면 BadRequestException.
+     */
+    @Transactional
+    public void delete(Long attachmentId) {
+        Attachment attachment = attachmentRepository.findById(attachmentId)
+                .orElseThrow(() -> new NotFoundException("Attachment %d not found".formatted(attachmentId)));
+        Workspace workspace = attachment.getWorkspace();
+        if (workspace != null) {
+            Path root = Path.of(workspace.getPath()).toAbsolutePath().normalize();
+            Path target = root.resolve(attachment.getStoredPath()).normalize();
+            if (!target.startsWith(root)) {
+                throw new BadRequestException("워크스페이스 밖의 파일은 지울 수 없습니다: " + attachment.getStoredPath());
+            }
+            try {
+                Files.deleteIfExists(target);
+            } catch (IOException ex) {
+                throw new IllegalStateException("파일을 지우지 못했습니다: " + attachment.getStoredPath(), ex);
+            }
+        }
+        attachmentRepository.delete(attachment);
+        changeEvents.attachmentChanged(null, attachment.getTaskId());
+    }
+
     /** 워크스페이스 폴더가 사라졌거나 잘못됐을 때를 대비한 기준 경로. */
     private Path rootOf(Workspace workspace) {
         Path root = Path.of(workspace.getPath()).toAbsolutePath().normalize();
