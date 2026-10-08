@@ -51,7 +51,8 @@ public class TaskService {
                 .toList();
     }
 
-    public List<TaskResponse> findAll(Long projectId, Long groupId) {        List<Task> tasks;
+    public List<TaskResponse> findAll(Long projectId, Long groupId) {
+        List<Task> tasks;
         if (groupId != null) {
             tasks = taskRepository.findByGroupWithRelations(groupId);
         } else if (projectId != null) {
