@@ -1,9 +1,9 @@
 /* 작업 알림(토스트). 화면 위쪽 가운데에 쌓이고, 누르면 닫힌다. */
 
-/* 화면 위쪽 가운데에 쌓인다(작업 시작·완료를 놓치지 않게). 배율 도구(맨 위)와 겹치지 않게 조금 내린다. */
+/* 화면 맨 위 가운데에 쌓인다. 예전에는 배율 도구를 피해 44px 내려 뒀는데, 이제 도구는 캔버스 안쪽에 있다. */
 .host {
   position: fixed;
-  top: calc(var(--spacing-md) + 44px);
+  top: var(--spacing-md);
   left: 50%;
   transform: translateX(-50%);
   z-index: 500;
