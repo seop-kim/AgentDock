@@ -1,5 +1,5 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { toast } from '../components/Toaster';
+import { toast, type ToastTone } from '../components/Toaster';
 import {
   Attachment as ApiAttachment,
   Execution as ApiExecution,
@@ -409,7 +409,7 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
    * 토스트는 종류마다 한 번만 띄운다(같은 말이 계속 뜨면 알림이 쓸모없어진다).
    */
   const notifiedRef = useRef<Set<string>>(new Set());
-  const notifyOnce = (key: string, text: string, tone: 'info' | 'success' | 'error' = 'info') => {
+  const notifyOnce = (key: string, text: string, tone: ToastTone = 'info') => {
     if (notifiedRef.current.has(key)) return;
     notifiedRef.current.add(key);
     toast(text, tone);
@@ -439,7 +439,8 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
         notifyOnce(`waitChild:${execution.id}`, `${label} 하위 작업을 기다립니다`);
       } else if (execution.status === 'WAITING_INPUT') {
         // 질문은 여러 번 올 수 있으므로 매번 알린다(같은 질문이 반복되면 그때 다시 볼 일이다).
-        toast(`${label} 답을 기다립니다 — 요청 창에서 답해 주세요`);
+        // 사람이 답해야 진행되므로 주황(확인 필요)으로 띄운다.
+        toast(`${label} 답을 기다립니다 — 요청 창에서 답해 주세요`, 'warn');
       }
     });
     prevStatusRef.current = next;

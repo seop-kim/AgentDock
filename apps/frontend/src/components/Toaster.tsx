@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import styles from './Toaster.module.css';
 
-/** 알림 종류(색). */
-export type ToastTone = 'info' | 'success' | 'error';
+/** 알림 종류(색) — 보통 · 완료 · 확인 필요 · 실패. */
+export type ToastTone = 'info' | 'success' | 'warn' | 'error';
 
 interface ToastItem {
   id: number;
@@ -10,15 +10,15 @@ interface ToastItem {
   tone: ToastTone;
 }
 
-/** 떠 있는 시간과 동시에 쌓이는 개수 상한(작업이 많아도 화면을 덮지 않게). */
-const TOAST_MS = 4000;
+/** 떠 있는 시간 — 실패·확인 필요는 조금 더 오래 둔다(놓치면 손해). 동시에 쌓이는 개수는 제한한다. */
+const TOAST_MS: Record<ToastTone, number> = { info: 4000, success: 4000, warn: 6000, error: 7000 };
 const MAX_TOASTS = 4;
 
 let nextId = 1;
 const listeners = new Set<(item: ToastItem) => void>();
 
 /**
- * 작업 관련 소식을 화면 오른쪽 아래에 띄운다.
+ * 작업 관련 소식을 화면 **위쪽 가운데**에 띄운다(중요도별 색: info·success·warn·error).
  * 에이전트 작업 시작·완료·실패·질문, 새로고침처럼 **사용자가 알아야 하는 일**에 쓴다.
  * 컴포넌트 밖(스토어·화면 어디서든)에서 부를 수 있게 모듈 함수로 둔다.
  */
@@ -37,7 +37,7 @@ export default function Toaster() {
       setItems((prev) => [...prev, item].slice(-MAX_TOASTS));
       window.setTimeout(() => {
         setItems((prev) => prev.filter((candidate) => candidate.id !== item.id));
-      }, TOAST_MS);
+      }, TOAST_MS[item.tone]);
     };
     listeners.add(onToast);
     return () => {
