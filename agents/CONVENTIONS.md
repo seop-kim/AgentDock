@@ -119,6 +119,15 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
 - **로그(SYSTEM)**: 파일마다 `⎿ 지시 파일: .agentdock/prompts/42.md (1,240자)`, 스텝마다 실제로 보낸 프롬프트 크기를 `⎿ 프롬프트 240자`.
 - **gitignore**: 이 파일들은 워크트리 안에 생긴다 — 저장소 루트 `.gitignore` 에 **`.agentdock/`** 을 둬 프롬프트·첨부가 작업 트리를 더럽히거나 자동 병합을 막지 않게 한다.
 
+### 실행 상태와 컨텍스트 (취소·만료·세션·그룹 노트)
+
+- **취소는 자손까지**: `POST /executions/{id}/cancel` 은 그 실행과 **자손 전부**의 CLI 프로세스를 끊고 `CANCELLED` 로 전이한다(부모만 멈추면 자식 CLI 가 계속 돈다). 이미 끝난 실행의 상태는 건드리지 않지만 그 아래에서 도는 것은 멈춘다.
+- **입력 대기 만료**: `WAITING_INPUT` 이 오래(기본 12시간, `agentdock.delegation.waiting-input-ttl-minutes`) 방치되면 10분 주기 검사(`@Scheduled`, 앱의 `@EnableScheduling`)가 만료로 취소한다. 만료도 취소와 같은 경로라 자손까지 정리된다. **기동 시 고아 정리에서 `WAITING_INPUT` 은 제외**한다(사람이 답할 차례를 없애면 안 된다).
+- **세션 재사용**: 같은 실행의 다음 스텝은 자기 CLI 세션을 이어받는다(Claude Code `--resume`, cmdc `--resume`). 자식 분기는 Claude 의 `--fork-session` 만 — cmdc 에는 확인된 분기 플래그가 없어 자식은 새 세션으로 시작한다(맥락은 지시 파일·그룹 노트가 맡는다).
+- **그룹 공유 노트**: `agent_group.shared_note` 는 규칙이 아니라 **맥락**이다. 그룹 실행의 시스템 프롬프트 맨 뒤에 실리고, 트리가 끝나면 `#<실행id> <요약>` 한 줄이 자동으로 붙는다(최근 2000자 유지). 화면에서는 그룹 프롬프트 창에서 본다 — 수정 요청에 `sharedNote` 를 보내지 않으면 기존 값을 지킨다.
+- **계약 수리**: 계약 JSON 이 조금 망가져도(군더더기 쉼표·홑따옴표·스마트 따옴표·주석) `JsonObjects.repair` 가 건져낸다. 원문이 그대로 파싱되면 수리본은 쓰지 않는다.
+- **프롬프트 규칙(DB, V19·V20)**: 자기 자신이나 부모에게 되돌려 맡기지 않는다(순환은 거부된다) / 작업 디렉터리 밖은 읽지도 쓰지도 않는다(밖에 있는 것이 필요하면 사람에게 물어 위치를 확인한다).
+
 ### CLI 출력을 다루는 법 (실측으로 확인한 사실 — 추측 금지)
 
 - `--output-format stream-json`(+`--verbose`)으로 실행하고 **JSONL 한 줄씩** 받아 로그로 바꾼다(`runtime/ClaudeStreamJson`). `assistant` 이벤트의 content 블록(thinking/text/tool_use)이 로그 줄이 되고, 마지막 `result` 이벤트에서 결과 텍스트와 계측값을 꺼낸다(`usage`·`total_cost_usd`·`duration_ms`·`num_turns`·`session_id`·`is_error`).
