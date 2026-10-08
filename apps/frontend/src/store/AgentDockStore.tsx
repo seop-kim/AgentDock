@@ -10,6 +10,7 @@ import {
   type Provider as ApiProvider,
   type Task as ApiTask,
 } from '../lib/api';
+import { workLog } from '../lib/executions';
 import { DEFAULT_PROVIDER_NAMES } from './seed';
 import type {
   Agent,
@@ -505,7 +506,8 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
         projectId,
         role: 'agent',
         author: nameOf(root.agentId),
-        text: finished ? root.handoff?.summary || '실행이 끝났습니다.' : '',
+        // 끝났으면 **무엇을 했는지**를 정리해 보여 준다(마스터 요약 + 에이전트별 작업 + 결과).
+        text: finished ? workLog(executionList, root.id, nameOf) || '실행이 끝났습니다.' : '',
         status: finished ? (root.status === 'FAILED' ? 'error' : 'done') : 'pending',
         rootExecutionId: root.id,
         attachments: [],

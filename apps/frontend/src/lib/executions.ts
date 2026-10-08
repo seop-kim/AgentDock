@@ -130,3 +130,45 @@ export function formatDuration(ms: number): string {
   if (minutes < 60) return `${minutes}분 ${seconds % 60}초`;
   return `${Math.floor(minutes / 60)}시간 ${minutes % 60}분`;
 }
+
+/**
+ * 명령 하나(트리)가 끝났을 때 **무엇을 했는지** 사람이 읽을 수 있게 정리한다(마크다운).
+ *
+ * <p>마스터 요약 한 줄만 보여 주면 "누가 무슨 일을 했는지"가 사라진다 — 위임받은 자식들의 결과를
+ * 한 줄씩 모으고, 끝에 결과(병합·커밋·변경 파일·시간·비용)를 값이 있는 것만 붙인다.
+ */
+export function workLog(
+  executions: Execution[],
+  rootExecutionId: number,
+  nameOf: (agentId: number) => string,
+): string {
+  const rows = treeOrder(executions, rootExecutionId);
+  if (rows.length === 0) return '';
+
+  const root = rows[0].execution;
+  const lines: string[] = [];
+  const headline = (root.handoff?.summary ?? '').trim();
+  if (headline !== '') lines.push(headline);
+
+  const others = rows.slice(1).filter((row) => (row.execution.handoff?.summary ?? '').trim() !== '');
+  if (others.length > 0) {
+    lines.push('', '**에이전트별 작업**');
+    others.forEach((row) => {
+      const state = STATUS_LABEL[row.execution.status];
+      const mark = state === '완료' ? '' : `[${state}] `;
+      lines.push(`- ${mark}${nameOf(row.execution.agentId)} — ${(row.execution.handoff?.summary ?? '').trim()}`);
+    });
+  }
+
+  const result: string[] = [];
+  if (root.mergeStatus !== null) result.push(MERGE_LABEL[root.mergeStatus]);
+  if (root.resultCommit !== null && root.resultCommit !== '') {
+    result.push(`커밋 ${root.resultCommit.slice(0, 7)}`);
+  }
+  if (root.changedFiles.length > 0) result.push(`변경 파일 ${root.changedFiles.length}개`);
+  if (root.metrics !== null && root.metrics.durationMs > 0) result.push(formatDuration(root.metrics.durationMs));
+  if (root.metrics !== null && root.metrics.costUsd > 0) result.push(formatCost(root.metrics.costUsd));
+  if (result.length > 0) lines.push('', `**결과** · ${result.join(' · ')}`);
+
+  return lines.join('\n').trim();
+}
