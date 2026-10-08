@@ -1,17 +1,20 @@
 /* 작업 알림(토스트). 화면 오른쪽 아래에 쌓이고, 누르면 닫힌다. */
 
+/* 화면 위쪽 가운데에 쌓인다(작업 시작·완료를 놓치지 않게). 배율 도구(맨 위)와 겹치지 않게 조금 내린다. */
 .host {
   position: fixed;
-  right: var(--spacing-md);
-  bottom: var(--spacing-md);
+  top: calc(var(--spacing-md) + 44px);
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 500;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 6px;
   margin: 0;
   padding: 0;
   list-style: none;
-  max-width: min(380px, calc(100vw - 32px));
+  max-width: min(420px, calc(100vw - 32px));
   pointer-events: none;
 }
 
@@ -44,11 +47,11 @@
 
 @keyframes toastIn {
   from {
-    transform: translateX(16px);
+    transform: translateY(-12px);
     opacity: 0;
   }
   to {
-    transform: translateX(0);
+    transform: translateY(0);
     opacity: 1;
   }
 }
