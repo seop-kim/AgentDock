@@ -30,7 +30,7 @@ agentdock:
   delegation:
     max-depth: 3            # 루트에서 몇 단계까지 내려갈 수 있는지
     max-executions: 20      # 트리 하나(명령 하나)가 만들 수 있는 실행 수
-    max-steps: 4            # 한 실행이 판단을 반복할 수 있는 횟수
+    max-steps: 8           # 한 실행이 판단을 반복할 수 있는 횟수
     max-targets: 4          # 한 번에 맡길 수 있는 대상 수
     max-concurrent: 4       # 동시에 도는 CLI 수
     max-cost-usd: 5         # 트리 하나의 예산 상한(달러)

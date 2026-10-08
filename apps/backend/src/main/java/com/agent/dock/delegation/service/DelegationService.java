@@ -771,7 +771,15 @@ public class DelegationService {
         try {
             // 이 스텝이 CLI 에 실제로 넘긴 프롬프트 크기를 SYSTEM 로그로 남긴다(파일로 옮긴 뒤 얼마나 줄었는지 확인용).
             streamHub.system(executionId, "⎿ 프롬프트 %,d자".formatted(prompt.length()));
-            return runner.runStep(executionId, agent, target.cwd(), target.systemPrompt(), prompt, maxCostUsd);
+            AgentExecutionResult result = runner.runStep(executionId, agent, target.cwd(), target.systemPrompt(), prompt, maxCostUsd);
+            // 어디서 시간이 가는지 한눈에 보이도록 스텝 결과를 요약해 남긴다(CLI 가 준 계측값만 쓴다).
+            var metrics = result.metrics();
+            streamHub.system(executionId, "⎿ 스텝 결과: %s · 입력 %s · 출력 %s · 비용 %s".formatted(
+                    metrics.durationMs() == null ? "시간 -" : "%,dms".formatted(metrics.durationMs()),
+                    metrics.inputTokens() == null ? "-" : "%,d".formatted(metrics.inputTokens()),
+                    metrics.outputTokens() == null ? "-" : "%,d".formatted(metrics.outputTokens()),
+                    metrics.costUsd() == null ? "-" : "$" + metrics.costUsd().toPlainString()));
+            return result;
         } catch (RuntimeException ex) {
             throw ex;
         } catch (Exception ex) {
