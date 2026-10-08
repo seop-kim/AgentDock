@@ -247,10 +247,13 @@
 }
 
 /* 수동 병합: 무시(알림만 접기) + 지금 병합 */
+/* 입력줄·힌트와 붙지 않게 위쪽 여백을 준다. */
 .actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
 }
 
 .dismiss {
