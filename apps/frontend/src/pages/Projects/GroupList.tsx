@@ -36,9 +36,26 @@ export default function GroupList({
   const [overId, setOverId] = useState<number | null>(null);
   const [menu, setMenu] = useState<{ group: AgentGroup; rect: DOMRect } | null>(null);
   const [promptGroup, setPromptGroup] = useState<AgentGroup | null>(null);
+  /** 그룹 검색어(이름·리더·멤버 이름에서 찾는다). */
+  const [query, setQuery] = useState('');
 
   const projectGroups = groups.filter((g) => g.projectId === project.id);
   const agentName = (id: number) => agents.find((a) => a.id === id)?.name ?? '?';
+
+  const needle = query.trim().toLowerCase();
+  const visibleGroups =
+    needle === ''
+      ? projectGroups
+      : projectGroups.filter((group) =>
+          [
+            group.name,
+            group.leaderAgentId === null ? '' : agentName(group.leaderAgentId),
+            ...group.memberIds.map((agentId) => agentName(agentId)),
+          ]
+            .join(' ')
+            .toLowerCase()
+            .includes(needle),
+        );
 
   const onDragOver = (e: DragEvent, groupId: number) => {
     if (!isAgentDrag(e)) return;
@@ -103,12 +120,27 @@ export default function GroupList({
         </button>
       </div>
 
+      {/* 그룹 검색 — 이름·리더·멤버 이름에서 찾는다(목록과 같은 폭). */}
+      {open && (
+        <div className={styles.filters} onClick={(e) => e.stopPropagation()}>
+          <div className={styles.searchWrap}>
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="그룹·리더·멤버 검색"
+              aria-label="그룹 검색"
+            />
+          </div>
+        </div>
+      )}
+
       <div className={styles.body}>
         <div className={styles.cards}>
           {projectGroups.length === 0 && (
             <p className={shared.muted}>그룹이 없습니다. 에이전트는 그룹 없이도 쓸 수 있습니다.</p>
           )}
-          {projectGroups.map((group) => {
+          {visibleGroups.map((group) => {
             const selected = target?.kind === 'group' && target.id === group.id;
             return (
               <div

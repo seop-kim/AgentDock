@@ -67,6 +67,25 @@
   user-select: none;
 }
 
+/* 그룹 검색줄 — 목록 카드와 같은 폭을 쓴다(좌우 여백 없음). */
+.filters {
+  padding: 0 0 var(--spacing-md);
+}
+
+.searchWrap {
+  position: relative;
+}
+
+.searchWrap input {
+  width: 100%;
+  padding: 5px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-input-bg);
+  color: var(--color-text);
+  font-size: 12px;
+}
+
 /* 몸통: grid 행을 1fr ↔ 0fr 로 바꿔 안쪽을 접는다. */
 .body {
   display: grid;
