@@ -205,9 +205,11 @@
   padding: 7px 4px;
   border: none;
   background: transparent;
-  resize: none;
+  /* 오른쪽 아래 손잡이로 세로로 늘려 쓸 수 있다(최대 높이까지 — 그 위로는 안에서 스크롤). */
+  resize: vertical;
+  min-height: 38px;
   line-height: 1.5;
-  max-height: 120px;
+  max-height: 45vh;
   overflow-y: auto;
 }
 
