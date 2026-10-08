@@ -35,7 +35,9 @@ export default function AgentHoverCard({
   );
   const uniqueLinked = linked.filter((l, i) => linked.findIndex((x) => x.id === l.id) === i);
 
-  const left = Math.min(anchor.right + 12, window.innerWidth - CARD_WIDTH - 8);
+  // 화면 밖으로 나가지 않게: 오른쪽에 자리가 없으면 카드 왼쪽에 붙이고, 위아래도 안쪽으로 당긴다.
+  const roomRight = window.innerWidth - anchor.right - 12;
+  const left = roomRight >= CARD_WIDTH ? anchor.right + 12 : Math.max(8, anchor.left - CARD_WIDTH - 12);
   const top = Math.max(8, Math.min(anchor.top, window.innerHeight - ESTIMATED_HEIGHT));
 
   return createPortal(

@@ -4,7 +4,10 @@
   top: var(--top);
   left: var(--left);
   z-index: 150;
-  width: 320px;
+  /* 화면이 작아도 잘리지 않게: 폭은 화면에 맞춰 줄이고, 높이가 넘치면 카드 안에서 스크롤한다. */
+  width: min(320px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
   padding: var(--spacing-md);
   border-radius: var(--radius-lg);
   color: var(--color-text);
