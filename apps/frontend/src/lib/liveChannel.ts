@@ -55,6 +55,8 @@ export function subscribeEvents(handlers: {
   connectionHandlers.add(handlers.onConnection);
   // 리더가 이미 연결돼 있으면 지금 상태를 알려 준다(팔로워는 연결이 없어 모른다).
   if (leaderActive) handlers.onConnection(connected);
+  // 그리고 리더에게 상태를 물어본다 — 모듈 로드 때 보낸 hello 는 이 구독자가 붙기 전이라 답을 놓친다.
+  send({ kind: 'hello' });
   return () => {
     eventHandlers.delete(handlers.onEvent);
     connectionHandlers.delete(handlers.onConnection);
@@ -237,5 +239,5 @@ function electLeader(): void {
     .catch(() => stopLeading());
 }
 
-send({ kind: 'hello' });
+// 리더 선출을 시작한다(구독자가 생기면 그때 hello 로 상태를 확인한다).
 electLeader();
