@@ -219,8 +219,21 @@ export interface WorkspaceBrowseResult {
   entries: WorkspaceBrowseEntry[];
 }
 
+/** 서버 내부 오류(5xx) 한 건 — 백엔드 `ServerErrorLog.Entry` 와 같은 모양. 화면의 확인 창이 읽는다. */
+export interface ServerError {
+  id: number;
+  time: string;
+  method: string;
+  path: string;
+  exception: string;
+  message: string;
+  stack: string;
+}
+
 export const api = {
   base: API_BASE,
+  /** 서버 내부 오류(최근 순). 사람이 원인을 보고 에이전트에게 수정을 맡길지 고른다. */
+  listServerErrors: () => request<ServerError[]>('/errors/recent'),
 
   listProjects: () => request<Project[]>('/projects'),
   getProject: (id: number) => request<Project>(`/projects/${id}`),
