@@ -423,8 +423,9 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
       if (before === undefined || before === execution.status) return;
       const who = agentsRef.current.find((agent) => agent.id === execution.agentId)?.name ?? '에이전트';
       const label = `#${execution.id} ${who}`;
-      if (execution.status === 'RUNNING') {
-        // 시작은 **처음 돌기 시작할 때만**(대기 → 재개는 시작이 아니다).
+      if (execution.status === 'RUNNING' && before === 'QUEUED') {
+        // 시작은 **대기(QUEUED)에서 처음 돌기 시작할 때만** — 재개(대기·하위 대기 → RUNNING)는 시작이 아니다.
+        // (재개까지 시작으로 치면, 화면을 새로고침할 때마다 돌고 있는 작업이 "시작"으로 다시 뜬다.)
         notifyOnce(`start:${execution.id}`, `${label} 작업을 시작했습니다`);
       } else if (execution.status === 'DONE') {
         const ms = execution.metrics?.durationMs ?? 0;
