@@ -213,3 +213,25 @@ npm run build --workspace=apps/frontend      # tsc --noEmit && vite build (커�
 - `max-steps` 는 요청으로 4 → 8 로 올린 상태다(재위임이 서버에서 막히므로 8 을 유지한다).
 - `feat/self-host-setup` 은 여전히 `dev` 로 PR 하지 않았다(로컬이 `origin/dev` 보다 116 커밋 앞).
 
+## 13. 백엔드 동시성 정리 — 요청이 에이전트 실행에 막히지 않게 (2026-10-08 추가, `0ea0709`·`001299a`)
+
+에이전트를 여럿 돌릴 때 화면(HTTP) 요청이 느려지는 지점을 없앤 묶음이다. **실행 구조 자체는 그대로**다 —
+명령 하나가 실행 트리 하나, 루트는 즉시 반환, 나머지는 백그라운드(`workers`), CLI 동시 실행은 `cliSlots`(기본 4)가 제한.
+
+- **무거운 git 을 요청 스레드에서 떼어냈다**(`0ea0709`): `start()`/`resume()` 가 `workers.submit` **바깥에서**
+  `ExecutionGuard.isolated()`(`git worktree add`, 수 초)를 불러 명령·답변 응답이 그만큼 늦었다. 이제 루트 실행 행만
+  만들고 즉시 응답하며, 격리·실행·병합은 워커가 맡는다(화면은 SSE 로 곧 채워진다). `collectTreeResult`(병합)는
+  원래도 워커 안이었다 — 확인함.
+- **워커 풀은 캐시 풀을 유지**한다 — 부모 실행이 자식을 기다리며 스레드를 잡으므로 **고정 풀이면 교착**이 난다.
+  대신 `agentdock-worker-N` 이름의 **데몬** 스레드 + `@PreDestroy shutdownNow()` 로 로그 추적과 종료를 정리했다.
+- **출력 펌프를 전용 풀로**(`001299a`): `CompletableFuture.runAsync` 는 인자를 주지 않으면 common ForkJoinPool
+  (코어-1개, 병렬 스트림과 공유)을 빌려 써서 출력이 많은 실행에서 펌프가 밀렸다. `StreamPumps`(agentdock-pump-N
+  데몬 캐시 풀)로 바꿔 런타임 2개 + 워크트리 git 읽기에 쓴다.
+- **커넥션·톰캣**: HikariCP 10 → 20(+`connection-timeout 10s`), Tomcat `min-spare 20`. 기본 10 은 에이전트 4개가
+  동시에 돌며 SSE·화면 요청까지 커넥션을 쓸 때 **요청이 커넥션을 기다리는** 지점이었다.
+- **SSE 는 스레드를 잡지 않는다(확인)**: 모든 SSE 끝점이 `new SseEmitter(0L)`(타임아웃 없음) + Spring MVC 비동기라
+  요청 스레드는 즉시 반환되고, 하트비트는 **스레드 하나**가 모든 연결을 돌본다. 그래서 사진의 `stream canceled` 는
+  타임아웃이 아니라 브라우저 새로고침/서버 재시작 때문이었다.
+- **남겨 둔 것**: CLI 버전·프로브 확인(`CliStatusService`/`*Probe`)은 요청마다 `new Thread` 를 만들지만, 사용자가
+  설정 화면에서 눌러야 도는 짧은 작업이라 그대로 뒀다.
+
