@@ -1,4 +1,4 @@
-import { DragEvent, useState } from 'react';
+import { DragEvent, useEffect, useRef, useState } from 'react';
 import { isAgentDrag, startAgentDrag } from '../../lib/dnd';
 import { useGroupDrop } from '../../lib/useGroupDrop';
 import { ChevronDownIcon, ChevronUpIcon, PlusIcon } from '../../components/icons';
@@ -7,8 +7,12 @@ import shared from '../../styles/shared.module.css';
 import type { AgentGroup, ChatTarget, Project } from '../../types';
 import GroupCardMenu from './GroupCardMenu';
 import GroupFormModal from './GroupFormModal';
+import GroupHoverCard from './GroupHoverCard';
 import GroupPromptModal from './GroupPromptModal';
 import styles from './GroupList.module.css';
+
+/** 마우스를 올린 뒤 정보 창이 뜨기까지의 지연(스쳐 지나갈 때 깜빡이지 않게) */
+const HOVER_DELAY_MS = 250;
 
 /**
  * 에이전트 목록 아래의 그룹 목록. 그룹을 만들고 지우며, 에이전트 카드를 그룹 카드로 끌어 놓으면 멤버가 된다.
@@ -38,6 +42,31 @@ export default function GroupList({
   const [promptGroup, setPromptGroup] = useState<AgentGroup | null>(null);
   /** 그룹 검색어(이름·리더·멤버 이름에서 찾는다). */
   const [query, setQuery] = useState('');
+  /** 마우스를 올린 그룹(정보 창에 쓸 좌표와 함께). */
+  const [hover, setHover] = useState<{ group: AgentGroup; rect: DOMRect } | null>(null);
+  const hoverTimer = useRef<number | null>(null);
+
+  // 화면이 사라질 때 예약된 타이머를 정리한다.
+  useEffect(
+    () => () => {
+      if (hoverTimer.current !== null) window.clearTimeout(hoverTimer.current);
+    },
+    [],
+  );
+
+  /** 살짝 지나갈 때 깜빡이지 않게 잠깐 기다렸다 띄운다(에이전트 카드와 같다). */
+  const showHover = (group: AgentGroup, element: HTMLElement) => {
+    if (hoverTimer.current !== null) window.clearTimeout(hoverTimer.current);
+    hoverTimer.current = window.setTimeout(() => {
+      setHover({ group, rect: element.getBoundingClientRect() });
+    }, HOVER_DELAY_MS);
+  };
+
+  const hideHover = () => {
+    if (hoverTimer.current !== null) window.clearTimeout(hoverTimer.current);
+    hoverTimer.current = null;
+    setHover(null);
+  };
 
   const projectGroups = groups.filter((g) => g.projectId === project.id);
   const agentName = (id: number) => agents.find((a) => a.id === id)?.name ?? '?';
@@ -147,6 +176,8 @@ export default function GroupList({
                 key={group.id}
                 className={`${styles.card} ${selected ? styles.cardSelected : ''} ${overId === group.id ? styles.cardOver : ''}`}
                 onClick={() => onSelect({ kind: 'group', id: group.id })}
+                onMouseEnter={(e) => showHover(group, e.currentTarget)}
+                onMouseLeave={hideHover}
                 onDragOver={(e) => onDragOver(e, group.id)}
                 onDragLeave={() => setOverId(null)}
                 onDrop={(e) => onDrop(e, group.id)}
@@ -206,6 +237,8 @@ export default function GroupList({
         </div>
       </div>
       </div>
+
+      {hover && <GroupHoverCard group={hover.group} anchor={hover.rect} />}
 
       {creating && <GroupFormModal project={project} onClose={() => setCreating(false)} />}
 

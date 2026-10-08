@@ -81,22 +81,8 @@ export default function AgentHoverCard({
         </dd>
       </dl>
 
-      <div className={styles.promptLabel}>프롬프트 (마스터 → 그룹 → 에이전트 순서로 겹침)</div>
+      <div className={styles.promptLabel}>프롬프트</div>
       <dl className={styles.rows}>
-        <dt>마스터</dt>
-        <dd>{project.masterPrompt || <span className={shared.muted}>없음</span>}</dd>
-        <dt>그룹</dt>
-        <dd>
-          {myGroups.length === 0 ? (
-            <span className={shared.muted}>없음</span>
-          ) : (
-            myGroups.map((g) => (
-              <div key={g.id}>
-                <strong>{g.name}</strong>: {g.prompt || <span className={shared.muted}>비어 있음</span>}
-              </div>
-            ))
-          )}
-        </dd>
         <dt>에이전트</dt>
         <dd>{agent.persona || <span className={shared.muted}>없음</span>}</dd>
       </dl>
