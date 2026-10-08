@@ -5,7 +5,7 @@ import { agentStatus } from '../../lib/agentStatus';
 import { isAgentDrag, readAgentDrag, startAgentDrag } from '../../lib/dnd';
 import { isLive, waitingInputs } from '../../lib/executions';
 import { openTerminalWindow } from '../../lib/windowSync';
-import { ChevronDownIcon, ChevronUpIcon, PlusIcon } from '../../components/icons';
+import { ChevronDownIcon, ChevronUpIcon, FilterIcon, PlusIcon } from '../../components/icons';
 import { useAgentDockStore } from '../../store/AgentDockStore';
 import shared from '../../styles/shared.module.css';
 import type { Agent, AgentGroup, AgentRole, Execution, Project, Task } from '../../types';
@@ -241,9 +241,14 @@ export default function AgentList({
             onClick={() => setFilterOpen((prev) => !prev)}
             aria-expanded={filterOpen}
             aria-haspopup="dialog"
-            title="상태·그룹으로 거르기"
+            aria-label="필터"
+            title={
+              activeFilterCount(filters) > 0
+                ? `필터 ${activeFilterCount(filters)}개 걸림 — 눌러서 바꾸기`
+                : '상태·그룹으로 거르기'
+            }
           >
-            필터{activeFilterCount(filters) > 0 ? ` ${activeFilterCount(filters)}` : ''}
+            <FilterIcon />
           </button>
         </div>
       )}

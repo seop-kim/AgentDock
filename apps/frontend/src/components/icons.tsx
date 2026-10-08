@@ -34,6 +34,12 @@ export const DashboardIcon = () => (
   </Icon>
 );
 
+export const FilterIcon = () => (
+  <Icon>
+    <path d="M4 5h16l-6 7v6l-4 2v-8L4 5z" />
+  </Icon>
+);
+
 export const SettingsIcon = () => (
   <Icon>
     <circle cx="12" cy="12" r="3" />
