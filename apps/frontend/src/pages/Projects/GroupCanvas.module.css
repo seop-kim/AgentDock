@@ -2,6 +2,11 @@
   position: absolute;
   inset: 0;
   overflow: hidden;
+  /* 캔버스 위에서는 글자 선택·이미지 끌기(브라우저 기본 드래그)가 일어나지 않게 한다.
+     노드 이동·화면 이동은 포인터 이벤트로 직접 처리하므로 영향받지 않는다. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
 }
 
 /* 화면 맨 위 가운데에 작게 붙는 확대/축소 도구. 왼쪽/오른쪽 패널을 뺀 빈 곳의 가운데에 온다. */
