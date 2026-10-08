@@ -113,28 +113,59 @@ export default function ChatPanel({
     setAttachments((prev) => [...prev, ...uploaded.filter((file) => !hasAttachment(prev, file))]);
   };
 
+  /** 이미지 업로드 실패를 화면에 보여 주기 위한 상태(조용히 실패하지 않게). */
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
   /**
-   * 입력창에 이미지 붙여넣기(Ctrl+V). 클립보드의 이미지는 파일로 오므로 **드롭과 같은 경로**로 올린다.
-   * 이미지가 아니면(글자 붙여넣기) 기본 동작을 막지 않아 글자가 그대로 들어간다.
+   * 클립보드의 이미지를 첨부로 올린다(드롭·파일 고르기와 같은 경로).
+   * 이미지가 아니면 아무것도 하지 않아 글자 붙여넣기가 그대로 동작한다. 처리했으면 true.
    */
-  const onPaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    if (defaultWorkspaceId === null) return;
-    const files = Array.from(e.clipboardData.items)
-      .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+  const attachPastedImages = async (clipboard: DataTransfer | null): Promise<boolean> => {
+    if (clipboard === null || defaultWorkspaceId === null) return false;
+    const files = Array.from(clipboard.items)
+      // type 이 빈 값으로 오는 앱도 있다 — 그때도 파일이면 이미지로 본다.
+      .filter((item) => item.kind === 'file' && (item.type === '' || item.type.startsWith('image/')))
       .map((item) => item.getAsFile())
       .filter((file): file is File => file !== null);
-    if (files.length === 0) return;
-    e.preventDefault();
-    // 붙여넣은 이미지는 파일 이름이 없다 — 알아볼 수 있게 이름을 붙여 준다(서버가 안전한 이름으로 저장한다).
+    if (files.length === 0) return false;
+
+    // 붙여넣은 이미지는 파일 이름이 없다 — 알아볼 수 있게 시각으로 이름을 붙인다.
     const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const named = files.map((file, index) => {
-      const extension = file.type.split('/')[1] === undefined ? 'png' : file.type.split('/')[1];
+      const extension = file.type === '' ? 'png' : (file.type.split('/')[1] ?? 'png');
       const suffix = index === 0 ? '' : `-${index + 1}`;
       return new File([file], `붙여넣은-이미지-${stamp}${suffix}.${extension}`, { type: file.type });
     });
-    const uploaded = await uploadAttachments(defaultWorkspaceId, named);
-    setAttachments((prev) => [...prev, ...uploaded.filter((file) => !hasAttachment(prev, file))]);
+    try {
+      const uploaded = await uploadAttachments(defaultWorkspaceId, named);
+      setAttachments((prev) => [...prev, ...uploaded.filter((file) => !hasAttachment(prev, file))]);
+      setUploadError(null);
+    } catch (error) {
+      setUploadError(
+        `이미지를 붙이지 못했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`,
+      );
+    }
+    return true;
   };
+
+  // 패널이 펼쳐져 있으면 **포커스가 어디에 있든** 붙여넣기를 받는다(캔버스를 눌러 둔 채 붙여넣는 경우가 흔하다).
+  useEffect(() => {
+    if (!open) return;
+    const onDocumentPaste = (e: ClipboardEvent) => {
+      // 진단용(debug 레벨): 어떤 형식으로 오는지 남긴다 — 이미지가 안 잡힐 때 원인을 바로 알기 위해.
+      console.debug(
+        '[chat] paste items',
+        Array.from(e.clipboardData?.items ?? []).map((item) => `${item.kind}:${item.type}`),
+      );
+      void attachPastedImages(e.clipboardData).then((handled) => {
+        if (handled) e.preventDefault();
+      });
+    };
+    document.addEventListener('paste', onDocumentPaste);
+    return () => document.removeEventListener('paste', onDocumentPaste);
+    // attachPastedImages 는 매 렌더 새로 만들어지지만, 안에서 쓰는 값은 아래 deps 로 충분하다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, defaultWorkspaceId]);
 
   const onDragOver = (e: DragEvent<HTMLElement>) => {
     e.preventDefault();
@@ -355,7 +386,6 @@ export default function ChatPanel({
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onInputKeyDown}
-          onPaste={onPaste}
           placeholder={target ? '명령을 입력하고 Enter (Shift+Enter 로 줄바꿈)' : '먼저 대상을 선택하세요'}
           aria-label="명령 입력"
         />
@@ -363,6 +393,7 @@ export default function ChatPanel({
           보내기
         </button>
         </form>
+        {uploadError && <p className={styles.uploadError}>{uploadError}</p>}
         </>
       )}
 

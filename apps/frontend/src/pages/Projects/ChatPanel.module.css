@@ -232,6 +232,13 @@
   background: var(--color-code-bg);
 }
 
+/* 첨부(붙여넣기) 실패 안내 — 조용히 실패하지 않게 보여 준다. */
+.uploadError {
+  margin: 4px 0 0;
+  color: var(--color-error);
+  font-size: 12px;
+}
+
 /* 손잡이가 한 줄을 차지하도록 입력줄이 줄바꿈을 허용한다. */
 .form {
   flex-wrap: wrap;
