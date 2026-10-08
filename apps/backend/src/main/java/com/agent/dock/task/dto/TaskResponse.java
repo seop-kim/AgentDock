@@ -1,11 +1,13 @@
 package com.agent.dock.task.dto;
 
 import com.agent.dock.agent.dto.AgentSummary;
+import com.agent.dock.attachment.dto.AttachmentResponse;
 import com.agent.dock.group.dto.GroupSummary;
 import com.agent.dock.project.dto.ProjectSummary;
 import com.agent.dock.task.domain.Task;
 import com.agent.dock.task.domain.TaskStatus;
 import java.time.Instant;
+import java.util.List;
 
 public record TaskResponse(
         Long id,
@@ -14,13 +16,14 @@ public record TaskResponse(
         AgentSummary agent,
         String title, String prompt, TaskStatus status,
         Long latestExecutionId,
+        List<AttachmentResponse> attachments,
         Instant createdAt, Instant updatedAt
 ) {
-    public static TaskResponse from(Task t, Long latestExecutionId) {
+    public static TaskResponse from(Task t, Long latestExecutionId, List<AttachmentResponse> attachments) {
         ProjectSummary project = t.getProject() == null ? null : ProjectSummary.from(t.getProject());
         GroupSummary group = t.getGroup() == null ? null : GroupSummary.from(t.getGroup());
         AgentSummary agent = t.getAgent() == null ? null : AgentSummary.from(t.getAgent());
         return new TaskResponse(t.getId(), project, group, agent, t.getTitle(), t.getPrompt(), t.getStatus(),
-                latestExecutionId, t.getCreatedAt(), t.getUpdatedAt());
+                latestExecutionId, attachments == null ? List.of() : attachments, t.getCreatedAt(), t.getUpdatedAt());
     }
 }

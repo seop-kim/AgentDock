@@ -1,5 +1,22 @@
 package com.agent.dock.execution.service;
 
+import com.agent.dock.common.exception.BadRequestException;
+import com.agent.dock.execution.dto.ExecutionStatsResponse;
+import com.agent.dock.execution.dto.ExecutionSummaryResponse;
+import com.agent.dock.execution.repository.ExecutionUsage;
+import com.agent.dock.group.domain.AgentGroup;
+import com.agent.dock.group.repository.AgentGroupRepository;
+import com.agent.dock.project.repository.ProjectRepository;
+import com.agent.dock.task.domain.Task;
+import com.agent.dock.task.repository.TaskRepository;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.EnumSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Set;
+import org.springframework.data.domain.PageRequest;
+
 import com.agent.dock.agent.domain.Agent;
 import com.agent.dock.agent.repository.AgentRepository;
 import com.agent.dock.common.exception.ConflictException;
@@ -20,6 +37,7 @@ import com.agent.dock.runtime.dto.AgentExecutionResult;
 import com.agent.dock.runtime.dto.ExecutionMetrics;
 import com.agent.dock.runtime.interfaces.AgentRuntime;
 import com.agent.dock.runtime.service.RuntimeRegistry;
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -48,6 +66,9 @@ public class ExecutionService {
     private final ExecutionRepository executionRepository;
     private final ExecutionLogRepository logRepository;
     private final AgentRepository agentRepository;
+    private final ProjectRepository projectRepository;
+    private final TaskRepository taskRepository;
+    private final AgentGroupRepository groupRepository;
     private final ExecutionGuard guard;
     private final ExecutionFactory factory;
     private final ExecutionStreamHub streamHub;
@@ -65,6 +86,12 @@ public class ExecutionService {
     /** 사람의 답을 기다리다 만료된 실행의 사유(방치된 트리가 영원히 멈춰 있지 않게). */
     private static final String WAITING_INPUT_EXPIRED_REASON = "답이 없어 만료됨";
 
+    /** 목록 조회 기본/최대 limit. 범위 밖은 400. */
+    private static final int DEFAULT_LIST_LIMIT = 100;
+    private static final int MAX_LIST_LIMIT = 500;
+    /** 한 번에 구독할 수 있는 실행 수 상한(다중 로그 스트림). */
+    private static final int MAX_MULTIPLEX_IDS = 20;
+
     /** 입력 대기 만료 기준(분). 이 시간을 넘긴 질문은 만료로 취소한다. */
     @Value("${agentdock.delegation.waiting-input-ttl-minutes:720}")
     private long waitingInputTtlMinutes;
@@ -73,6 +100,90 @@ public class ExecutionService {
         Execution execution = executionRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Execution %d not found".formatted(id)));
         return ExecutionResponse.from(execution);
+    }
+
+    /** 목록에 필요한 라벨(task 제목·에이전트·그룹 이름)을 배치 조회로 붙인다(N+1 방지). */
+    private List<ExecutionSummaryResponse> toSummaries(List<Execution> executions) {
+        if (executions.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> taskIds = new LinkedHashSet<>();
+        Set<Long> agentIds = new LinkedHashSet<>();
+        for (Execution execution : executions) {
+            if (execution.getTaskId() != null) {
+                taskIds.add(execution.getTaskId());
+            }
+            if (execution.getAgentId() != null) {
+                agentIds.add(execution.getAgentId());
+            }
+            if (execution.getDelegatedTargetAgentId() != null) {
+                agentIds.add(execution.getDelegatedTargetAgentId());
+            }
+        }
+        Map<Long, Task> tasks = new HashMap<>();
+        taskRepository.findAllById(taskIds).forEach(task -> tasks.put(task.getId(), task));
+        Map<Long, String> agentNames = new HashMap<>();
+        agentRepository.findAllById(agentIds).forEach(agent -> agentNames.put(agent.getId(), agent.getName()));
+        Set<Long> groupIds = new LinkedHashSet<>();
+        for (Task task : tasks.values()) {
+            if (task.getGroupId() != null) {
+                groupIds.add(task.getGroupId());
+            }
+        }
+        Map<Long, String> groupNames = new HashMap<>();
+        groupRepository.findAllById(groupIds).forEach(group -> groupNames.put(group.getId(), group.getName()));
+
+        List<ExecutionSummaryResponse> summaries = new ArrayList<>();
+        for (Execution execution : executions) {
+            Task task = execution.getTaskId() == null ? null : tasks.get(execution.getTaskId());
+            Long groupId = task == null ? null : task.getGroupId();
+            summaries.add(ExecutionSummaryResponse.from(
+                    execution,
+                    task == null ? null : task.getProjectId(),
+                    task == null ? null : task.getTitle(),
+                    agentNames.get(execution.getAgentId()),
+                    groupId,
+                    groupId == null ? null : groupNames.get(groupId)));
+        }
+        return summaries;
+    }
+
+    /** 실행 목록(대시보드 집계·Tasks/실행 목록·요청 창). projectId/status 는 선택, 최신순, 커서 페이징. */
+    public List<ExecutionSummaryResponse> listSummaries(Long projectId, List<String> statusParams, Integer limit, Long beforeId) {
+        int pageSize = limit == null ? 100 : limit;
+        if (pageSize < 1 || pageSize > 500) {
+            throw new BadRequestException("limit 은 1..500 입니다");
+        }
+        List<ExecutionStatus> statuses = parseStatuses(statusParams);
+        if (projectId != null && !projectRepository.existsById(projectId)) {
+            throw new NotFoundException("Project %d not found".formatted(projectId));
+        }
+        return toSummaries(executionRepository.searchSummaries(projectId, statuses, pageSize, beforeId));
+    }
+
+    /** status 파라미터를 서버 enum 목록으로. 쉼표·반복 둘 다 허용(OR), 빈 값 무시, 모르는 값은 400. */
+    private List<ExecutionStatus> parseStatuses(List<String> params) {
+        if (params == null || params.isEmpty()) {
+            return List.of();
+        }
+        Set<ExecutionStatus> statuses = new LinkedHashSet<>();
+        for (String param : params) {
+            if (param == null) {
+                continue;
+            }
+            for (String token : param.split(",")) {
+                String value = token.trim();
+                if (value.isEmpty()) {
+                    continue;
+                }
+                try {
+                    statuses.add(ExecutionStatus.valueOf(value));
+                } catch (IllegalArgumentException ex) {
+                    throw new BadRequestException("알 수 없는 실행 상태입니다: " + value);
+                }
+            }
+        }
+        return List.copyOf(statuses);
     }
 
     public List<ExecutionLogResponse> getLogs(Long executionId) {
@@ -575,5 +686,134 @@ public class ExecutionService {
             return null;
         }
         return agentRepository.findById(execution.getAgentId()).map(Agent::getProjectId).orElse(null);
+    }
+
+    /** 여러 실행의 로그를 한 연결로 받는다(터미널을 여러 개 열어도 SSE 는 하나). ids 는 쉼표 목록. */
+    public SseEmitter streamMany(String ids) {
+        return streamHub.subscribeMany(parseExecutionIds(ids));
+    }
+
+    /**
+     * 실행 집계(GET /executions/summary). 전역/프로젝트별/팀별 실행 수·비용·입출력 토큰을 더한다.
+     * 팀별 묶음은 실행이 속한 Task 의 group_id 기준이라 그룹에 맡긴 트리 전체가 한 팀으로 잡힌다.
+     * 값은 CLI 가 준 계측값만 더한다(추정 금지).
+     */
+    public ExecutionStatsResponse stats(Long projectId) {
+        List<ExecutionUsage> usages;
+        if (projectId != null) {
+            requireProject(projectId);
+            List<Long> taskIds = taskRepository.findIdsByProjectId(projectId);
+            if (taskIds.isEmpty()) {
+                return ExecutionStatsResponse.empty();
+            }
+            usages = executionRepository.findUsageByTaskIds(taskIds);
+        } else {
+            usages = executionRepository.findUsageGlobal();
+        }
+        Map<Long, Task> tasks = tasksOf(usages);
+        long running = usages.stream().filter(usage -> isRunning(usage.status())).count();
+        long inputTokens = usages.stream().mapToLong(usage -> orZero(usage.inputTokens())).sum();
+        long outputTokens = usages.stream().mapToLong(usage -> orZero(usage.outputTokens())).sum();
+
+        Map<Long, List<ExecutionUsage>> byProjectId = new LinkedHashMap<>();
+        Map<Long, List<ExecutionUsage>> byGroupId = new LinkedHashMap<>();
+        for (ExecutionUsage usage : usages) {
+            Task task = usage.taskId() == null ? null : tasks.get(usage.taskId());
+            if (task == null) {
+                continue;
+            }
+            byProjectId.computeIfAbsent(task.getProjectId(), key -> new ArrayList<>()).add(usage);
+            if (task.getGroupId() != null) {
+                byGroupId.computeIfAbsent(task.getGroupId(), key -> new ArrayList<>()).add(usage);
+            }
+        }
+        Map<Long, String> projectNames = new HashMap<>();
+        projectRepository.findAllById(byProjectId.keySet())
+                .forEach(project -> projectNames.put(project.getId(), project.getName()));
+        Map<Long, String> groupNames = new HashMap<>();
+        Map<Long, Long> groupProjects = new HashMap<>();
+        groupRepository.findAllById(byGroupId.keySet()).forEach(group -> {
+            groupNames.put(group.getId(), group.getName());
+            groupProjects.put(group.getId(), group.getProjectId());
+        });
+        List<ExecutionStatsResponse.ProjectUsage> projects = byProjectId.entrySet().stream()
+                .map(entry -> new ExecutionStatsResponse.ProjectUsage(entry.getKey(),
+                        projectNames.get(entry.getKey()), (long) entry.getValue().size(),
+                        sumCost(entry.getValue()), inputOf(entry.getValue()), outputOf(entry.getValue())))
+                .sorted(Comparator.comparing(ExecutionStatsResponse.ProjectUsage::costUsd).reversed())
+                .toList();
+        List<ExecutionStatsResponse.GroupUsage> groups = byGroupId.entrySet().stream()
+                .map(entry -> new ExecutionStatsResponse.GroupUsage(entry.getKey(),
+                        groupNames.get(entry.getKey()), groupProjects.get(entry.getKey()),
+                        (long) entry.getValue().size(), sumCost(entry.getValue()),
+                        inputOf(entry.getValue()), outputOf(entry.getValue())))
+                .sorted(Comparator.comparing(ExecutionStatsResponse.GroupUsage::costUsd).reversed())
+                .toList();
+        return new ExecutionStatsResponse(usages.size(), running, sumCost(usages), inputTokens, outputTokens,
+                projects, groups);
+    }
+    private Map<Long, Task> tasksOf(List<ExecutionUsage> usages) {
+        Set<Long> taskIds = new LinkedHashSet<>();
+        for (ExecutionUsage usage : usages) {
+            if (usage.taskId() != null) {
+                taskIds.add(usage.taskId());
+            }
+        }
+        Map<Long, Task> tasks = new HashMap<>();
+        taskRepository.findAllById(taskIds).forEach(task -> tasks.put(task.getId(), task));
+        return tasks;
+    }
+
+    private void requireProject(Long projectId) {
+        if (!projectRepository.existsById(projectId)) {
+            throw new NotFoundException("Project %d not found".formatted(projectId));
+        }
+    }
+
+    private static List<Long> parseExecutionIds(String ids) {
+        if (ids == null || ids.isBlank()) {
+            throw new BadRequestException("ids 는 쉼표로 구분한 실행 id 목록이어야 합니다");
+        }
+        Set<Long> parsed = new LinkedHashSet<>();
+        for (String piece : ids.split(",")) {
+            String value = piece.trim();
+            if (value.isEmpty()) {
+                continue;
+            }
+            try {
+                parsed.add(Long.parseLong(value));
+            } catch (NumberFormatException ex) {
+                throw new BadRequestException("잘못된 실행 id: " + value);
+            }
+        }
+        if (parsed.isEmpty()) {
+            throw new BadRequestException("ids 는 쉼표로 구분한 실행 id 목록이어야 합니다");
+        }
+        if (parsed.size() > MAX_MULTIPLEX_IDS) {
+            throw new BadRequestException("한 번에 구독할 수 있는 실행은 20개까지입니다");
+        }
+        return List.copyOf(parsed);
+    }
+
+    private static BigDecimal sumCost(List<ExecutionUsage> usages) {
+        BigDecimal total = BigDecimal.ZERO;
+        for (ExecutionUsage usage : usages) {
+            if (usage.costUsd() != null) {
+                total = total.add(usage.costUsd());
+            }
+        }
+        return total;
+    }
+
+    private static long inputOf(List<ExecutionUsage> usages) {
+        return usages.stream().mapToLong(usage -> orZero(usage.inputTokens())).sum();
+    }
+
+    private static long outputOf(List<ExecutionUsage> usages) {
+        return usages.stream().mapToLong(usage -> orZero(usage.outputTokens())).sum();
+    }
+
+    private static long orZero(Integer value) {
+        return value == null ? 0L : value;
     }
 }

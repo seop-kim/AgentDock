@@ -5,6 +5,9 @@ import com.agent.dock.provider.dto.CliStatusResponse;
 import com.agent.dock.provider.dto.CreateAiProviderRequest;
 import com.agent.dock.provider.dto.ProviderCapabilities;
 import com.agent.dock.provider.dto.RuntimeEnabledRequest;
+import com.agent.dock.provider.dto.ProviderCatalogEntry;
+import com.agent.dock.provider.dto.ProviderCliStatusResponse;
+import com.agent.dock.provider.dto.UpdateAiProviderRequest;
 import com.agent.dock.provider.service.AiProviderService;
 import com.agent.dock.provider.service.CliStatusService;
 import jakarta.validation.Valid;
@@ -26,6 +29,18 @@ public class AiProviderController {
         return service.findAll();
     }
 
+    /** 런타임별 CLI 상태를 한 번에(카드마다 CLI 를 실행하지 않게). */
+    @GetMapping("/cli")
+    public List<ProviderCliStatusResponse> cliAll() {
+        return cliStatusService.checkAll();
+    }
+
+    /** 등록 가능한 런타임 카탈로그(키·표시 이름·이미 등록됨 여부·기본 capabilities). */
+    @GetMapping("/catalog")
+    public List<ProviderCatalogEntry> catalog() {
+        return service.catalog();
+    }
+
     /** 이 런타임 CLI 의 실행 파일 경로/버전/실행 가능 여부. 폴더와 무관한 런타임 전역 정보다. */
     @GetMapping("/{id}/cli")
     public CliStatusResponse cli(@PathVariable Long id) {
@@ -44,6 +59,12 @@ public class AiProviderController {
         service.delete(id);
     }
 
+    /** 런타임 표시 이름 변경. */
+    @PutMapping("/{id}")
+    public AiProviderResponse rename(@PathVariable Long id, @Valid @RequestBody UpdateAiProviderRequest request) {
+        return service.rename(id, request.name());
+    }
+
     /** 런타임 on/off 토글. */
     @PutMapping("/{id}/enabled")
     public AiProviderResponse setEnabled(@PathVariable Long id, @Valid @RequestBody RuntimeEnabledRequest request) {
@@ -53,5 +74,12 @@ public class AiProviderController {
     @PutMapping("/{id}/capabilities")
     public AiProviderResponse updateCapabilities(@PathVariable Long id, @Valid @RequestBody ProviderCapabilities request) {
         return service.updateCapabilities(id, request);
+    }
+
+    /** capabilities 를 런타임 기본값으로 되돌린다. */
+    @PostMapping("/{id}/capabilities/reset")
+    @ResponseStatus(HttpStatus.CREATED)
+    public AiProviderResponse resetCapabilities(@PathVariable Long id) {
+        return service.resetCapabilities(id);
     }
 }

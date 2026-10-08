@@ -5,6 +5,8 @@ import com.agent.dock.execution.domain.Execution;
 import com.agent.dock.execution.dto.AnswerRequest;
 import com.agent.dock.execution.dto.ExecutionLogResponse;
 import com.agent.dock.execution.dto.ExecutionResponse;
+import com.agent.dock.execution.dto.ExecutionStatsResponse;
+import com.agent.dock.execution.dto.ExecutionSummaryResponse;
 import com.agent.dock.execution.dto.ExecutionTreeResponse;
 import com.agent.dock.execution.service.ExecutionService;
 import jakarta.validation.Valid;
@@ -23,6 +25,31 @@ public class ExecutionController {
     private final ExecutionService service;
     /** 답을 받아 **실행을 이어서 돌리는** 일은 오케스트레이터(위임 루프)의 것이다. */
     private final DelegationService delegationService;
+
+    /** 실행 목록(대시보드·Tasks/실행 목록·요청 창). projectId·status 는 선택, 최신순, beforeId 커서. */
+    @GetMapping
+    public List<ExecutionSummaryResponse> findAll(
+            @RequestParam(required = false) Long projectId,
+            @RequestParam(required = false) List<String> status,
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) Long beforeId) {
+        return service.listSummaries(projectId, status, limit, beforeId);
+    }
+
+    /** 실행 집계(대시보드 사용량). projectId 를 주면 그 프로젝트만, 없으면 전역. */
+    @GetMapping("/summary")
+    public ExecutionStatsResponse summary(@RequestParam(required = false) Long projectId) {
+        return service.stats(projectId);
+    }
+
+    /**
+     * 여러 실행의 로그를 한 연결로 받는다(터미널을 여러 개 열어도 SSE 는 하나).
+     * ?ids=1,2 — 쉼표 목록. 이미 끝난 실행은 저장 로그를 재생하고 그 실행의 exit 만 보낸다.
+     */
+    @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamMany(@RequestParam(required = false) String ids) {
+        return service.streamMany(ids);
+    }
 
     @GetMapping("/{id}")
     public ExecutionResponse findOne(@PathVariable Long id) {

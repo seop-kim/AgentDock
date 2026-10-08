@@ -144,6 +144,56 @@ class AiProviderServiceTest {
     }
 
     @Test
+    void renameUpdatesDisplayNameAndTrims() {
+        AiProvider provider = new AiProvider();
+        provider.setName("옛 이름");
+        when(providerRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(provider));
+        when(providerRepository.save(any(AiProvider.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var response = service.rename(1L, "  새 이름  ");
+
+        assertThat(response.name()).isEqualTo("새 이름");
+        verify(changeEvents).runtimeChanged();
+    }
+
+    @Test
+    void renameOfMissingProviderIsNotFound() {
+        when(providerRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.rename(1L, "이름")).isInstanceOf(NotFoundException.class);
+        verify(providerRepository, never()).save(any());
+    }
+
+    @Test
+    void resetCapabilitiesRestoresProviderKeyDefaults() {
+        AiProvider provider = new AiProvider();
+        provider.setKey(ProviderKey.CLAUDE_CODE);
+        provider.setCapabilities(new HashMap<>(Map.of("models", List.of("stale"))));
+        when(providerRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(provider));
+        when(providerRepository.save(any(AiProvider.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var response = service.resetCapabilities(1L);
+
+        assertThat(response.capabilities()).isEqualTo(ProviderKey.CLAUDE_CODE.defaultCapabilities());
+        verify(changeEvents).runtimeChanged();
+    }
+
+    @Test
+    void catalogMarksAlreadyRegisteredKeys() {
+        when(providerRepository.existsByKeyAndDeletedAtIsNull(ProviderKey.CLAUDE_CODE)).thenReturn(true);
+
+        var catalog = service.catalog();
+
+        assertThat(catalog).hasSize(ProviderKey.values().length);
+        var claude = catalog.stream().filter(entry -> entry.key() == ProviderKey.CLAUDE_CODE).findFirst().orElseThrow();
+        assertThat(claude.registered()).isTrue();
+        assertThat(claude.name()).isEqualTo("Claude Code");
+        assertThat(claude.capabilities()).containsKey("install");
+        var codex = catalog.stream().filter(entry -> entry.key() == ProviderKey.CODEX).findFirst().orElseThrow();
+        assertThat(codex.registered()).isFalse();
+    }
+
+    @Test
     void updateCapabilitiesOfDeletedProviderIsNotFound() {
         when(providerRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.empty());
 
