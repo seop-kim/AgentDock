@@ -707,7 +707,6 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
   );
 
   /**
-  /**
    * `reload()` 가 겹쳐 도는 것을 막는 표시. 서버가 느릴 때 폴링이 다음 `reload()` 를 시작하면
    * **끝나지 않은 요청이 계속 쌓인다**(실측: Network 패널에 같은 6개 요청이 4중으로 pending, 총 3,679건).
    */
