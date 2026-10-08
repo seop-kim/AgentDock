@@ -47,7 +47,8 @@ export default function ChatPanel({
   /** 응답에 딸린 실행 트리를 연다. */
   onOpenExecutions: (rootExecutionId: number) => void;
 }) {
-  const { agents, groups, providers, chats, executions, sendCommand, uploadAttachments } = useAgentDockStore();
+  const { agents, groups, providers, chats, executions, sendCommand, uploadAttachments, chatHasMore, loadMoreChats } =
+    useAgentDockStore();
   const [text, setText] = useState('');
   /** 이번 명령에 붙일 파일(보내면 비운다). */
   const [attachments, setAttachments] = useState<AttachedFile[]>([]);
@@ -325,6 +326,12 @@ export default function ChatPanel({
         {receiverHint && <span className={styles.hint}>{receiverHint}</span>}
 
         <div ref={logRef} className={styles.log}>
+          {/* 오래된 명령은 한 페이지(5개)씩만 읽는다 — 더 있으면 여기서 이어 읽는다. */}
+          {chatHasMore[project.id] === true && (
+            <button type="button" className={styles.loadMore} onClick={() => loadMoreChats(project.id)}>
+              이전 명령 더 보기
+            </button>
+          )}
           {messages.length === 0 && <p className={shared.muted}>아직 보낸 명령이 없습니다.</p>}
           {messages.map((m) => {
             const rootId = m.rootExecutionId;

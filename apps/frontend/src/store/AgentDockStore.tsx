@@ -56,6 +56,10 @@ interface AgentDockStore {
   groupPositions: Record<number, Position>;
 
   reload: () => Promise<void>;
+  /** 프로젝트별로 아직 안 읽은(더 오래된) 명령이 남아 있는지. */
+  chatHasMore: Record<number, boolean>;
+  /** 이전 명령을 한 페이지(5개) 더 읽는다. */
+  loadMoreChats: (projectId: number) => void;
   /** 실행 트리 창을 열어 둔 트리를 알린다(닫으면 null). 열어 둔 트리는 계속 다시 읽는다. */
   watchExecutionTree: (projectId: number, rootExecutionId: number | null) => void;
 
@@ -382,6 +386,9 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
   const filesRef = useRef<Record<number, string[]>>({});
   /** 태스크 → 최신 실행(트리 루트). 이벤트로 태스크 목록만 다시 읽을 때 트리의 뿌리를 알려면 필요하다. */
   const taskRootsRef = useRef<Map<number, number | null>>(new Map());
+  /** 채팅(명령) 페이지 크기. '이전 명령 더 보기' 로 늘어난다 — 콜백에서 최신 값을 읽으려고 ref 로도 둔다. */
+  const chatPageSizeRef = useRef(CHAT_PAGE_SIZE);
+  const [chatHasMore, setChatHasMore] = useState<Record<number, boolean>>({});
   /** 실행 트리 창을 열어 둔 트리(프로젝트 → 루트 실행). 그 트리만 계속 다시 읽는다. */
   const openTreesRef = useRef<Map<number, Set<number>>>(new Map());
   /** 스트림이 알려 준 변화(디바운스로 모았다가 한 번에 처리한다). */
@@ -582,10 +589,13 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
    */
   const loadProjectSlice = useCallback(
     async (projectId: number, forceTrees = false) => {
-      const rows = await api.listTasks(projectId, CHAT_PAGE_SIZE);
+      const limit = chatPageSizeRef.current;
+      const rows = await api.listTasks(projectId, limit);
       const taskList = rows.map((task) => mapTask(projectId, task));
       rows.forEach((task, index) => taskRootsRef.current.set(taskList[index].id, task.latestExecutionId));
       setTasks((prev) => [...prev.filter((task) => task.projectId !== projectId), ...taskList]);
+      // 요청한 만큼 받았으면 더 있을 수 있고, 그보다 적으면 그게 끝이다.
+      setChatHasMore((prev) => ({ ...prev, [projectId]: rows.length >= limit }));
 
       const known = new Map(executionsRef.current.map((execution) => [execution.id, execution]));
       const openTrees = openTreesRef.current.get(projectId) ?? new Set<number>();
@@ -1059,6 +1069,11 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
       sendCommand,
       removeWorktree: (executionId, deleteBranch) =>
         call(() => api.removeExecutionWorktree(executionId, deleteBranch)),
+      chatHasMore,
+      loadMoreChats: (projectId) => {
+        chatPageSizeRef.current += CHAT_PAGE_SIZE;
+        void loadProjectSlice(projectId, true);
+      },
       retryMerge: (executionId) => call(() => api.retryExecutionMerge(executionId)),
       answerExecution: (executionId, text) => call(() => api.answerExecution(executionId, text)),
       uploadAttachments: async (workspaceId, files) => {
