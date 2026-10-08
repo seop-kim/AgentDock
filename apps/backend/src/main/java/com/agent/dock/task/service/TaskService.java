@@ -152,6 +152,6 @@ public class TaskService {
         Long latestExecutionId = executionRepository.findFirstByTaskIdOrderByIdDesc(task.getId())
                 .map(execution -> execution.getId())
                 .orElse(null);
-        return TaskResponse.from(task, latestExecutionId);
+        return TaskResponse.from(task, latestExecutionId, attachmentService.listForTask(task.getId()));
     }
 }

@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { askConfirm } from '../../components/ConfirmDialog';
 import { TerminalIcon, TrashIcon } from '../../components/icons';
+import { toast } from '../../components/Toaster';
+import { api, type ProviderCliStatus } from '../../lib/api';
 import { useAgentDockStore } from '../../store/AgentDockStore';
 import shared from '../../styles/shared.module.css';
-import type { AiProvider } from '../../types';
+import type { AiProvider, Capabilities } from '../../types';
 import CliPanel from './CliPanel';
 import styles from './Settings.module.css';
 
@@ -17,8 +19,20 @@ const parseLines = (text: string) =>
 const parseSteps = (text: string) =>
   text.split('\n').map((line) => line.trim()).filter((line) => line !== '' && !line.startsWith('#'));
 
-export default function RuntimeCard({ provider }: { provider: AiProvider }) {
-  const { toggleProvider, deleteProvider, updateCapabilities } = useAgentDockStore();
+export default function RuntimeCard({
+  provider,
+  cli = null,
+  defaultCapabilities = null,
+}: {
+  provider: AiProvider;
+  /** 서버가 한 번에 준 CLI 상태(없으면 줄을 숨긴다). */
+  cli?: ProviderCliStatus | null;
+  /** 카탈로그가 주는 이 런타임의 기본 capabilities("기본값으로" 버튼). */
+  defaultCapabilities?: Capabilities | null;
+}) {
+  const { toggleProvider, deleteProvider, updateCapabilities, reload } = useAgentDockStore();
+  const [renaming, setRenaming] = useState(false);
+  const [nameText, setNameText] = useState(provider.name);
   const [cliOpen, setCliOpen] = useState(false);
   const [capabilitiesOpen, setCapabilitiesOpen] = useState(false);
   const [modelsText, setModelsText] = useState('');
@@ -62,11 +76,47 @@ export default function RuntimeCard({ provider }: { provider: AiProvider }) {
     setCapabilitiesOpen(false);
   };
 
+  /** 표시 이름 변경 — 서버에 저장하고 목록을 다시 읽는다. */
+  const onRename = () => {
+    const name = nameText.trim();
+    setRenaming(false);
+    if (name === '' || name === provider.name) {
+      setNameText(provider.name);
+      return;
+    }
+    api
+      .updateProvider(provider.id, { name })
+      .then(() => {
+        toast(`런타임 이름을 "${name}" 로 바꿨습니다`);
+        void reload();
+      })
+      .catch(() => toast('런타임 이름을 바꾸지 못했습니다', 'error'));
+  };
+
+  /** capabilities 를 카탈로그 기본값으로 되돌린다. */
+  const onResetCapabilities = () => {
+    if (defaultCapabilities === null) return;
+    updateCapabilities(provider.id, { ...defaultCapabilities } as unknown as Record<string, unknown>);
+    toast('capabilities 를 기본값으로 되돌렸습니다');
+    setCapabilitiesOpen(false);
+  };
+
   return (
     <div className={styles.card}>
       <div className={styles.cardHeader}>
         <h2 className={styles.cardTitle}>
-          {provider.name} <span className={shared.muted}>({provider.key})</span>
+          {renaming ? (
+            <input
+              value={nameText}
+              onChange={(e) => setNameText(e.target.value)}
+              aria-label="런타임 표시 이름"
+              autoFocus
+            />
+          ) : (
+            <>
+              {provider.name} <span className={shared.muted}>({provider.key})</span>
+            </>
+          )}
         </h2>
         <button className={`${shared.dangerButton} ${styles.dangerIcon}`} onClick={onDelete}>
           <TrashIcon size={15} />
@@ -84,6 +134,15 @@ export default function RuntimeCard({ provider }: { provider: AiProvider }) {
         </span>
       </div>
 
+      {cli !== null && (
+        <p className={shared.muted}>
+          CLI:{' '}
+          {cli.runnable
+            ? [cli.version ?? '버전 확인됨', cli.resolvedPath].filter((value) => value !== null).join(' · ')
+            : (cli.detail ?? 'CLI 를 찾지 못했습니다')}
+        </p>
+      )}
+
       <div className={shared.actions}>
         <button className={styles.ghostButton} onClick={() => toggleProvider(provider.id)}>
           {provider.enabled ? '끄기' : '켜기'}
@@ -91,6 +150,32 @@ export default function RuntimeCard({ provider }: { provider: AiProvider }) {
         <button className={styles.ghostButton} onClick={() => setCliOpen(true)}>
           <TerminalIcon size={15} /> CLI 확인
         </button>
+        {renaming ? (
+          <>
+            <button className={styles.ghostButton} onClick={onRename}>
+              저장
+            </button>
+            <button
+              className={styles.ghostButton}
+              onClick={() => {
+                setRenaming(false);
+                setNameText(provider.name);
+              }}
+            >
+              취소
+            </button>
+          </>
+        ) : (
+          <button
+            className={styles.ghostButton}
+            onClick={() => {
+              setNameText(provider.name);
+              setRenaming(true);
+            }}
+          >
+            이름 바꾸기
+          </button>
+        )}
       </div>
       {installSteps.length === 0 && (
         <p className={shared.muted}>
@@ -141,6 +226,11 @@ export default function RuntimeCard({ provider }: { provider: AiProvider }) {
           <input value={notesText} onChange={(e) => setNotesText(e.target.value)} placeholder="예: CLI 버전에 따라 바뀜" />
           <div className={shared.actions}>
             <button onClick={onSaveCapabilities}>저장</button>
+            {defaultCapabilities !== null && (
+              <button className={styles.ghostButton} onClick={onResetCapabilities}>
+                기본값으로
+              </button>
+            )}
           </div>
         </div>
       )}

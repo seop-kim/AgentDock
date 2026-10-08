@@ -136,7 +136,11 @@ export interface Task {
   status: string;
   group: AgentSummary | null;
   agent: AgentSummary | null;
+  /** 이 Task 가 속한 프로젝트(전 프로젝트 목록 화면이 이름을 보여 주려고 함께 온다). */
+  project?: { id: number; name: string } | null;
   latestExecutionId: number | null;
+  /** 이 명령(Task)에 함께 보낸 첨부(서버 `TaskResponse.attachments`). 재조회 시 말풍선 첨부 복원에 쓴다. */
+  attachments?: Attachment[] | null;
 }
 
 export interface Execution {
@@ -230,6 +234,77 @@ export interface ServerError {
   stack: string;
 }
 
+/**
+ * 실행 목록 조회 파라미터.
+ * - `projectId` 를 빼면 전역, 주면 그 프로젝트만.
+ * - `status` 는 여러 개면 OR 이다(서버가 `status` 를 반복 파라미터로 받는다).
+ * - `limit` 을 주면 최근 것부터 그만큼만.
+ */
+export interface ExecutionListQuery {
+  projectId?: number | null;
+  status?: string[] | null;
+  limit?: number | null;
+  beforeId?: number | null;
+}
+
+/**
+ * 실행 목록 한 줄 — 서버 `ExecutionSummaryResponse`.
+ * 큰 텍스트(prompt·resultText·handoff·sessionId)는 없다(목록·집계·요청 조회 전용).
+ */
+export interface ExecutionSummary {
+  id: number;
+  projectId: number | null;
+  taskId: number | null;
+  taskTitle: string | null;
+  agentId: number | null;
+  agentName: string | null;
+  groupId: number | null;
+  groupName: string | null;
+  rootExecutionId: number | null;
+  parentExecutionId: number | null;
+  status: string;
+  decision: 'DELEGATE' | 'ASK' | 'DONE' | null;
+  delegatedTargetAgentId: number | null;
+  question: string | null;
+  questionOptions: string[] | null;
+  worktreeBranch: string | null;
+  resultCommit: string | null;
+  mergeStatus: 'MERGED' | 'MANUAL' | 'NONE' | null;
+  mergeDetail: string | null;
+  costUsd: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  cacheReadTokens: number | null;
+  cacheCreationTokens: number | null;
+  durationMs: number | null;
+  numTurns: number | null;
+  exitCode: number | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+/** `GET /ai-providers/cli` — 런타임별 CLI 상태를 한 번에 조회한 결과(카드마다 CLI 를 실행하지 않게). */
+export interface ProviderCliStatus {
+  providerId: number;
+  key: string;
+  name: string;
+  resolvedPath: string | null;
+  version: string | null;
+  runnable: boolean;
+  detail: string | null;
+}
+
+/** `GET /ai-providers/catalog` — 등록 가능한 런타임과 그 기본값(모델/모드/설치 명령). */
+export interface ProviderCatalogEntry {
+  key: string;
+  name: string;
+  /** 이미 등록되어 있는지(있으면 다시 등록할 수 없다). 구버전 서버에서는 없을 수 있다. */
+  registered?: boolean;
+  capabilities?: Capabilities | null;
+}
+
 export const api = {
   base: API_BASE,
   /** 서버 내부 오류(최근 순). 사람이 원인을 보고 에이전트에게 수정을 맡길지 고른다. */
@@ -283,6 +358,8 @@ export const api = {
   /** 명령(태스크) 목록. `limit` 을 주면 최근 것부터 그만큼만 받는다(트리도 그만큼만 읽히게 된다). */
   listTasks: (projectId: number, limit?: number) =>
     request<Task[]>(`/tasks?projectId=${projectId}${limit === undefined ? '' : `&limit=${limit}`}`),
+  /** 전 프로젝트 작업 목록(Tasks 화면). `limit` 을 주면 최근 것부터 그만큼만 받는다. */
+  listAllTasks: (limit?: number) => request<Task[]>(`/tasks${limit === undefined ? '' : `?limit=${limit}`}`),
   sendCommand: (
     projectId: number,
     data: { text: string; targetAgentId?: number | null; groupId?: number | null; attachmentIds?: number[] },
@@ -291,6 +368,20 @@ export const api = {
     body: JSON.stringify(data),
   }),
 
+  /**
+   * 실행 목록(`GET /executions?projectId=&status=&limit=`).
+   * 화면(실행 목록·대시보드 집계·요청 창)이 **프로젝트 하나 또는 전체**의 실행을 한 번에 읽는다.
+   * 트리 단위 재조회와 달리 평평한 목록이고, 응답은 `ExecutionSummaryResponse`(lean) 다 — 큰 텍스트는 없다.
+   */
+  listExecutions: (query: ExecutionListQuery = {}) => {
+    const params = new URLSearchParams();
+    if (query.projectId !== undefined && query.projectId !== null) params.set('projectId', String(query.projectId));
+    (query.status ?? []).forEach((status) => params.append('status', status));
+    if (query.limit !== undefined && query.limit !== null) params.set('limit', String(query.limit));
+    if (query.beforeId !== undefined && query.beforeId !== null) params.set('beforeId', String(query.beforeId));
+    const suffix = params.toString();
+    return request<ExecutionSummary[]>(`/executions${suffix === '' ? '' : `?${suffix}`}`);
+  },
   getExecution: (id: number) => request<Execution>(`/executions/${id}`),
   getExecutionTree: (id: number) => request<ExecutionTree>(`/executions/${id}/tree`),
   getExecutionLogs: (id: number) => request<ExecutionLogEntry[]>(`/executions/${id}/logs`),
@@ -325,6 +416,13 @@ export const api = {
   updateProviderCapabilities: (id: number, data: Capabilities) =>
     request<Provider>(`/ai-providers/${id}/capabilities`, { method: 'PUT', body: JSON.stringify(data) }),
   getProviderCli: (id: number) => request<CliStatus>(`/ai-providers/${id}/cli`),
+  /** 런타임별 CLI 상태를 한 번에(카드마다 `<cli> --version` 을 실행하지 않게). */
+  listProviderCli: () => request<ProviderCliStatus[]>('/ai-providers/cli'),
+  /** 등록 가능한 런타임 카탈로그(키·표시 이름·기본 capabilities). */
+  getProviderCatalog: () => request<ProviderCatalogEntry[]>('/ai-providers/catalog'),
+  /** 런타임 표시 이름을 바꾼다. */
+  updateProvider: (id: number, data: { name: string }) =>
+    request<Provider>(`/ai-providers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   startLogin: (providerId: number) => request<{ sessionId: string }>(`/ai-providers/${providerId}/login`, { method: 'POST' }),
   startInstall: (providerId: number) => request<{ sessionId: string }>(`/ai-providers/${providerId}/install`, { method: 'POST' }),
   sendSessionInput: (sessionId: string, text: string) =>

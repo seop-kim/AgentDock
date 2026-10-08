@@ -34,6 +34,14 @@ export const DashboardIcon = () => (
   </Icon>
 );
 
+/** Tasks(작업 목록) */
+export const ListIcon = () => (
+  <Icon>
+    <path d="M8 6h13M8 12h13M8 18h13" />
+    <path d="M3 6h.01M3 12h.01M3 18h.01" />
+  </Icon>
+);
+
 export const FilterIcon = () => (
   <Icon>
     <path d="M4 5h16l-6 7v6l-4 2v-8L4 5z" />

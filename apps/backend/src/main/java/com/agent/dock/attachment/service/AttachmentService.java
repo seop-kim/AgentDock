@@ -145,6 +145,16 @@ public class AttachmentService {
         return prompt.toString();
     }
 
+    /** Task 재조회 시 채팅 말풍선 첨부를 복원하기 위해 이 명령(Task)에 붙은 첨부를 돌려준다. */
+    public List<AttachmentResponse> listForTask(Long taskId) {
+        if (taskId == null) {
+            return List.of();
+        }
+        return attachmentRepository.findByTaskIdOrderByIdAsc(taskId).stream()
+                .map(AttachmentResponse::from)
+                .toList();
+    }
+
     /** 워크스페이스 폴더가 사라졌거나 잘못됐을 때를 대비한 기준 경로. */
     private Path rootOf(Workspace workspace) {
         Path root = Path.of(workspace.getPath()).toAbsolutePath().normalize();

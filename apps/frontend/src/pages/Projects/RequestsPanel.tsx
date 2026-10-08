@@ -91,8 +91,17 @@ function visibleAsks(waits: Execution[], all: Execution[]): Execution[] {
 }
 
 export default function RequestsPanel({ project }: { project: Project }) {
-  const { executions, agents, retryMerge, answerExecution, reload, sendCommand, error: requestError } =
-    useAgentDockStore();
+  const {
+    executions,
+    executionList,
+    loadExecutionList,
+    agents,
+    retryMerge,
+    answerExecution,
+    reload,
+    sendCommand,
+    error: requestError,
+  } = useAgentDockStore();
   const [open, setOpen] = useState(false);
   /** 닫히는 중(아래로 내려가는 애니메이션 동안 화면에 남긴다). */
   const [closing, setClosing] = useState(false);
@@ -126,6 +135,12 @@ export default function RequestsPanel({ project }: { project: Project }) {
     };
   }, [requestError]);
 
+  // 이 프로젝트의 실행을 **트리 5개가 아니라 전부** 읽는다 —
+  // 오래된 트리에서 물어본 질문과 수동 병합(MANUAL)도 요청 목록에 뜨게.
+  useEffect(() => {
+    loadExecutionList({ projectId: project.id, limit: 100 });
+  }, [project.id, loadExecutionList]);
+
   // 닫히는 도중에 컴포넌트가 사라져도 타이머가 남지 않게.
   useEffect(
     () => () => {
@@ -136,7 +151,18 @@ export default function RequestsPanel({ project }: { project: Project }) {
     [],
   );
 
-  const mine = executions.filter((execution) => execution.projectId === project.id);
+  // 트리로 읽은 실행(executions)과 실행 목록(executionList)을 합친다 — 뒤에 온 실행 목록 값을 우선해
+  // 오래된 트리에서 나온 질문·수동 병합까지 담는다(같은 실행은 한 번만).
+  const mine = (() => {
+    const byId = new Map<number, Execution>();
+    executions
+      .filter((execution) => execution.projectId === project.id)
+      .forEach((execution) => byId.set(execution.id, execution));
+    executionList
+      .filter((execution) => execution.projectId === project.id)
+      .forEach((execution) => byId.set(execution.id, execution));
+    return [...byId.values()];
+  })();
   const waits = visibleAsks(waitingInputs(mine), mine);
   const merges = mine.filter((execution) => execution.mergeStatus === 'MANUAL');
   const errorItems: Item[] = serverErrors

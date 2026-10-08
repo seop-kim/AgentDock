@@ -104,6 +104,11 @@ export interface Task {
   status: TaskStatus;
   /** 이 Task 를 받은 에이전트(그룹에 보내면 리더). 담당이 없으면 null. */
   agentId: number | null;
+  /**
+   * 이 Task(명령)에 함께 보낸 첨부 파일. 서버 `TaskResponse.attachments` 에서 온다 —
+   * 채팅을 다시 만들 때(`rebuildChats`) 내 말풍선의 첨부가 사라지지 않게 복원하는 데 쓴다.
+   */
+  attachments: AttachedFile[];
 }
 
 /** 실행 단위의 상태. 부모는 자식이 도는 동안 WAITING_CHILD 로, 사람에게 물으면 WAITING_INPUT 으로 멈춘다. */

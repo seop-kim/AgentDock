@@ -4,6 +4,7 @@ import com.agent.dock.common.exception.NotFoundException;
 import com.agent.dock.process.util.Executables;
 import com.agent.dock.provider.domain.AiProvider;
 import com.agent.dock.provider.dto.CliStatusResponse;
+import com.agent.dock.provider.dto.ProviderCliStatusResponse;
 import com.agent.dock.provider.interfaces.AiRuntimeCli;
 import com.agent.dock.provider.repository.AiProviderRepository;
 import java.io.InputStream;
@@ -30,6 +31,22 @@ public class CliStatusService {
         AiProvider provider = providerRepository.findByIdAndDeletedAtIsNull(providerId)
                 .orElseThrow(() -> new NotFoundException("AiProvider %d not found".formatted(providerId)));
 
+        return check(provider);
+    }
+
+    /** 런타임 전체 CLI 상태를 한 번에(카드마다 CLI 를 실행하지 않게). 호출마다 실행하며 저장하지 않는다. */
+    public List<ProviderCliStatusResponse> checkAll() {
+        return providerRepository.findByDeletedAtIsNullOrderByNameAsc().stream()
+                .map(provider -> {
+                    CliStatusResponse status = check(provider);
+                    return new ProviderCliStatusResponse(provider.getId(), provider.getKey(), provider.getName(),
+                            provider.isEnabled(), status.resolvedPath(), status.version(), status.runnable(),
+                            status.detail());
+                })
+                .toList();
+    }
+
+    private CliStatusResponse check(AiProvider provider) {
         AiRuntimeCli cli = cliRegistry.find(provider.getKey()).orElse(null);
         if (cli == null) {
             return new CliStatusResponse(null, null, false,

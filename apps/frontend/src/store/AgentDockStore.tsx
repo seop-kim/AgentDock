@@ -8,6 +8,8 @@ import {
   api,
   type Agent as ApiAgent,
   type AgentGroup as ApiGroup,
+  type ExecutionListQuery,
+  type ExecutionSummary as ApiExecutionSummary,
   type Project as ApiProject,
   type Provider as ApiProvider,
   type Task as ApiTask,
@@ -50,6 +52,8 @@ interface AgentDockStore {
   groups: AgentGroup[];
   tasks: Task[];
   executions: Execution[];
+  /** 실행 목록 API(`GET /executions`)로 읽은 평평한 목록(전역 또는 한 프로젝트). 화면이 요청할 때 채워진다. */
+  executionList: Execution[];
   chats: ChatMessage[];
   roles: AgentRole[];
   permissionProfiles: PermissionProfile[];
@@ -63,6 +67,8 @@ interface AgentDockStore {
   loadMoreChats: (projectId: number) => void;
   /** 실행 트리 창을 열어 둔 트리를 알린다(닫으면 null). 열어 둔 트리는 계속 다시 읽는다. */
   watchExecutionTree: (projectId: number, rootExecutionId: number | null) => void;
+  /** 실행 목록을 읽는다(projectId 를 주면 그 프로젝트만, 없으면 전역). 읽은 조건으로 이벤트·폴링 때 다시 읽는다. */
+  loadExecutionList: (query?: ExecutionListQuery) => void;
 
   toggleProvider: (id: number) => void;
   deleteProvider: (id: number) => void;
@@ -202,7 +208,7 @@ function taskStatus(status: string): Task['status'] {
   }
 }
 
-function executionOf(execution: ApiExecution, projectId: number): Execution {
+export function executionOf(execution: ApiExecution, projectId: number): Execution {
   const summary = summaryOf(execution.resultText);
   const changedFiles = changedFilesOf(execution.resultText);
   const decision: Execution['decision'] =
@@ -244,6 +250,51 @@ function executionOf(execution: ApiExecution, projectId: number): Execution {
     question: execution.question ?? null,
     options: execution.questionOptions ?? [],
     answer: execution.answer ?? null,
+  };
+}
+
+/**
+ * 실행 목록 한 줄(`ExecutionSummaryResponse`)을 화면이 쓰는 `Execution` 으로 바꾼다.
+ * 목록에는 prompt·resultText·handoff·sessionId 가 없으므로 그 값들은 비운다 —
+ * 요청 창·집계가 필요로 하는 상태·질문·병합만 채운다.
+ */
+function executionSummaryOf(summary: ApiExecutionSummary): Execution {
+  const decision: Execution['decision'] =
+    summary.decision === 'DONE'
+      ? { action: 'done', summary: '' }
+      : summary.decision === 'DELEGATE' && summary.delegatedTargetAgentId !== null
+        ? { action: 'delegate', targetAgentId: summary.delegatedTargetAgentId, prompt: '' }
+        : summary.decision === 'ASK'
+          ? { action: 'ask', question: summary.question ?? '' }
+          : null;
+  return {
+    id: summary.id,
+    projectId: summary.projectId ?? 0,
+    agentId: summary.agentId ?? 0,
+    parentExecutionId: summary.parentExecutionId,
+    status: executionStatus(summary.status),
+    prompt: summary.taskTitle ?? '',
+    decision,
+    handoff: null,
+    metrics:
+      summary.inputTokens === null && summary.costUsd === null
+        ? null
+        : {
+            inputTokens: summary.inputTokens ?? 0,
+            outputTokens: summary.outputTokens ?? 0,
+            costUsd: summary.costUsd ?? 0,
+            durationMs: summary.durationMs ?? 0,
+          },
+    sessionId: '',
+    worktreePath: null,
+    worktreeBranch: summary.worktreeBranch ?? null,
+    resultCommit: summary.resultCommit ?? null,
+    mergeStatus: summary.mergeStatus ?? null,
+    mergeDetail: summary.mergeDetail ?? null,
+    changedFiles: [],
+    question: summary.question ?? null,
+    options: summary.questionOptions ?? [],
+    answer: null,
   };
 }
 
@@ -310,6 +361,16 @@ function mapGroup(group: ApiGroup): AgentGroup {
   };
 }
 
+/** 서버 첨부 레코드 → 화면이 쓰는 첨부(경로는 워크스페이스 기준 저장 경로, 이름은 원래 이름). */
+function attachedFileOf(attachment: ApiAttachment): AttachedFile {
+  return {
+    id: attachment.id,
+    workspaceId: attachment.workspaceId,
+    path: attachment.storedPath,
+    name: attachment.originalName,
+  };
+}
+
 function mapTask(projectId: number, task: ApiTask): Task {
   return {
     id: task.id,
@@ -317,6 +378,7 @@ function mapTask(projectId: number, task: ApiTask): Task {
     title: task.title,
     status: taskStatus(task.status),
     agentId: task.agent?.id ?? null,
+    attachments: (task.attachments ?? []).map(attachedFileOf),
   };
 }
 
@@ -363,6 +425,8 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
   const [groups, setGroups] = useState<AgentGroup[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [executions, setExecutions] = useState<Execution[]>([]);
+  /** 실행 목록 API 로 읽은 평평한 목록(전역 또는 한 프로젝트). 화면이 요청할 때만 채운다. */
+  const [executionList, setExecutionList] = useState<Execution[]>([]);
   const [chats, setChats] = useState<ChatMessage[]>([]);
   const [roles, setRoles] = useState<AgentRole[]>([]);
   const [permissionProfiles, setPermissionProfiles] = useState<PermissionProfile[]>([]);
@@ -391,6 +455,8 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
   const chatPageSizeRef = useRef(CHAT_PAGE_SIZE);
   /** 지금 **열려 있는 프로젝트**(상세 화면). 목록에서는 이 프로젝트의 slice 만 읽는다. */
   const openProjectRef = useRef<number | null>(null);
+  /** 실행 목록을 어떤 조건으로 읽었는지. 화면이 요청하기 전에는 null 이라 아무 것도 부르지 않는다. */
+  const executionListQueryRef = useRef<ExecutionListQuery | null>(null);
   const [chatHasMore, setChatHasMore] = useState<Record<number, boolean>>({});
   /** 실행 트리 창을 열어 둔 트리(프로젝트 → 루트 실행). 그 트리만 계속 다시 읽는다. */
   const openTreesRef = useRef<Map<number, Set<number>>>(new Map());
@@ -523,6 +589,29 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  /** 실행 목록을 읽어 화면 모양으로 바꾼다. 못 읽어도 지금 목록을 그대로 둔다(조각별 실패를 견딘다). */
+  const fetchExecutionList = useCallback(async (query: ExecutionListQuery) => {
+    try {
+      const rows = await api.listExecutions(query);
+      setExecutionList(rows.map(executionSummaryOf));
+    } catch (ex) {
+      console.warn('[AgentDock] 실행 목록을 갱신하지 못했습니다', ex);
+    }
+  }, []);
+
+  /**
+   * 실행 목록을 읽는다(화면이 부른다). 읽은 조건을 기억해 이벤트·안전망 폴링이 같은 조건으로 다시 읽는다.
+   * **식별자가 executionList 가 바뀌어도 그대로여야 한다** — 화면의 `useEffect([loadExecutionList])` 가
+   * 목록 갱신마다 다시 돌면 조회가 끝없이 반복된다(스토어 객체는 executionList 를 의존성으로 갖는다).
+   */
+  const loadExecutionList = useCallback(
+    (query: ExecutionListQuery = {}) => {
+      executionListQueryRef.current = query;
+      void fetchExecutionList(query);
+    },
+    [fetchExecutionList],
+  );
+
   /**
    * 한 프로젝트의 채팅 기록을 서버 상태(태스크 + 실행 트리)에서 다시 만든다.
    * 명령 하나 = 내 말풍선 + 그 응답이고, 응답 문구·상태는 트리 루트의 상태·요약에서 온다(위가 옛날, 아래가 최신).
@@ -540,7 +629,7 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
         text: task.title,
         status: 'done',
         rootExecutionId: taskRootsRef.current.get(task.id) ?? null,
-        attachments: [],
+        attachments: task.attachments,
       });
       const rootId = taskRootsRef.current.get(task.id) ?? null;
       if (rootId === null) return;
@@ -661,6 +750,17 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
         case 'execution.changed':
           if (event.projectId === null) await reloadRef.current();
           else await loadProjectSlice(event.projectId, true);
+          // 실행 목록을 읽어 둔 화면(요청 창 등)은 **필터가 맞을 때만** 같은 조건으로 다시 읽는다(계약 §7).
+          {
+            const listQuery = executionListQueryRef.current;
+            const matches =
+              listQuery !== null &&
+              (listQuery.projectId === undefined ||
+                listQuery.projectId === null ||
+                event.projectId === null ||
+                event.projectId === listQuery.projectId);
+            if (matches && listQuery !== null) await fetchExecutionList(listQuery);
+          }
           return;
         case 'task.changed':
           if (event.projectId === null) await reloadRef.current();
@@ -697,6 +797,7 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
       }
     },
     [
+      fetchExecutionList,
       loadAgents,
       loadGroups,
       loadProjectSlice,
@@ -747,11 +848,25 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
       await tolerantly('팀 목록', () => loadGroups(openProjectId), undefined);
       await tolerantly('프로젝트 상세', () => loadProjectSlice(openProjectId), undefined);
     }
+    // 실행 목록은 화면이 한 번 요청했으면(요청 창·실행 목록 화면) 같은 조건으로 계속 최신으로 둔다.
+    const listQuery = executionListQueryRef.current;
+    if (listQuery !== null) {
+      await tolerantly('실행 목록', () => fetchExecutionList(listQuery), undefined);
+    }
 
     setLoading(false);
     setError(null);
     reloadInFlightRef.current = false;
-  }, [loadAgents, loadCatalog, loadGroups, loadProjectSlice, loadProjects, loadProviders, loadWorkspaces]);
+  }, [
+    fetchExecutionList,
+    loadAgents,
+    loadCatalog,
+    loadGroups,
+    loadProjectSlice,
+    loadProjects,
+    loadProviders,
+    loadWorkspaces,
+  ]);
 
   useEffect(() => {
     void reload();
@@ -921,7 +1036,7 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
           taskRootsRef.current.set(result.taskId, result.rootExecutionId);
           setTasks((prev) => [
             ...prev,
-            { id: result.taskId, projectId, title, status: 'RUNNING', agentId: receiver.id },
+            { id: result.taskId, projectId, title, status: 'RUNNING', agentId: receiver.id, attachments },
           ]);
           // 이후 갱신은 **전역 이벤트 스트림**이 몰고 간다 — 실행이 바뀔 때마다 `execution.changed` 가 오고,
           // 그 알림이 이 프로젝트의 태스크·실행 트리·채팅을 다시 읽는다(주기 폴링 없음).
@@ -970,6 +1085,7 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
       groups,
       tasks,
       executions,
+      executionList,
       chats,
       roles,
       permissionProfiles,
@@ -992,6 +1108,7 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
         void loadGroups(projectId);
         void loadProjectSlice(projectId, true);
       },
+      loadExecutionList,
 
       toggleProvider: (id) => {
         const provider = providers.find((candidate) => candidate.id === id);
@@ -1137,8 +1254,11 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
       chats,
       error,
       executions,
+      executionList,
       fail,
+      fetchExecutionList,
       fetchWorkspaceFiles,
+      loadExecutionList,
       groupPositions,
       groups,
       loadProjectSlice,

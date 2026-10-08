@@ -5,6 +5,7 @@ import com.agent.dock.provider.domain.AiProvider;
 import com.agent.dock.provider.domain.ProviderKey;
 import com.agent.dock.provider.interfaces.AiRuntimeCli;
 import com.agent.dock.provider.repository.AiProviderRepository;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
@@ -13,6 +14,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.Mock;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -51,6 +55,31 @@ class CliStatusServiceTest {
         when(providerRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.check(1L)).isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void checkAllReportsStatusForEveryProviderWithoutSaving() {
+        AiProvider claude = provider(ProviderKey.CLAUDE_CODE);
+        claude.setId(1L);
+        claude.setName("Claude Code");
+        claude.setEnabled(true);
+        AiProvider codex = provider(ProviderKey.CODEX);
+        codex.setId(2L);
+        codex.setName("Codex");
+        when(providerRepository.findByDeletedAtIsNullOrderByNameAsc()).thenReturn(List.of(claude, codex));
+        when(cliRegistry.find(ProviderKey.CLAUDE_CODE))
+                .thenReturn(Optional.of(cli("definitely-not-installed-xyz")));
+        when(cliRegistry.find(ProviderKey.CODEX)).thenReturn(Optional.empty());
+
+        var rows = service.checkAll();
+
+        assertThat(rows).hasSize(2);
+        assertThat(rows.get(0).providerId()).isEqualTo(1L);
+        assertThat(rows.get(0).name()).isEqualTo("Claude Code");
+        assertThat(rows.get(0).runnable()).isFalse();
+        assertThat(rows.get(1).key()).isEqualTo(ProviderKey.CODEX);
+        assertThat(rows.get(1).detail()).contains("CLI 정보를 확인할 수 없습니다");
+        verify(providerRepository, never()).save(any());
     }
 
     private AiProvider provider(ProviderKey key) {
