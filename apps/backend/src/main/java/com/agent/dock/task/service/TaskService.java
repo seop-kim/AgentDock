@@ -39,8 +39,19 @@ public class TaskService {
     /** 전역 SSE 스트림에 "Task 가 바뀌었다"를 알린다. */
     private final EventPublisher changeEvents;
 
-    public List<TaskResponse> findAll(Long projectId, Long groupId) {
-        List<Task> tasks;
+    /**
+     * 명령(태스크) 목록의 **한 페이지**. 화면은 트리까지 읽느라 비용이 커서 최근 것부터 몇 개씩 가져온다.
+     * `findAll` 이 최신 → 오래된 순(desc)이므로 앞에서 `limit` 개를 자르면 최근 것이 된다.
+     * `beforeId` 를 주면 그보다 **오래된** 것만 준다("이전 명령 더 보기").
+     */
+    public List<TaskResponse> findPage(Long projectId, Long groupId, int limit, Long beforeId) {
+        return findAll(projectId, groupId).stream()
+                .filter(task -> beforeId == null || task.id() < beforeId)
+                .limit(Math.max(1, limit))
+                .toList();
+    }
+
+    public List<TaskResponse> findAll(Long projectId, Long groupId) {        List<Task> tasks;
         if (groupId != null) {
             tasks = taskRepository.findByGroupWithRelations(groupId);
         } else if (projectId != null) {
