@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ClipIcon, FileIcon } from '../../components/icons';
 import { unavailableReason } from '../../lib/agentAvailability';
 import { ATTACHMENT_FOLDER, hasAttachment } from '../../lib/attachments';
-import { workLog } from '../../lib/executions';
+import { MERGE_LABEL, STATUS_LABEL, treeOrder } from '../../lib/executions';
 import { useAgentDockStore } from '../../store/AgentDockStore';
 import attach from '../../styles/attachment.module.css';
 import shared from '../../styles/shared.module.css';
@@ -121,12 +121,40 @@ export default function ChatPanel({
   const [continueFrom, setContinueFrom] = useState<number | null>(null);
 
   /**
-   * 이어갈 작업의 맥락. 그 트리의 **작업 내역**(마스터 요약 + 에이전트별 작업 + 결과)을 짧게 붙여,
-   * 에이전트가 "무엇을 이어서 해야 하는지"를 알고 시작하게 한다(이전 결과를 다시 설명할 필요가 없다).
+   * 이어갈 작업의 맥락. 이전 트리의 **작업 내역**을 요약보다 자세히 붙인다 —
+   * 마스터 요약 + **에이전트별 결과 전문** + **변경 파일 목록** + 커밋·병합. 그래야 검토에서 나온
+   * 세부 지적까지 이어받는다(한 줄 요약만으로는 빠진다).
    */
   const continueBlock = (rootId: number): string => {
-    const log = workLog(executions, rootId, (agentId) => agents.find((a) => a.id === agentId)?.name ?? '에이전트');
-    return `이전 작업(실행 #${rootId})을 이어서 진행해 주세요.\n\n${log === '' ? '(이전 작업 내역을 찾지 못했습니다)' : log}\n\n[새 지시]\n`;
+    const nameOf = (agentId: number) => agents.find((agent) => agent.id === agentId)?.name ?? '에이전트';
+    const rows = treeOrder(executions, rootId);
+    const root = rows[0]?.execution;
+    const lines: string[] = [`이전 작업(실행 #${rootId})을 이어서 진행해 주세요.`, ''];
+
+    const headline = (root?.handoff?.summary ?? '').trim();
+    if (headline !== '') lines.push(headline, '');
+
+    const children = rows.slice(1);
+    if (children.length > 0) {
+      lines.push('## 에이전트별 결과');
+      children.forEach((row) => {
+        const result = (row.execution.handoff?.summary ?? '').trim();
+        lines.push(`- ${nameOf(row.execution.agentId)} (${STATUS_LABEL[row.execution.status]}): ${result === '' ? '결과 없음' : result}`);
+      });
+      lines.push('');
+    }
+
+    const changed = root?.changedFiles ?? [];
+    if (changed.length > 0) {
+      lines.push('## 변경 파일');
+      changed.forEach((file) => lines.push(`- ${file.status} ${file.path}`));
+      lines.push('');
+    }
+    if (root?.resultCommit != null && root.resultCommit !== '') lines.push(`커밋: ${root.resultCommit}`);
+    if (root?.mergeStatus != null) lines.push(`병합: ${MERGE_LABEL[root.mergeStatus]}`);
+
+    lines.push('', '[새 지시]', '');
+    return lines.join('\n');
   };
   /** 붙여넣거나 끌어온 이미지의 **미리보기 URL**(보낼 때까지). 서버에 올린 뒤에는 원본 파일이 없어 만들 수 없다. */
   const [previews, setPreviews] = useState<Record<string, string>>({});
