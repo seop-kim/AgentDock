@@ -399,24 +399,23 @@ public class DelegationService {
             String prompt = DelegationPrompts.judgement(project.getName(), roster, instruction,
                     stepContext(id, target, step, progress), maxTargets);
             AgentExecutionResult result = step(id, agent, target, prompt);
-            ExecutionStatus status = applyStep(id, result);
+            // 판단 스텝은 **아직 끝이 아니다** — 상태를 확정하지 않는다(끝은 done/ask/실패에서만).
+            // 스텝마다 SUCCEEDED 로 덮으면 화면·알림이 "완료"로 보이고, 자식이 도는 동안 총괄이 끝난 것처럼 보인다.
+            ExecutionStatus status = applyStep(id, result, false);
             if (!result.succeeded()) {
                 streamHub.system(id, "⎿ 실행이 실패해 사람에게 넘깁니다");
                 return status;
             }
-            // 판단은 계속된다. 스텝 종료 상태가 화면에 '완료'로 보이지 않게 다시 실행 중으로 돌린다.
-            executionService.markRunning(id);
 
             Optional<DelegationContract> contract = DelegationContract.parse(result.structured());
             if (contract.isEmpty() && !retryUsed) {
                 retryUsed = true;
                 streamHub.system(id, "⎿ 계약을 읽지 못해 한 번 더 시도합니다");
                 result = step(id, agent, target, DelegationPrompts.repair(result.resultText()));
-                status = applyStep(id, result);
+                status = applyStep(id, result, false);
                 if (!result.succeeded()) {
                     return status;
                 }
-                executionService.markRunning(id);
                 contract = DelegationContract.parse(result.structured());
             }
             if (contract.isEmpty()) {
@@ -828,7 +827,15 @@ public class DelegationService {
     // ── 스텝 실행 ────────────────────────────────────────────────────────────────
 
     private ExecutionStatus applyStep(Long executionId, AgentExecutionResult result) {
-        ExecutionStatus status = executionService.applyResult(executionId, result);
+        return applyStep(executionId, result, true);
+    }
+
+    /**
+     * 스텝 결과를 반영한다. `finish=false` 는 **판단 루프의 중간 스텝**이라는 뜻이라 실행 상태를 확정하지 않는다
+     * (끝은 `done`/`ask`/실패에서만 확정한다).
+     */
+    private ExecutionStatus applyStep(Long executionId, AgentExecutionResult result, boolean finish) {
+        ExecutionStatus status = executionService.applyResult(executionId, result, finish);
         if (result.structured() != null) {
             executionService.recordHandoff(executionId, result.structured());
         }

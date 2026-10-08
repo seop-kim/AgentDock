@@ -319,13 +319,28 @@ public class ExecutionService {
 
     /** 한 스텝의 결과(텍스트·계측값)를 저장하고 최종 상태를 돌려준다. */
     public ExecutionStatus applyResult(Long executionId, AgentExecutionResult result) {
+        return applyResult(executionId, result, true);
+    }
+
+    /**
+     * 한 스텝의 결과(텍스트·계측값)를 저장하고 상태를 돌려준다.
+     *
+     * <p>`finish=false` 는 **아직 끝난 것이 아닌 스텝**(판단 루프의 중간 스텝)용이다 — 상태·종료시각을 확정하지 않는다.
+     * 스텝마다 SUCCEEDED 로 덮으면 화면·알림이 그 순간 "완료"로 보인다(실측: 루트가
+     * `RUNNING→SUCCEEDED→RUNNING→WAITING_CHILD` 로 찍히고, 그 사이 총괄이 끝난 것처럼 보였다).
+     * 실패는 중간 스텝이라도 그대로 확정한다 — 사람이 알아야 하기 때문이다.
+     */
+    public ExecutionStatus applyResult(Long executionId, AgentExecutionResult result, boolean finish) {
         ExecutionStatus status = result.succeeded() ? ExecutionStatus.SUCCEEDED : ExecutionStatus.FAILED;
+        boolean persist = finish || !result.succeeded();
         update(executionId, execution -> {
             ExecutionMetrics metrics = result.metrics();
             execution.setResultText(result.resultText());
             execution.setExitCode(result.exitCode());
-            execution.setStatus(status);
-            execution.setFinishedAt(Instant.now());
+            if (persist) {
+                execution.setStatus(status);
+                execution.setFinishedAt(Instant.now());
+            }
             if (metrics != null) {
                 execution.setInputTokens(metrics.inputTokens());
                 execution.setOutputTokens(metrics.outputTokens());

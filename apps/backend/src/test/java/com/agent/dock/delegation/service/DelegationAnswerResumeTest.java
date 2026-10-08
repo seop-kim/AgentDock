@@ -46,6 +46,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -184,7 +185,8 @@ class DelegationAnswerResumeTest {
 
     /** CLI 한 스텝이 이 계약 JSON 을 냈다고 둔다. */
     private void givenStepReturns(Map<String, Object> structured) throws Exception {
-        when(executionService.applyResult(eq(42L), any())).thenReturn(ExecutionStatus.SUCCEEDED);
+        // 판단 루프의 중간 스텝은 finish=false 로 부른다(실행을 완료로 덮지 않는다) — 3인자 오버로드를 스텁한다.
+        when(executionService.applyResult(eq(42L), any(), anyBoolean())).thenReturn(ExecutionStatus.SUCCEEDED);
         when(runner.runStep(eq(42L), any(), any(), any(), any(), any()))
                 .thenReturn(new AgentExecutionResult(0, "{}", structured, ExecutionMetrics.empty(), false));
     }
