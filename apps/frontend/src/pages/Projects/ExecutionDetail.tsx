@@ -28,7 +28,6 @@ export default function ExecutionDetail({ execution }: { execution: Execution })
   const files = changedFileLines(execution);
   const metrics = execution.metrics;
   const entries: { key: string; value: string }[] = [
-    { key: '변경 파일', value: files.length > 0 ? files.join('\n') : '-' },
     {
       key: '토큰',
       value: metrics
@@ -50,6 +49,21 @@ export default function ExecutionDetail({ execution }: { execution: Execution })
           </div>
         </div>
       )}
+
+      {/* 수정 내역: 이 실행이 바꾼 파일. 무엇을 건드렸는지가 제일 궁금하므로 값 블록 위에 따로 둔다. */}
+      <div className={exec.mdBlock}>
+        <span className={exec.kvKey}>수정 내역 {files.length > 0 ? `(${files.length})` : ''}</span>
+        {files.length === 0 ? (
+          <div className={exec.kvValue}>이 실행이 바꾼 파일이 없습니다.</div>
+        ) : (
+          files.map((line) => (
+            <div key={line} className={exec.kvValue}>
+              {line}
+            </div>
+          ))
+        )}
+      </div>
+
       <dl className={exec.kv}>
         {entries.map((entry) => (
           <div key={entry.key} className={exec.kvRow}>
