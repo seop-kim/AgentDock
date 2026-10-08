@@ -404,6 +404,16 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
    * 사용자가 화면을 안 보고 있어도 무슨 일이 일어나는지 알 수 있게 한다.
    */
   const prevStatusRef = useRef<Map<number, Execution['status']>>(new Map());
+  /**
+   * 이미 알린 것(실행 id + 종류). 한 실행이 `RUNNING → WAITING_CHILD → RUNNING` 을 반복해도
+   * 토스트는 종류마다 한 번만 띄운다(같은 말이 계속 뜨면 알림이 쓸모없어진다).
+   */
+  const notifiedRef = useRef<Set<string>>(new Set());
+  const notifyOnce = (key: string, text: string, tone: 'info' | 'success' | 'error' = 'info') => {
+    if (notifiedRef.current.has(key)) return;
+    notifiedRef.current.add(key);
+    toast(text, tone);
+  };
   useEffect(() => {
     const previous = prevStatusRef.current;
     const next = new Map<number, Execution['status']>();
@@ -414,15 +424,20 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
       const who = agentsRef.current.find((agent) => agent.id === execution.agentId)?.name ?? '에이전트';
       const label = `#${execution.id} ${who}`;
       if (execution.status === 'RUNNING') {
-        toast(`${label} 작업을 시작했습니다`);
+        // 시작은 **처음 돌기 시작할 때만**(대기 → 재개는 시작이 아니다).
+        notifyOnce(`start:${execution.id}`, `${label} 작업을 시작했습니다`);
       } else if (execution.status === 'DONE') {
         const ms = execution.metrics?.durationMs ?? 0;
-        toast(`${label} 작업 완료${ms > 0 ? ` (${formatDuration(ms)})` : ''}`, 'success');
+        notifyOnce(`done:${execution.id}`, `${label} 작업 완료${ms > 0 ? ` (${formatDuration(ms)})` : ''}`, 'success');
       } else if (execution.status === 'FAILED') {
-        toast(`${label} 작업이 실패했습니다`, 'error');
+        notifyOnce(`fail:${execution.id}`, `${label} 작업이 실패했습니다`, 'error');
       } else if (execution.status === 'CANCELLED') {
-        toast(`${label} 작업이 취소되었습니다`);
+        notifyOnce(`cancel:${execution.id}`, `${label} 작업이 취소되었습니다`);
+      } else if (execution.status === 'WAITING_CHILD') {
+        // 위임한 자식을 기다리는 구간에 들어갔다(다음 판단 스텝은 시작이 아니다).
+        notifyOnce(`waitChild:${execution.id}`, `${label} 하위 작업을 기다립니다`);
       } else if (execution.status === 'WAITING_INPUT') {
+        // 질문은 여러 번 올 수 있으므로 매번 알린다(같은 질문이 반복되면 그때 다시 볼 일이다).
         toast(`${label} 답을 기다립니다 — 요청 창에서 답해 주세요`);
       }
     });
