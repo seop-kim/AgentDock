@@ -1,4 +1,5 @@
 import { DragEvent, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { unavailableReason } from '../../lib/agentAvailability';
 import { agentStatus } from '../../lib/agentStatus';
 import { isAgentDrag, readAgentDrag, startAgentDrag } from '../../lib/dnd';
@@ -27,6 +28,10 @@ interface AgentFilters {
 }
 
 const NO_FILTERS: AgentFilters = { query: '', status: 'all', groupId: 'all' };
+
+/** 검색어를 뺀 **필터 항목**이 몇 개 걸렸는지(버튼에 숫자로 보여 준다). */
+const activeFilterCount = (filters: AgentFilters): number =>
+  (filters.status === 'all' ? 0 : 1) + (filters.groupId === 'all' ? 0 : 1);
 
 /** 이 에이전트가 지금 조건에 맞는지(검색어 AND 상태 AND 그룹). */
 function matchesFilters(
@@ -85,6 +90,31 @@ export default function AgentList({
   const [filters, setFilters] = useState<AgentFilters>(NO_FILTERS);
   const filtering =
     filters.query.trim() !== '' || filters.status !== 'all' || filters.groupId !== 'all';
+  /** 필터 팝업을 띄울지(버튼 아래에 뜬다). */
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterButtonRef = useRef<HTMLButtonElement>(null);
+
+  // 필터 팝업: 바깥을 누르거나 Esc, 스크롤하면 닫는다(다른 메뉴와 같은 방식).
+  useEffect(() => {
+    if (!filterOpen) return;
+    const closeOnScroll = () => setFilterOpen(false);
+    const onPointerDown = (e: PointerEvent) => {
+      if (!(e.target as HTMLElement).closest('[data-agent-filter-popup], [data-agent-filter-button]')) {
+        setFilterOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFilterOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', closeOnScroll, true);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', closeOnScroll, true);
+    };
+  }, [filterOpen]);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Agent | null>(null);
   const [dropActive, setDropActive] = useState(false);
@@ -195,7 +225,7 @@ export default function AgentList({
         </button>
       </div>
 
-      {/* 검색 + 상태/그룹 필터 — 셋을 함께(AND) 걸 수 있다. */}
+      {/* 검색 + 필터 버튼. 상태·그룹은 버튼을 눌러 뜨는 팝업에서 고른다. */}
       {open && (
         <div className={styles.filters} onClick={(e) => e.stopPropagation()}>
           <input
@@ -205,49 +235,94 @@ export default function AgentList({
             placeholder="이름·역할·모델 검색"
             aria-label="에이전트 검색"
           />
-          <select
-            value={filters.status}
-            onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value as AgentFilters['status'] }))}
-            aria-label="상태 필터"
-            title="상태로 거르기"
+          <button
+            type="button"
+            ref={filterButtonRef}
+            data-agent-filter-button
+            className={`${styles.filterButton} ${activeFilterCount(filters) > 0 ? styles.filterButtonOn : ''}`}
+            onClick={() => setFilterOpen((prev) => !prev)}
+            aria-expanded={filterOpen}
+            aria-haspopup="dialog"
+            title="상태·그룹으로 거르기"
           >
-            <option value="all">상태 전체</option>
-            <option value="WORKING">작업 중만</option>
-            <option value="WAITING">작업 대기중</option>
-            <option value="IDLE">작업 없음</option>
-            <option value="UNPLACED">미배치</option>
-          </select>
-          <select
-            value={filters.groupId === 'all' ? 'all' : String(filters.groupId)}
-            onChange={(e) =>
-              setFilters((prev) => ({
-                ...prev,
-                groupId: e.target.value === 'all' ? 'all' : Number(e.target.value),
-              }))
-            }
-            aria-label="그룹 필터"
-            title="그룹으로 거르기"
-          >
-            <option value="all">그룹 전체</option>
-            {groups
-              .filter((group) => group.projectId === project.id)
-              .map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
-          </select>
+            필터{activeFilterCount(filters) > 0 ? ` ${activeFilterCount(filters)}` : ''}
+          </button>
           <span className={styles.filterCount}>
             {projectAgents.filter((agent) => matchesFilters(agent, filters, groups, roles, tasks, executions)).length}{' '}
             / {projectAgents.length}
           </span>
-          {filtering && (
-            <button type="button" className={styles.filterReset} onClick={() => setFilters(NO_FILTERS)}>
-              초기화
-            </button>
-          )}
         </div>
       )}
+
+      {/* 필터 팝업: 상태·그룹을 고르고, 초기화도 여기서 한다. */}
+      {open &&
+        filterOpen &&
+        filterButtonRef.current !== null &&
+        createPortal(
+          <div
+            className={styles.popup}
+            data-agent-filter-popup
+            role="dialog"
+            aria-label="에이전트 필터"
+            style={
+              {
+                '--top': `${filterButtonRef.current.getBoundingClientRect().bottom + 4}px`,
+                '--left': `${Math.max(
+                  8,
+                  Math.min(filterButtonRef.current.getBoundingClientRect().left, window.innerWidth - 248),
+                )}px`,
+              } as React.CSSProperties
+            }
+          >
+            <label className={styles.popupLabel} htmlFor="agent-filter-status">
+              상태
+            </label>
+            <select
+              id="agent-filter-status"
+              value={filters.status}
+              onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value as AgentFilters['status'] }))}
+            >
+              <option value="all">상태 전체</option>
+              <option value="WORKING">작업 중만</option>
+              <option value="WAITING">작업 대기중</option>
+              <option value="IDLE">작업 없음</option>
+              <option value="UNPLACED">미배치</option>
+            </select>
+
+            <label className={styles.popupLabel} htmlFor="agent-filter-group">
+              그룹
+            </label>
+            <select
+              id="agent-filter-group"
+              value={filters.groupId === 'all' ? 'all' : String(filters.groupId)}
+              onChange={(e) =>
+                setFilters((prev) => ({
+                  ...prev,
+                  groupId: e.target.value === 'all' ? 'all' : Number(e.target.value),
+                }))
+              }
+            >
+              <option value="all">그룹 전체</option>
+              {groups
+                .filter((group) => group.projectId === project.id)
+                .map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
+            </select>
+
+            <div className={styles.popupActions}>
+              <button type="button" className={styles.filterReset} onClick={() => setFilters(NO_FILTERS)}>
+                초기화
+              </button>
+              <button type="button" className={styles.filterReset} onClick={() => setFilterOpen(false)}>
+                닫기
+              </button>
+            </div>
+          </div>,
+          document.body,
+        )}
 
       <div className={styles.body}>
         <div className={styles.cards}>

@@ -229,14 +229,61 @@
   font-size: 12px;
 }
 
-.filters select {
-  max-width: 116px;
-  padding: 4px 6px;
+/* 필터 버튼 — 항목이 걸려 있으면 강조하고 개수를 보여 준다. */
+.filterButton {
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.filterButtonOn {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-weight: 600;
+}
+
+/* 필터 팝업(버튼 아래에 포털로 뜬다). */
+.popup {
+  composes: glassStrong from '../../styles/glass.module.css';
+  position: fixed;
+  top: var(--top);
+  left: var(--left);
+  z-index: 300;
+  width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border-radius: var(--radius);
+  color: var(--color-text);
+}
+
+.popupLabel {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.popup select {
+  width: 100%;
+  padding: 5px 6px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   background: var(--color-input-bg);
   color: var(--color-text);
   font-size: 12px;
+}
+
+.popupActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 4px;
 }
 
 .filterCount {
