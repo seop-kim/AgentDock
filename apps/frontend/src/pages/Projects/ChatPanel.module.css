@@ -5,6 +5,9 @@
   top: var(--spacing-md);
   right: var(--spacing-md);
   bottom: var(--spacing-md);
+  /* left 를 auto 로 두면 애니메이션이 안 되어 왼쪽이 즉시 튀고 폭만 늘어난다(오른쪽으로 늘어나는 것처럼 보임).
+     숫자로 적어 두면 left·width 가 함께 움직여 **오른쪽 끝이 고정된 채 왼쪽으로** 펼쳐진다. */
+  left: calc(100% - 360px - var(--spacing-md));
   width: 360px;
   max-width: calc(100% - var(--spacing-md) * 2);
   display: flex;
