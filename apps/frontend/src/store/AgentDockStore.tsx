@@ -122,8 +122,8 @@ const StoreContext = createContext<AgentDockStore | null>(null);
 const EVENT_DEBOUNCE_MS = 250;
 /** 안전망 폴링 주기(ms). 평소에는 이벤트가 갱신하고, 이 주기는 놓친 것만 줍는다. */
 const SAFETY_POLL_MS = 30000;
-/** 스트림이 끊겨 있는 동안의 폴링 주기(ms). */
-const DISCONNECTED_POLL_MS = 5000;
+/** 스트림이 끊겨 있는 동안의 폴링 주기(ms). 스트림이 스스로 다시 붙으므로 자주 돌 이유가 없다. */
+const DISCONNECTED_POLL_MS = 15000;
 
 /**
  * 전역 이벤트 스트림(`GET /events/stream`)이 실어 오는 알림.
@@ -707,10 +707,19 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
   );
 
   /**
+  /**
+   * `reload()` 가 겹쳐 도는 것을 막는 표시. 서버가 느릴 때 폴링이 다음 `reload()` 를 시작하면
+   * **끝나지 않은 요청이 계속 쌓인다**(실측: Network 패널에 같은 6개 요청이 4중으로 pending, 총 3,679건).
+   */
+  const reloadInFlightRef = useRef(false);
+
+  /**
    * 서버 상태를 통째로 다시 읽는다(첫 로드·화면 조작 뒤·안전망 폴링).
    * 조각 로더를 그대로 조립하고, 실행 트리도 같은 규칙(아직 모르는 것만)으로 읽는다.
    */
   const reload = useCallback(async () => {
+    if (reloadInFlightRef.current) return;
+    reloadInFlightRef.current = true;
     /**
      * 한 엔드포인트가 실패해도 나머지는 갱신한다. 예전에는 `Promise.all` 이라 하나만 죽어도
      * 새로고침 전체가 실패한 것처럼 보였다(구버전 서버에서 `/runtimes` 404 하나로 화면이 '모두 에러'처럼 보였다).
@@ -741,6 +750,7 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
 
     setLoading(false);
     setError(null);
+    reloadInFlightRef.current = false;
   }, [loadAgents, loadCatalog, loadGroups, loadProjectSlice, loadProjects, loadProviders, loadWorkspaces]);
 
   useEffect(() => {
@@ -801,7 +811,7 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
 
   /**
    * 폴링은 **안전망**이다 — 평소에는 이벤트가 화면을 갱신하고, 이 주기는 놓친 것만 줍는다(30초).
-   * 스트림이 끊겨 있으면 그동안만 5초로 빠르게 돌고, 탭이 숨겨져 있으면 아예 돌지 않는다(다시 보이면 한 번 읽는다).
+   * 스트림이 끊겨 있으면 그동안만 15초로 돌고, 탭이 숨겨져 있으면 아예 돌지 않는다(다시 보이면 한 번 읽는다).
    */
   useEffect(() => {
     let timer: number | undefined;
