@@ -82,6 +82,9 @@ public class DelegationService {
     private int maxSteps;
     @Value("${agentdock.delegation.max-targets:4}")
     private int maxTargets;
+    /** 같은 부모가 같은 에이전트에게 맡길 수 있는 최대 횟수(재위임 반복 차단). */
+    @Value("${agentdock.delegation.max-repeat-per-agent:3}")
+    private int maxRepeatPerAgent;
     @Value("${agentdock.delegation.max-concurrent:4}")
     private int maxConcurrent;
     @Value("${agentdock.delegation.max-cost-usd:5}")
@@ -525,7 +528,7 @@ public class DelegationService {
             if (accepted.size() >= maxTargets) {
                 break;
             }
-            String rejection = rejectionReason(order, allowed, depth, path, state);
+            String rejection = rejectionReason(executionId, order, allowed, depth, path, state);
             if (rejection != null) {
                 streamHub.system(executionId, "⎿ 위임 거부: " + rejection);
                 continue;
@@ -535,12 +538,17 @@ public class DelegationService {
         return accepted;
     }
 
-    private String rejectionReason(DelegationContract.Order order, Set<Long> allowed, int depth, List<Long> path, TreeState state) {
+    private String rejectionReason(Long executionId, DelegationContract.Order order, Set<Long> allowed,
+                                   int depth, List<Long> path, TreeState state) {
         if (!allowed.contains(order.agentId())) {
             return "이 프로젝트의 팀에 없는 에이전트입니다(id=%d)".formatted(order.agentId());
         }
         if (path.contains(order.agentId())) {
             return "순환 위임입니다(id=%d 는 이 경로에 이미 있습니다)".formatted(order.agentId());
+        }
+        String repeated = repeatReason(executionId, order, state);
+        if (repeated != null) {
+            return repeated;
         }
         if (depth + 1 > maxDepth) {
             return "깊이 상한(%d)을 넘습니다".formatted(maxDepth);
@@ -553,6 +561,34 @@ public class DelegationService {
             return "예산 상한($%s)을 넘었습니다(현재 $%s)".formatted(maxCostUsd.toPlainString(), cost.toPlainString());
         }
         return null;
+    }
+
+    /**
+     * 같은 부모가 **같은 에이전트에게 되풀이해 맡기는 것**을 막는다. 판단 실행이 매 단계 다시 위임을 고르면
+     * 실행만 늘고 결과는 나아지지 않는다(실측: 한 명령에서 같은 에이전트에게 4회 재위임).
+     * 지시 문장이 같은 경우도 함께 막는다(공백·줄바꿈만 다른 것은 같은 지시로 본다).
+     */
+    private String repeatReason(Long parentExecutionId, DelegationContract.Order order, TreeState state) {
+        List<Execution> sameAgent = executionRepository
+                .findByRootExecutionIdOrderByIdAsc(state.rootExecutionId()).stream()
+                .filter(child -> parentExecutionId.equals(child.getParentExecutionId()))
+                .filter(child -> order.agentId().equals(child.getAgentId()))
+                .toList();
+        if (sameAgent.size() >= maxRepeatPerAgent) {
+            return "같은 에이전트에게 %d번 넘게 맡길 수 없습니다(id=%d) — 결과는 이미 돌아왔으니 직접 정리하세요(action=done)"
+                    .formatted(maxRepeatPerAgent, order.agentId());
+        }
+        String wanted = normalizeText(order.prompt());
+        if (!wanted.isEmpty()
+                && sameAgent.stream().anyMatch(child -> normalizeText(child.getPrompt()).contains(wanted))) {
+            return "같은 지시를 이미 맡겼습니다(id=%d) — 결과가 모자라면 직접 정리하거나 사람에게 물으세요".formatted(order.agentId());
+        }
+        return null;
+    }
+
+    /** 공백·줄바꿈만 다른 같은 지시를 같은 것으로 보기 위한 정규화. */
+    private String normalizeText(String text) {
+        return text == null ? "" : text.replaceAll("\\s+", " ").trim();
     }
 
     private long treeSize(Long rootExecutionId) {
