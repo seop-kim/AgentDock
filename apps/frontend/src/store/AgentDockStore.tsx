@@ -483,8 +483,8 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
       });
       const rootId = taskRootsRef.current.get(task.id) ?? null;
       if (rootId === null) return;
-      const root = executionList.find((execution) => execution.id === rootId);
-      if (root === undefined) {
+      const candidate = executionList.find((execution) => execution.id === rootId);
+      if (candidate === undefined) {
         // 트리를 아직 못 읽었어도 **지금 도는 작업**은 응답을 기다리는 중으로 보여 준다(다음 갱신에서 채워진다).
         if (task.status === 'PENDING' || task.status === 'RUNNING') {
           messages.push({
@@ -500,7 +500,30 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
         }
         return;
       }
-      const finished = !unfinished(root.status);
+      /*
+       * 부모를 따라 올라가 트리의 **진짜 루트**를 찾는다.
+       * `latestExecutionId` 가 자식일 수 있는데, 그때 자식 하나의 상태만 보면 **아직 돌고 있는 트리를
+       * "끝났다"로 오판**한다(2026-10-08 실측: 실행 162 가 WAITING_CHILD 인데 채팅은 종료로 표시됐다).
+       * 판정은 트리 안 **모든 실행**을 보고, 하나라도 안 끝났으면 진행 중으로 둔다.
+       */
+      const byId = new Map(executionList.map((execution) => [execution.id, execution]));
+      let treeRoot = candidate;
+      while (treeRoot.parentExecutionId !== null) {
+        const parent = byId.get(treeRoot.parentExecutionId);
+        if (parent === undefined) break;
+        treeRoot = parent;
+      }
+      const belongsToTree = (execution: Execution): boolean => {
+        let cursor: Execution | undefined = execution;
+        while (cursor !== undefined) {
+          if (cursor.id === treeRoot.id) return true;
+          cursor = cursor.parentExecutionId === null ? undefined : byId.get(cursor.parentExecutionId);
+        }
+        return false;
+      };
+      const members = executionList.filter(belongsToTree);
+      const finished = !members.some((execution) => unfinished(execution.status));
+      const root = members.find((execution) => execution.id === treeRoot.id) ?? treeRoot;
       messages.push({
         id: task.id + 100000,
         projectId,
