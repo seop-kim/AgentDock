@@ -13,11 +13,24 @@
   /* 왼쪽은 넓히기 화살표가 설 자리만 조금 남긴다(크게 비우지 않는다) */
   padding: 10px 12px 10px 14px;
   border-radius: var(--radius-lg);
+  /* 접기/펴기를 부드럽게: top·bottom 이 높이를 만들므로 bottom 을 애니메이션한다. 삐져나온 자식은 자른다. */
+  overflow: hidden;
+  transition: bottom 220ms ease;
 }
 
-/* 접었을 때: 머리말만 남기고 위쪽에 붙는다 */
+/* 접었을 때: 머리말 높이만 남기고 위쪽에 붙는다(높이가 bottom 에서 파생되므로 애니메이션이 먹는다). */
 .collapsed {
-  bottom: auto;
+  bottom: calc(100% - var(--spacing-md) - 46px);
+}
+
+/* 접히고 펴질 때 안쪽 기록은 서서히 사라지고 나타난다(양쪽 모두 부드럽게). */
+.collapsed .log {
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.chat:not(.collapsed) .log {
+  transition: opacity 160ms ease;
 }
 
 /* 크게 보기: 왼쪽 패널 옆부터 창 오른쪽까지 차지해 구성도를 덮는다(일시적). */
