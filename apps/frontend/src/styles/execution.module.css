@@ -527,3 +527,27 @@
   overflow: auto;
   white-space: pre;
 }
+
+/* 팀별 묶음(실행 트리 창) — 브라우저 기본 details/summary 로 접는다(상태 없이 동작하고 키보드로도 접힌다). */
+.group {
+  margin-bottom: var(--spacing-sm);
+}
+
+.groupHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.groupName {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.groupCount {
+  color: var(--color-muted);
+  font-size: 12px;
+}

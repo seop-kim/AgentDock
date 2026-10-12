@@ -140,6 +140,9 @@ export interface Execution {
   parentExecutionId: number | null;
   /** 이 실행이 속한 트리의 루트 실행 id(루트 자신이면 자기 id). 실행 목록을 트리로 묶을 때 쓴다. */
   rootExecutionId: number | null;
+  /** 이 실행이 팀(그룹)을 통해 돌았으면 그 팀. **목록 응답에만** 있고 상세·트리에는 없다(없으면 화면이 에이전트 소속으로 대신 묶는다). */
+  groupId?: number | null;
+  groupName?: string | null;
   status: ExecutionStatus;
   /** 이 실행이 받은 지시. */
   prompt: string;

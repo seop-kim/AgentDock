@@ -351,6 +351,8 @@ function executionSummaryOf(summary: ApiExecutionSummary): Execution {
     agentId: summary.agentId ?? 0,
     parentExecutionId: summary.parentExecutionId,
     rootExecutionId: summary.rootExecutionId,
+    groupId: summary.groupId,
+    groupName: summary.groupName,
     status: executionStatus(summary.status),
     prompt: summary.taskTitle ?? '',
     decision,

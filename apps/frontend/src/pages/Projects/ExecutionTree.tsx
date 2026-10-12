@@ -142,6 +142,28 @@ function ordinalsOf(rows: { execution: Execution }[]): Map<number, number> {
   return ordinals;
 }
 
+/**
+ * 실행 행을 **팀별로 묶는다**(팀이 없으면 "팀 없음"). 한 명령이 13개 실행을 만든 실측이 있어 평평하게 나열하면
+ * 읽기 어렵다. 접기는 브라우저 기본 `details` 를 쓴다(상태 없이 동작하고 키보드로도 접힌다).
+ *
+ * <p>트리 응답에는 팀 정보가 없어(평평한 목록에만, 그것도 태스크 기준) **에이전트 소속**으로 대신 묶는다 —
+ * 리더면 자기가 이끄는 팀, 팀원이면 자기가 속한 팀이다.
+ */
+function groupRows(rows: { execution: Execution; depth: number }[], teamOf: (agentId: number) => string | null) {
+  const groups = new Map<string, { key: string; name: string; rows: { execution: Execution; depth: number }[] }>();
+  rows.forEach((row) => {
+    const name = teamOf(row.execution.agentId) ?? '팀 없음(총괄·직접)';
+    const group = groups.get(name) ?? { key: name, name, rows: [] };
+    group.rows.push(row);
+    groups.set(name, group);
+  });
+  return [...groups.values()].map((group) => ({
+    ...group,
+    failed: group.rows.filter((row) => row.execution.status === 'FAILED').length,
+    hasLive: group.rows.some((row) => isLive(row.execution.status)),
+  }));
+}
+
 /** 아직 계약을 내지 않은 실행을 "직접 처리"로 잘못 보여주지 않도록 따로 표시한다. */
 function actionLabel(execution: Execution, nameOf: (id: number) => string): string {
   // 끝난 실행은 결정이 없어도 진행 표현을 쓰지 않는다(실패·중단이 "판단 중…"으로 남던 문제).
@@ -269,7 +291,7 @@ export default function ExecutionTreeModal({
   masterAgentId: number | null;
   onClose: () => void;
 }) {
-  const { agents, removeWorktree } = useAgentDockStore();
+  const { agents, groups, removeWorktree } = useAgentDockStore();
   const [notice, setNotice] = useCancelNotice();
   const rows = treeOrder(executions, rootExecutionId);
   if (rows.length === 0) return null;
@@ -279,6 +301,11 @@ export default function ExecutionTreeModal({
   // 실패는 요약에서 바로 보이게 한다 — 자손이 실패했는데 "모두 완료"로 읽히면 결과를 잘못 믿게 된다.
   const failed = rows.filter((row) => row.execution.status === 'FAILED').length;
   const nameOf = (id: number) => agents.find((a) => a.id === id)?.name ?? '삭제된 에이전트';
+  /** 에이전트 소속 팀(리더면 자기가 이끄는 팀) — 트리 응답에 팀 정보가 없어 이걸로 묶는다. */
+  const teamOf = (agentId: number) =>
+    groups.find((group) => group.leaderAgentId === agentId)?.name ??
+    groups.find((group) => group.memberIds.includes(agentId))?.name ??
+    null;
 
   /**
    * 워크트리 정리(사람이 판단해 부른다). 한 트리 = 한 워크트리라서 루트 행에서만 정리할 수 있다.
@@ -328,40 +355,57 @@ export default function ExecutionTreeModal({
         </div>
 
         <ol className={exec.tree}>
-          {rows.map(({ execution, depth }) => (
-            <li key={execution.id} className={exec.row} style={{ marginLeft: `${depth * 18}px` }}>
-              <div className={exec.rowHead}>
-                <ExecutionBadge status={execution.status} />
-                <strong className={exec.rowName}>
-                  {nameOf(execution.agentId)}
-                  {(ordinals.get(execution.id) ?? 1) > 1 ? ` · ${ordinals.get(execution.id)}번째 작업` : ''}
-                </strong>
-                {execution.agentId === masterAgentId && <span className={exec.tag}>마스터</span>}
-                <span className={exec.rowAction}>{actionLabel(execution, nameOf)}</span>
-                <span className={exec.rowMetrics}>
-                  {execution.metrics
-                    ? `입력 ${formatTokens(execution.metrics.inputTokens)} · 출력 ${formatTokens(
-                        execution.metrics.outputTokens,
-                      )} · ${formatCost(execution.metrics.costUsd)} · ${formatDuration(
-                        execution.metrics.durationMs,
-                      )} · 세션 ${execution.sessionId.slice(0, 8)}`
-                    : '실행 중…'}
-                </span>
-                <CancelButton execution={execution} name={nameOf(execution.agentId)} onError={setNotice} />
-              </div>
-              {execution.worktreeBranch && (
-                <p className={exec.rowFiles} title={execution.worktreePath ?? undefined}>
-                  워크트리 {execution.worktreePath} · {execution.worktreeBranch}
-                  {execution.parentExecutionId === null && (
-                    <button type="button" className={exec.cardButton} onClick={() => cleanupWorktree(execution)}>
-                      워크트리 정리
-                    </button>
-                  )}
-                </p>
-              )}
-              {execution.parentExecutionId === null && <TreeResultLine execution={execution} />}
-              {/* 결과·Handoff 를 원문 텍스트로 쏟지 않고 사람이 읽는 모양으로 그린다(원문 JSON 은 접어 둔다). */}
-              <ExecutionDetail execution={execution} />
+          {groupRows(rows, teamOf).map((group) => (
+            <li key={group.key} className={exec.group}>
+              {/* 팀별로 묶고 브라우저 기본 접기(details)로 접는다 — 실행이 13개까지 늘어나 한눈에 안 들어온다. */}
+              <details open={group.hasLive}>
+                <summary className={exec.groupHead}>
+                  <span className={exec.groupName}>{group.name}</span>
+                  <span className={exec.groupCount}>
+                    {group.rows.length}건
+                    {group.failed > 0 ? ` · 실패 ${group.failed}` : ''}
+                    {group.hasLive ? ' · 진행 중' : ''}
+                  </span>
+                </summary>
+                <ol className={exec.tree}>
+                  {group.rows.map(({ execution, depth }) => (
+                    <li key={execution.id} className={exec.row} style={{ marginLeft: `${depth * 18}px` }}>
+                      <div className={exec.rowHead}>
+                        <ExecutionBadge status={execution.status} />
+                        <strong className={exec.rowName}>
+                          {nameOf(execution.agentId)}
+                          {(ordinals.get(execution.id) ?? 1) > 1 ? ` · ${ordinals.get(execution.id)}번째 작업` : ''}
+                        </strong>
+                        {execution.agentId === masterAgentId && <span className={exec.tag}>마스터</span>}
+                        <span className={exec.rowAction}>{actionLabel(execution, nameOf)}</span>
+                        <span className={exec.rowMetrics}>
+                          {execution.metrics
+                            ? `입력 ${formatTokens(execution.metrics.inputTokens)} · 출력 ${formatTokens(
+                                execution.metrics.outputTokens,
+                              )} · ${formatCost(execution.metrics.costUsd)} · ${formatDuration(
+                                execution.metrics.durationMs,
+                              )} · 세션 ${execution.sessionId.slice(0, 8)}`
+                            : '실행 중…'}
+                        </span>
+                        <CancelButton execution={execution} name={nameOf(execution.agentId)} onError={setNotice} />
+                      </div>
+                      {execution.worktreeBranch && (
+                        <p className={exec.rowFiles} title={execution.worktreePath ?? undefined}>
+                          워크트리 {execution.worktreePath} · {execution.worktreeBranch}
+                          {execution.parentExecutionId === null && (
+                            <button type="button" className={exec.cardButton} onClick={() => cleanupWorktree(execution)}>
+                              워크트리 정리
+                            </button>
+                          )}
+                        </p>
+                      )}
+                      {execution.parentExecutionId === null && <TreeResultLine execution={execution} />}
+                      {/* 결과·Handoff 를 원문 텍스트로 쏟지 않고 사람이 읽는 모양으로 그린다(원문 JSON 은 접어 둔다). */}
+                      <ExecutionDetail execution={execution} />
+                    </li>
+                  ))}
+                </ol>
+              </details>
             </li>
           ))}
         </ol>
