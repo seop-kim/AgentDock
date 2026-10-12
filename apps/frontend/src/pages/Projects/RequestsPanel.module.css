@@ -1,0 +1,280 @@
+/* 내가 처리할 요청: 아래 가운데 알약 + 화면 중앙에서 올라오는 창(왼쪽 목록 / 오른쪽 상세). */
+
+.dock {
+  position: absolute;
+  /* 화면 아래 가운데(확대/축소 도구는 위로 갔으니 그 자리는 비어 있다). */
+  bottom: calc(var(--spacing-md) + 8px);
+  left: calc((100% + var(--inset-left, 0px) - var(--inset-right, 0px)) / 2);
+  transform: translateX(-50%);
+  display: flex;
+  justify-content: center;
+  max-width: calc(100% - 32px);
+  pointer-events: none;
+}
+
+.pill {
+  composes: glass from '../../styles/glass.module.css';
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float), var(--glass-highlight), inset 3px 0 0 var(--color-warning);
+  color: var(--color-warning);
+  font-size: 13px;
+  font-weight: 600;
+  pointer-events: auto;
+}
+
+.pillDetail {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* 뒤를 흐리지 않는 투명한 판(빈 곳을 누르면 닫힌다). */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 320;
+  background: transparent;
+}
+
+/* 화면 아래에 붙어 있는 긴 패널이 아래에서 위로 올라온다(뒤 배경은 그대로 보인다). */
+.sheet {
+  composes: glassStrong from '../../styles/glass.module.css';
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  width: min(1000px, calc(100vw - 32px));
+  height: min(78vh, 680px);
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: var(--shadow-float), var(--glass-highlight);
+  /* 애니메이션이 끝난 뒤에도 제자리에 머물도록 기준 위치를 잡아 둔다. */
+  transform: translateX(-50%);
+  animation: rise 190ms ease-out;
+}
+
+@keyframes rise {
+  from {
+    transform: translate(-50%, 100%);
+  }
+  to {
+    transform: translate(-50%, 0);
+  }
+}
+
+/* 닫을 때: 아래로 부드럽게 내려간 뒤 사라진다(끝난 뒤 화면에서 감춘다). */
+.sheetClosing {
+  animation: sink 180ms ease-in forwards;
+}
+
+@keyframes sink {
+  from {
+    transform: translate(-50%, 0);
+  }
+  to {
+    transform: translate(-50%, 100%);
+  }
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  padding: 10px 14px;
+  color: var(--color-text);
+}
+
+.close {
+  font-size: 12px;
+}
+
+.body {
+  flex: 1 1 auto;
+  display: flex;
+  gap: var(--spacing-sm);
+  min-height: 0;
+  padding: 0 14px 14px;
+}
+
+/* 왼쪽: 요청 목록 */
+.list {
+  flex: 0 0 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.row:hover {
+  background: var(--color-code-bg);
+  filter: none;
+}
+
+.rowActive {
+  border-color: var(--color-warning);
+  background: var(--color-code-bg);
+}
+
+.rowKind {
+  color: var(--color-warning);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.rowText {
+  overflow: hidden;
+  color: var(--color-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 오른쪽: 고른 요청의 상세(답 입력 또는 병합) */
+.detail {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  overflow-y: auto;
+}
+
+.detailTitle {
+  margin: 0 0 6px;
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.detailText {
+  margin: 0 0 8px;
+  color: var(--color-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+/* 입력 대기: 보기는 한 행씩 고르는 선택지다(누른 즉시 보내지 않는다). */
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 var(--spacing-sm);
+  padding: 0;
+  list-style: none;
+}
+
+.optionRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.optionRow:hover {
+  background: var(--color-code-bg);
+  filter: none;
+}
+
+.optionRowOn {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.optionMark {
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.answerRow {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.answerRow input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-input-bg);
+  color: var(--color-text);
+  font-size: 12px;
+}
+
+.sendButton {
+  flex-shrink: 0;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.hint {
+  margin: 8px 0 0;
+  color: var(--color-muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+/* 수동 병합: 무시(알림만 접기) + 지금 병합 */
+/* 입력줄·힌트와 붙지 않게 위쪽 여백을 준다. */
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+}
+
+.dismiss {
+  font-size: 12px;
+}
+
+.mergeButton {
+  font-size: 12px;
+}
+
+/* 서버 오류 스택 — 읽기만 하면 되므로 접지 않고 안에서 스크롤한다(창이 넘치지 않게). */
+.stack {
+  margin: 8px 0 0;
+  padding: 8px;
+  max-height: 220px;
+  border-radius: var(--radius);
+  background: var(--color-input-bg);
+  color: var(--color-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow: auto;
+}

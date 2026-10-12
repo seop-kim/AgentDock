@@ -8,6 +8,7 @@ import com.agent.dock.common.exception.ConflictException;
 import com.agent.dock.common.exception.ForbiddenException;
 import com.agent.dock.common.exception.NotFoundException;
 import com.agent.dock.execution.domain.Execution;
+import com.agent.dock.group.domain.AgentGroup;
 import com.agent.dock.group.repository.AgentGroupRepository;
 import com.agent.dock.permission.domain.PermissionAction;
 import com.agent.dock.permission.service.PermissionService;
@@ -39,9 +40,22 @@ public class ExecutionGuard {
     /**
      * 가드를 통과한 실행 대상. 엔티티 대신 값만 들고 있어 다른 스레드로 넘겨도 안전하다.
      *
-     * @param systemPrompt 프롬프트 계층(마스터 → 그룹 → 에이전트)을 합친 시스템 프롬프트
+     * @param systemPrompt   프롬프트 계층(마스터 → 그룹 → 에이전트)을 합친 시스템 프롬프트
+     * @param worktreePath   루트가 만든 git worktree 경로. 없으면 null 이고 워크스페이스에서 돈다
+     * @param worktreeBranch worktree 의 브랜치 이름. 격리하지 못하면 null
      */
-    public record Target(Long agentId, Long workspaceId, String workspacePath, String systemPrompt) {
+    public record Target(Long agentId, Long workspaceId, String workspacePath, String systemPrompt,
+                         String worktreePath, String worktreeBranch) {
+
+        /** CLI 를 실제로 돌릴 작업 디렉터리: worktree 가 있으면 그 안, 없으면 워크스페이스. */
+        public String cwd() {
+            return worktreePath == null || worktreePath.isBlank() ? workspacePath : worktreePath;
+        }
+
+        /** 루트가 만든 worktree 를 이 실행(자식 포함)에 물려준다. */
+        public Target withWorktree(String path, String branch) {
+            return new Target(agentId, workspaceId, workspacePath, systemPrompt, path, branch);
+        }
     }
 
     public Target prepare(Long agentId, Long projectId, Long groupId) {
@@ -70,14 +84,26 @@ public class ExecutionGuard {
         }
 
         return new Target(agent.getId(), workspace.getId(), workspace.getPath(),
-                systemPrompt(project, groupId, agent));
+                systemPrompt(project, groupId, agent), null, null);
     }
 
-    /** 프롬프트 계층: 마스터(프로젝트) → 그룹 → 에이전트. 그룹을 통해 실행될 때만 그룹 프롬프트가 끼어든다. */
+    /**
+     * 프롬프트 계층: 마스터(프로젝트) → 그룹 → 에이전트. 그룹을 통해 실행될 때만 그룹 프롬프트가 끼어든다.
+     * 그룹의 **공유 노트**는 규칙이 아니라 맥락이므로 맨 뒤에 붙인다(에이전트가 자기 일을 하되 팀의 맥락을 알게).
+     */
     private String systemPrompt(Project project, Long groupId, Agent agent) {
-        String groupPrompt = groupId == null ? "" : groupRepository.findById(groupId)
-                .map(group -> group.getPrompt())
-                .orElse("");
-        return PromptLayers.combine(project.getMasterPrompt(), groupPrompt, agent.getPersona());
+        AgentGroup group = groupId == null ? null : groupRepository.findById(groupId).orElse(null);
+        String groupPrompt = group == null ? "" : group.getPrompt();
+        return PromptLayers.combine(project.getMasterPrompt(), groupPrompt,
+                agent.getPersona() + sharedNoteOf(group));
+    }
+
+    /** 그룹 공유 노트를 프롬프트에 붙일 한 덩어리로 만든다(비어 있으면 아무것도 붙이지 않는다). */
+    private static String sharedNoteOf(AgentGroup group) {
+        if (group == null || group.getSharedNote() == null || group.getSharedNote().isBlank()) {
+            return "";
+        }
+        return "\n\n## 그룹 공유 노트 (같은 팀이 알아낸 맥락 — 런타임이 달라도 함께 본다)\n"
+                + group.getSharedNote().trim();
     }
 }

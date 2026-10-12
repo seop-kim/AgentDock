@@ -10,6 +10,7 @@ import com.agent.dock.common.exception.ConflictException;
 import com.agent.dock.common.exception.NotFoundException;
 import com.agent.dock.execution.repository.ExecutionLogRepository;
 import com.agent.dock.execution.repository.ExecutionRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.group.domain.AgentGroup;
 import com.agent.dock.group.domain.AgentGroupMember;
 import com.agent.dock.group.repository.AgentGroupMemberRepository;
@@ -52,6 +53,8 @@ public class AgentService {
     private final ExecutionRepository executionRepository;
     private final ExecutionLogRepository executionLogRepository;
     private final AttachmentRepository attachmentRepository;
+    /** 전역 SSE 스트림에 "에이전트가 바뀌었다"를 알린다. */
+    private final EventPublisher changeEvents;
 
     public List<AgentResponse> findAll() {
         List<Agent> agents = agentRepository.findAllWithRelations();
@@ -87,6 +90,7 @@ public class AgentService {
         agent.setMode(request.mode());
         agent.setProfile(request.profile());
         Agent saved = agentRepository.save(agent);
+        changeEvents.agentChanged(request.projectId());
         return findOne(saved.getId());
     }
 
@@ -109,6 +113,7 @@ public class AgentService {
         agent.setMode(request.mode());
         agent.setPersona(request.persona());
         agentRepository.save(agent);
+        changeEvents.agentChanged(agent.getProjectId());
         return findOne(id);
     }
 
@@ -118,6 +123,7 @@ public class AgentService {
                 .orElseThrow(() -> new NotFoundException("Agent %d not found".formatted(agentId)));
         agent.setProvider(findEnabledProvider(providerId));
         agentRepository.save(agent);
+        changeEvents.agentChanged(agent.getProjectId());
         return findOne(agentId);
     }
 
@@ -140,6 +146,7 @@ public class AgentService {
         deleteExecutions(id);
         executionRepository.clearDelegatedTarget(id);
         agentRepository.delete(agent);
+        changeEvents.agentChanged(project.getId());
     }
 
     /** 모든 그룹에서 뺀다. 리더였다면 남은 첫 멤버가 리더를 이어받는다(목업과 같은 규칙). */

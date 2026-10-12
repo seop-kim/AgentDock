@@ -1,8 +1,11 @@
-import { CSSProperties, useEffect, useState } from 'react';
+import { CSSProperties, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { SettingsIcon } from '../../components/icons';
+import RunningWorks from './RunningWorks';
 import { useAgentDockStore } from '../../store/AgentDockStore';
 import shared from '../../styles/shared.module.css';
+import { questionText } from '../../lib/executions';
+import { toast } from '../../components/Toaster';
 import type { ChatTarget } from '../../types';
 import AgentList from './AgentList';
 import ChatPanel from './ChatPanel';
@@ -27,7 +30,8 @@ const BOTTOM_INSET = 24;
 export default function ProjectDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { projects, workspaces, agents, groups, tasks, executions } = useAgentDockStore();
+  const { projects, workspaces, agents, groups, tasks, executions, loading, reload, watchExecutionTree } =
+    useAgentDockStore();
   const [notice, setNotice] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   /** 실행 트리 창에 띄울 실행(채팅 응답에 딸린 루트 실행 id). */
@@ -43,6 +47,8 @@ export default function ProjectDetail() {
   // 선택된 에이전트: 왼쪽 카드와 구성도 노드가 함께 강조된다. focusSeq 가 오를 때마다 구성도가 그쪽으로 이동한다.
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
   const [focusSeq, setFocusSeq] = useState(0);
+  /** 구성도에서 노드를 눌렀을 때 값이 오른다: 왼쪽 에이전트 목록이 그 카드로 스크롤한다(반대 방향). */
+  const [cardFocusSeq, setCardFocusSeq] = useState(0);
 
   const project = projects.find((p) => String(p.id) === id);
   const masterAgentId = project?.masterAgentId ?? null;
@@ -59,13 +65,50 @@ export default function ProjectDetail() {
     setChatTarget((prev) => prev ?? { kind: 'agent', id: masterAgentId });
   }, [masterAgentId]);
 
+  // 실행 트리 창을 열어 둔 동안에는 그 트리만 계속 다시 읽는다.
+  // 나머지 갱신은 전역 이벤트 스트림(SSE)이 몰고 간다 — 주기 폴링은 두지 않는다.
+  const projectId = project?.id ?? null;
+  useEffect(() => {
+    if (projectId === null) return;
+    watchExecutionTree(projectId, executionTreeRoot);
+    return () => watchExecutionTree(projectId, null);
+  }, [projectId, executionTreeRoot, watchExecutionTree]);
+
+  // 입력 대기가 새로 생기면 브라우저 알림으로 알린다 — 다른 탭을 보고 있어도 답할 때를 알게.
+  // 첫 로드(이미 대기 중이던 것)에서는 알리지 않고, 새로 생긴 순간에만 알린다.
+  const waitingKey = executions
+    .filter((execution) => execution.projectId === project?.id && execution.status === 'WAITING_INPUT')
+    .map((execution) => execution.id)
+    .join(',');
+  const askedRef = useRef<string | null>(null);
+  useEffect(() => {
+    const previous = askedRef.current;
+    askedRef.current = waitingKey;
+    if (previous === null || previous === waitingKey || waitingKey === '' || typeof Notification === 'undefined') {
+      return;
+    }
+    if (Notification.permission === 'default') {
+      void Notification.requestPermission();
+      return;
+    }
+    if (Notification.permission !== 'granted') return;
+    const asked = executions.filter(
+      (execution) => execution.projectId === project?.id && execution.status === 'WAITING_INPUT',
+    );
+    const first = asked[asked.length - 1];
+    const notification = new Notification(`입력 대기 — ${project?.name ?? '프로젝트'}`, {
+      body: first === undefined ? '에이전트가 사람의 답을 기다립니다.' : questionText(first),
+    });
+    notification.onclick = () => window.focus();
+  }, [waitingKey, executions, project?.id, project?.name]);
+
   if (!project) {
     return (
       <div className={styles.notFound}>
         <Link to="/projects" className={styles.back}>
           ← 프로젝트 목록
         </Link>
-        <h1>프로젝트를 찾을 수 없습니다</h1>
+        <h1>{loading ? '불러오는 중…' : '프로젝트를 찾을 수 없습니다'}</h1>
       </div>
     );
   }
@@ -112,7 +155,14 @@ export default function ProjectDetail() {
         insetBottom={BOTTOM_INSET}
         selectedAgentId={activeAgentId}
         focusSeq={focusSeq}
-        onSelectAgent={(agentId) => selectAgent(agentId, false)}
+        // 구성도에서 고른 에이전트를 왼쪽 목록에서도 찾을 수 있게, 카드가 보이도록 스크롤시킨다(반대 방향).
+        onSelectAgent={(agentId) => {
+          if (agentId !== activeAgentId) {
+            setAgentsOpen(true);
+            setCardFocusSeq((prev) => prev + 1);
+          }
+          selectAgent(agentId, false);
+        }}
         onNotice={setNotice}
       />
 
@@ -123,15 +173,32 @@ export default function ProjectDetail() {
           </Link>
           <div className={styles.titleRow}>
             <h1 className={styles.title}>{project.name}</h1>
-            <button
-              type="button"
-              className={styles.settingsButton}
-              onClick={() => setSettingsOpen(true)}
-              aria-label="프로젝트 설정"
-              title="프로젝트 설정"
-            >
-              <SettingsIcon />
-            </button>
+            {/* 새로고침·설정은 한 묶음으로 붙여 둔다(space-between 이 가운데로 벌리지 않게). */}
+            <div className={styles.titleActions}>
+              {/* 지금 돌고 있는 작업(트리 묶음) — 있을 때만 칩이 뜬다. */}
+              {projectId !== null && <RunningWorks projectId={projectId} />}
+              <button
+                type="button"
+                className={styles.settingsButton}
+                onClick={() => {
+                // 다시 읽은 뒤 알려 준다(눌렀는데 아무 반응이 없어 보이지 않게).
+                void reload().then(() => toast('서버에서 다시 읽었습니다 — 캔버스·에이전트·명령을 갱신했습니다'));
+              }}
+                aria-label="새로고침"
+                title="캔버스·에이전트 목록·명령을 서버에서 다시 읽습니다"
+              >
+                ⟳
+              </button>
+              <button
+                type="button"
+                className={styles.settingsButton}
+                onClick={() => setSettingsOpen(true)}
+                aria-label="프로젝트 설정"
+                title="프로젝트 설정"
+              >
+                <SettingsIcon />
+              </button>
+            </div>
           </div>
           <div className={styles.meta}>
             <span className={styles.workspace}>
@@ -152,9 +219,11 @@ export default function ProjectDetail() {
           </div>
         </header>
 
+        {/* 입력 대기 알약은 왼쪽이 아니라 **구성도 아래 가운데**에 뜬다(GroupCanvas 가 확대/축소 도구 위에 그린다). */}
         <AgentList
           project={project}
           selectedAgentId={activeAgentId}
+          focusSeq={cardFocusSeq}
           onSelectAgent={(agentId) => selectAgent(agentId, true)}
           open={agentsOpen}
           onToggle={() => setAgentsOpen((prev) => !prev)}

@@ -1,7 +1,10 @@
-import { DragEvent, FormEvent, useEffect, useRef, useState } from 'react';
+import { DragEvent, FormEvent, KeyboardEvent, useEffect, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ClipIcon, FileIcon } from '../../components/icons';
 import { unavailableReason } from '../../lib/agentAvailability';
 import { ATTACHMENT_FOLDER, hasAttachment } from '../../lib/attachments';
+import { MERGE_LABEL, STATUS_LABEL, treeOrder } from '../../lib/executions';
 import { useAgentDockStore } from '../../store/AgentDockStore';
 import attach from '../../styles/attachment.module.css';
 import shared from '../../styles/shared.module.css';
@@ -16,6 +19,8 @@ const fromValue = (value: string): ChatTarget | null => {
   const [kind, id] = value.split(':');
   return kind === 'agent' || kind === 'group' ? { kind, id: Number(id) } : null;
 };
+
+const MAX_INPUT_HEIGHT = 120;
 
 /**
  * 구성도 아래에 떠 있는 채팅 창. 기본 대상은 프로젝트 **마스터 에이전트**이고, 원하면 그룹(리더가 받음)이나
@@ -43,7 +48,8 @@ export default function ChatPanel({
   /** 응답에 딸린 실행 트리를 연다. */
   onOpenExecutions: (rootExecutionId: number) => void;
 }) {
-  const { agents, groups, providers, chats, executions, sendCommand, uploadAttachments } = useAgentDockStore();
+  const { agents, groups, providers, chats, executions, sendCommand, uploadAttachments, chatHasMore, loadMoreChats } =
+    useAgentDockStore();
   const [text, setText] = useState('');
   /** 이번 명령에 붙일 파일(보내면 비운다). */
   const [attachments, setAttachments] = useState<AttachedFile[]>([]);
@@ -51,6 +57,8 @@ export default function ChatPanel({
   /** 파일을 끌어오는 중인지(놓을 곳을 보여 준다). */
   const [dragging, setDragging] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
+  /** 입력 textarea — 줄이 늘면 높이를 맞춘다. */
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const projectAgents = agents.filter((a) => a.projectId === project.id);
   const projectGroups = groups.filter((g) => g.projectId === project.id);
@@ -60,6 +68,14 @@ export default function ChatPanel({
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
   }, [messages.length, messages.filter((m) => m.status === 'pending').length, open]);
+
+  /** 입력이 길어지면 textarea 높이를 내용에 맞춘다(최대 MAX_INPUT_HEIGHT). */
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    input.style.height = 'auto';
+    input.style.height = `${Math.min(input.scrollHeight, MAX_INPUT_HEIGHT)}px`;
+  }, [text, open]);
 
   const receiverHint = (() => {
     if (!target) return '명령을 받을 에이전트나 그룹을 고르세요.';
@@ -96,8 +112,141 @@ export default function ChatPanel({
     const dropped = Array.from(e.dataTransfer.files).filter((_, index) => entries[index]?.isDirectory !== true);
     if (dropped.length === 0) return;
     const uploaded = await uploadAttachments(defaultWorkspaceId, dropped);
+    addUploaded(dropped, uploaded);
+  };
+
+  /** 이미지 업로드 실패를 화면에 보여 주기 위한 상태(조용히 실패하지 않게). */
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  /** 이어갈 작업(이전 실행 트리의 루트 id). 고르면 새 명령 앞에 그 작업 내역을 붙여 보낸다. */
+  const [continueFrom, setContinueFrom] = useState<number | null>(null);
+
+  /**
+   * 이어갈 작업의 맥락. 이전 트리의 **작업 내역**을 요약보다 자세히 붙인다 —
+   * 마스터 요약 + **에이전트별 결과 전문** + **변경 파일 목록** + 커밋·병합. 그래야 검토에서 나온
+   * 세부 지적까지 이어받는다(한 줄 요약만으로는 빠진다).
+   */
+  const continueBlock = (rootId: number): string => {
+    const nameOf = (agentId: number) => agents.find((agent) => agent.id === agentId)?.name ?? '에이전트';
+    const rows = treeOrder(executions, rootId);
+    const root = rows[0]?.execution;
+    const lines: string[] = [`이전 작업(실행 #${rootId})을 이어서 진행해 주세요.`, ''];
+
+    const headline = (root?.handoff?.summary ?? '').trim();
+    if (headline !== '') lines.push(headline, '');
+
+    const children = rows.slice(1);
+    if (children.length > 0) {
+      lines.push('## 에이전트별 결과');
+      children.forEach((row) => {
+        const result = (row.execution.handoff?.summary ?? '').trim();
+        lines.push(`- ${nameOf(row.execution.agentId)} (${STATUS_LABEL[row.execution.status]}): ${result === '' ? '결과 없음' : result}`);
+      });
+      lines.push('');
+    }
+
+    const changed = root?.changedFiles ?? [];
+    if (changed.length > 0) {
+      lines.push('## 변경 파일');
+      changed.forEach((file) => lines.push(`- ${file.status} ${file.path}`));
+      lines.push('');
+    }
+    if (root?.resultCommit != null && root.resultCommit !== '') lines.push(`커밋: ${root.resultCommit}`);
+    if (root?.mergeStatus != null) lines.push(`병합: ${MERGE_LABEL[root.mergeStatus]}`);
+
+    lines.push('', '[새 지시]', '');
+    return lines.join('\n');
+  };
+  /** 붙여넣거나 끌어온 이미지의 **미리보기 URL**(보낼 때까지). 서버에 올린 뒤에는 원본 파일이 없어 만들 수 없다. */
+  const [previews, setPreviews] = useState<Record<string, string>>({});
+  /** 썸네일을 눌러 크게 보고 있는 이미지 URL. */
+  const [zoomImage, setZoomImage] = useState<string | null>(null);
+
+  // 크게 보기: Esc 로 닫는다.
+  useEffect(() => {
+    if (zoomImage === null) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') setZoomImage(null);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [zoomImage]);
+
+  const previewKey = (file: AttachedFile) => `${file.workspaceId}:${file.path}`;
+
+  /** 업로드 결과를 첨부에 더하고, 이미지면 미리보기 URL 을 만들어 둔다(올린 순서가 같다고 본다). */
+  const addUploaded = (files: File[], uploaded: AttachedFile[]) => {
+    const added: Record<string, string> = {};
+    files.forEach((file, index) => {
+      const created = uploaded[index];
+      if (created === undefined || !file.type.startsWith('image/')) return;
+      added[`${created.workspaceId}:${created.path}`] = URL.createObjectURL(file);
+    });
+    setPreviews((prev) => ({ ...prev, ...added }));
     setAttachments((prev) => [...prev, ...uploaded.filter((file) => !hasAttachment(prev, file))]);
   };
+
+  /** 첨부를 뺄 때 미리보기 URL 도 함께 정리한다(메모리에 남지 않게). */
+  const removeAttachment = (file: AttachedFile) => {
+    setAttachments((prev) => prev.filter((item) => item !== file));
+    setPreviews((prev) => {
+      const url = prev[previewKey(file)];
+      if (url !== undefined) URL.revokeObjectURL(url);
+      const next = { ...prev };
+      delete next[previewKey(file)];
+      return next;
+    });
+  };
+
+  /**
+   * 클립보드의 이미지를 첨부로 올린다(드롭·파일 고르기와 같은 경로).
+   * 이미지가 아니면 아무것도 하지 않아 글자 붙여넣기가 그대로 동작한다. 처리했으면 true.
+   */
+  const attachPastedImages = async (clipboard: DataTransfer | null): Promise<boolean> => {
+    if (clipboard === null || defaultWorkspaceId === null) return false;
+    const files = Array.from(clipboard.items)
+      // type 이 빈 값으로 오는 앱도 있다 — 그때도 파일이면 이미지로 본다.
+      .filter((item) => item.kind === 'file' && (item.type === '' || item.type.startsWith('image/')))
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => file !== null);
+    if (files.length === 0) return false;
+
+    // 붙여넣은 이미지는 파일 이름이 없다 — 알아볼 수 있게 시각으로 이름을 붙인다.
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const named = files.map((file, index) => {
+      const extension = file.type === '' ? 'png' : (file.type.split('/')[1] ?? 'png');
+      const suffix = index === 0 ? '' : `-${index + 1}`;
+      return new File([file], `붙여넣은-이미지-${stamp}${suffix}.${extension}`, { type: file.type });
+    });
+    try {
+      const uploaded = await uploadAttachments(defaultWorkspaceId, named);
+      addUploaded(named, uploaded);
+      setUploadError(null);
+    } catch (error) {
+      setUploadError(
+        `이미지를 붙이지 못했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`,
+      );
+    }
+    return true;
+  };
+
+  // 패널이 펼쳐져 있으면 **포커스가 어디에 있든** 붙여넣기를 받는다(캔버스를 눌러 둔 채 붙여넣는 경우가 흔하다).
+  useEffect(() => {
+    if (!open) return;
+    const onDocumentPaste = (e: ClipboardEvent) => {
+      // 진단용(debug 레벨): 어떤 형식으로 오는지 남긴다 — 이미지가 안 잡힐 때 원인을 바로 알기 위해.
+      console.debug(
+        '[chat] paste items',
+        Array.from(e.clipboardData?.items ?? []).map((item) => `${item.kind}:${item.type}`),
+      );
+      void attachPastedImages(e.clipboardData).then((handled) => {
+        if (handled) e.preventDefault();
+      });
+    };
+    document.addEventListener('paste', onDocumentPaste);
+    return () => document.removeEventListener('paste', onDocumentPaste);
+    // attachPastedImages 는 매 렌더 새로 만들어지지만, 안에서 쓰는 값은 아래 deps 로 충분하다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, defaultWorkspaceId]);
 
   const onDragOver = (e: DragEvent<HTMLElement>) => {
     e.preventDefault();
@@ -110,15 +259,61 @@ export default function ChatPanel({
     setDragging(false);
   };
 
-  const onSubmit = (e: FormEvent) => {
+  /** Enter 단독이면 전송, Shift+Enter 는 줄바꿈으로 둔다. */
+  const onInputKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      e.currentTarget.form?.requestSubmit();
+    }
+  };
+
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!target) return;
     const trimmed = text.trim();
     // 파일만 붙이고 보내도 되게 한다(그때는 지시를 기본 문장으로 채운다).
     if (trimmed === '' && attachments.length === 0) return;
-    sendCommand(project.id, target, trimmed === '' ? '첨부한 파일을 확인해줘' : trimmed, attachments);
+    const body = trimmed === '' ? '첨부한 파일을 확인해줘' : trimmed;
+
+    // 이어가기: 이전 작업 내역을 **지시 파일(md)로 올리고** 프롬프트에는 짧은 참조만 남긴다
+    // (긴 내역이 프롬프트를 먹지 않게 — 위임 지시 파일과 같은 방식).
+    let allAttachments = attachments;
+    let prefix = '';
+    if (continueFrom !== null && defaultWorkspaceId !== null) {
+      const file = new File([continueBlock(continueFrom)], `이어가기-${continueFrom}.md`, {
+        type: 'text/markdown',
+      });
+      const uploaded = await uploadAttachments(defaultWorkspaceId, [file]);
+      allAttachments = [...attachments, ...uploaded.filter((item) => !hasAttachment(attachments, item))];
+      prefix = `이전 작업(실행 #${continueFrom})을 이어서 진행해 주세요. 첨부한 이어가기 파일을 읽고 그 내용대로 이어서 하세요.\n\n[새 지시]\n`;
+    }
+
+    sendCommand(project.id, target, `${prefix}${body}`, allAttachments);
     setText('');
+    setContinueFrom(null);
+    // 보낸 첨부의 미리보기 URL 은 더 쓸 일이 없으니 정리한다.
+    Object.values(previews).forEach((url) => URL.revokeObjectURL(url));
+    setPreviews({});
     setAttachments([]);
+  };
+
+  /** 입력창 높이(px). 위쪽 손잡이를 **위로** 끌면 커진다(아래는 화면에 붙어 있어 아래로는 못 늘린다). */
+  const [inputHeight, setInputHeight] = useState(38);
+
+  const startResize = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startHeight = inputHeight;
+    const move = (event: PointerEvent) => {
+      const next = startHeight + (startY - event.clientY);
+      setInputHeight(Math.max(38, Math.min(next, Math.round(window.innerHeight * 0.7))));
+    };
+    const stop = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', stop);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', stop);
   };
 
   return (
@@ -187,9 +382,16 @@ export default function ChatPanel({
         {receiverHint && <span className={styles.hint}>{receiverHint}</span>}
 
         <div ref={logRef} className={styles.log}>
+          {/* 오래된 명령은 한 페이지(5개)씩만 읽는다 — 더 있으면 여기서 이어 읽는다. */}
+          {chatHasMore[project.id] === true && (
+            <button type="button" className={styles.loadMore} onClick={() => loadMoreChats(project.id)}>
+              이전 명령 더 보기
+            </button>
+          )}
           {messages.length === 0 && <p className={shared.muted}>아직 보낸 명령이 없습니다.</p>}
           {messages.map((m) => {
             const rootId = m.rootExecutionId;
+            // 사람이 답할 것은 채팅이 아니라 "내가 처리할 요청"(또는 캔버스 말풍선)에서 처리한다 — 채팅에는 안 띄운다.
             return (
               <div key={m.id} className={`${styles.message} ${styles[m.role]}`}>
                 <div className={styles.meta}>
@@ -197,7 +399,13 @@ export default function ChatPanel({
                   {m.targetLabel && <span> → {m.targetLabel}</span>}
                 </div>
                 <div className={m.status === 'error' ? styles.error : undefined}>
-                  {m.status === 'pending' ? <span className={styles.pending}>작업 중…</span> : m.text}
+                  {m.status === 'pending' && m.role !== 'user' ? (
+                    <span className={styles.pending}>작업 중…</span>
+                  ) : (
+                    <div className={styles.markdown}>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.text}</ReactMarkdown>
+                    </div>
+                  )}
                 </div>
                 {m.attachments.length > 0 && (
                   <ul className={attach.chips}>
@@ -209,7 +417,8 @@ export default function ChatPanel({
                     ))}
                   </ul>
                 )}
-                {rootId !== null && (
+                {/* 실행 현황은 에이전트 응답에만 붙인다 — 내가 보낸 말에는 상태를 달지 않는다. */}
+                {rootId !== null && m.role !== 'user' && (
                   <ExecutionSummaryCard
                     executions={projectExecutions}
                     rootExecutionId={rootId}
@@ -225,12 +434,23 @@ export default function ChatPanel({
         <ul className={attach.chips}>
           {attachments.map((file) => (
             <li key={`${file.workspaceId}:${file.path}`} className={attach.chip} title={file.path}>
-              <FileIcon size={13} />
+              {/* 붙여넣거나 끌어온 이미지는 미리보기를 보여 준다(서버에서 다시 받아온 첨부는 아이콘만). */}
+              {previews[previewKey(file)] === undefined ? (
+                <FileIcon size={13} />
+              ) : (
+                <img
+                  className={styles.chipThumb}
+                  src={previews[previewKey(file)]}
+                  alt={file.name}
+                  title="눌러서 크게 보기"
+                  onClick={() => setZoomImage(previews[previewKey(file)] ?? null)}
+                />
+              )}
               <span className={attach.chipName}>{file.name}</span>
               <button
                 type="button"
                 className={attach.chipRemove}
-                onClick={() => setAttachments((prev) => prev.filter((item) => item !== file))}
+                onClick={() => removeAttachment(file)}
                 aria-label={`${file.name} 첨부 빼기`}
               >
                 ×
@@ -252,7 +472,41 @@ export default function ChatPanel({
         </p>
       )}
 
+      {/* 이어가기 — 입력줄 바로 위에서 고른다(고르면 새 명령 앞에 그 작업의 내역을 붙여 보낸다). */}
+      <select
+        className={styles.continuePick}
+        value={continueFrom === null ? '' : String(continueFrom)}
+        onChange={(e) => setContinueFrom(e.target.value === '' ? null : Number(e.target.value))}
+        aria-label="이어갈 작업"
+        title="이어갈 작업을 고르면 그 작업 내역을 함께 보냅니다"
+      >
+        <option value="">이어가기 없음 — 새 작업으로 시작</option>
+        {chats
+          .filter(
+            (message) =>
+              message.projectId === project.id &&
+              message.role === 'user' &&
+              message.rootExecutionId !== null,
+          )
+          .slice(-10)
+          .reverse()
+          .map((message) => (
+            <option key={message.id} value={String(message.rootExecutionId)}>
+              #{message.rootExecutionId} {message.text.slice(0, 26)}
+            </option>
+          ))}
+      </select>
+
       <form onSubmit={onSubmit} className={styles.form}>
+        {/* 위쪽 손잡이: 위로 끌면 입력창이 커진다(아래쪽에 두면 화면 끝에 걸려 한계가 있었다). */}
+        <div
+          className={styles.resizeBar}
+          role="separator"
+          aria-label="입력창 높이 조절"
+          aria-orientation="horizontal"
+          title="위로 끌면 입력창이 커집니다"
+          onPointerDown={startResize}
+        />
         <button
           type="button"
           className={styles.attach}
@@ -267,16 +521,21 @@ export default function ChatPanel({
         >
           <ClipIcon size={18} />
         </button>
-        <input
+        <textarea
+          ref={inputRef}
+          rows={1}
+          style={{ height: `${inputHeight}px` }}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={target ? '명령을 입력하고 Enter' : '먼저 대상을 선택하세요'}
+          onKeyDown={onInputKeyDown}
+          placeholder={target ? '명령을 입력하고 Enter (Shift+Enter 로 줄바꿈)' : '먼저 대상을 선택하세요'}
           aria-label="명령 입력"
         />
         <button type="submit" disabled={!target || (text.trim() === '' && attachments.length === 0)}>
           보내기
         </button>
         </form>
+        {uploadError && <p className={styles.uploadError}>{uploadError}</p>}
         </>
       )}
 
@@ -290,6 +549,18 @@ export default function ChatPanel({
             setPickerOpen(false);
           }}
         />
+      )}
+
+      {/* 썸네일을 누르면 뜨는 큰 미리보기 — 어느 이미지인지 확실히 알아보기 위해. 클릭·Esc 로 닫는다. */}
+      {zoomImage !== null && (
+        <div
+          className={styles.lightbox}
+          role="dialog"
+          aria-label="첨부 이미지 크게 보기"
+          onClick={() => setZoomImage(null)}
+        >
+          <img className={styles.lightboxImage} src={zoomImage} alt="첨부 이미지" />
+        </div>
       )}
     </section>
   );

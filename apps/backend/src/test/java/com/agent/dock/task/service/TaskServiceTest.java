@@ -1,16 +1,29 @@
 package com.agent.dock.task.service;
 
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.agent.domain.Agent;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.agent.repository.AgentRepository;
+import com.agent.dock.event.service.EventPublisher;
+import com.agent.dock.attachment.dto.AttachmentResponse;
 import com.agent.dock.attachment.service.AttachmentService;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.delegation.service.DelegationService;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.domain.Execution;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.repository.ExecutionRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.group.repository.AgentGroupRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.project.domain.Project;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.project.repository.ProjectRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.task.domain.Task;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.task.dto.CommandRequest;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.task.repository.TaskRepository;
 import java.util.List;
 import java.util.Optional;
@@ -39,6 +52,7 @@ class TaskServiceTest {
     @Mock ExecutionRepository executionRepository;
     @Mock DelegationService delegationService;
     @Mock AttachmentService attachmentService;
+    @Mock EventPublisher changeEvents;
     @InjectMocks TaskService service;
 
     private Project project;
@@ -53,6 +67,26 @@ class TaskServiceTest {
         agent.setId(7L);
         agent.setName("Dev");
         agent.setProject(project);
+    }
+
+    @Test
+    void findAllIncludesTaskAttachmentsForBubbleRestore() {
+        Task task = new Task();
+        task.setId(30L);
+        task.setProject(project);
+        task.setTitle("첨부 명령");
+        task.setPrompt("첨부 명령");
+        when(taskRepository.findAllWithRelations()).thenReturn(List.of(task));
+        when(executionRepository.findFirstByTaskIdOrderByIdDesc(30L)).thenReturn(Optional.empty());
+        AttachmentResponse attachment = new AttachmentResponse(
+                11L, 3L, 30L, "report.pdf", ".agentdock/attachments/abcd1234-report.pdf", 10L);
+        when(attachmentService.listForTask(30L)).thenReturn(List.of(attachment));
+
+        var rows = service.findAll(null, null);
+
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).attachments()).hasSize(1);
+        assertThat(rows.get(0).attachments().get(0).originalName()).isEqualTo("report.pdf");
     }
 
     @Test

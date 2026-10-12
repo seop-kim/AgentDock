@@ -5,6 +5,9 @@
   top: var(--spacing-md);
   right: var(--spacing-md);
   bottom: var(--spacing-md);
+  /* left 를 auto 로 두면 애니메이션이 안 되어 왼쪽이 즉시 튀고 폭만 늘어난다(오른쪽으로 늘어나는 것처럼 보임).
+     숫자로 적어 두면 left·width 가 함께 움직여 **오른쪽 끝이 고정된 채 왼쪽으로** 펼쳐진다. */
+  left: calc(100% - 360px - var(--spacing-md));
   width: 360px;
   max-width: calc(100% - var(--spacing-md) * 2);
   display: flex;
@@ -13,17 +16,34 @@
   /* 왼쪽은 넓히기 화살표가 설 자리만 조금 남긴다(크게 비우지 않는다) */
   padding: 10px 12px 10px 14px;
   border-radius: var(--radius-lg);
+  /* 접기/펴기 · 좌우 펼치기를 부드럽게: top·bottom·left 가 크기를 만들므로 그것들을 애니메이션한다. */
+  overflow: hidden;
+  transition:
+    bottom 220ms ease,
+    left 220ms ease,
+    width 220ms ease;
 }
 
-/* 접었을 때: 머리말만 남기고 위쪽에 붙는다 */
+/* 접었을 때: 머리말 높이만 남기고 위쪽에 붙는다(높이가 bottom 에서 파생되므로 애니메이션이 먹는다). */
 .collapsed {
-  bottom: auto;
+  bottom: calc(100% - var(--spacing-md) - 46px);
 }
 
-/* 크게 보기: 왼쪽 패널 옆부터 창 오른쪽까지 차지해 구성도를 덮는다(일시적). */
+/* 접히고 펴질 때 안쪽 기록은 서서히 사라지고 나타난다(양쪽 모두 부드럽게). */
+.collapsed .log {
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.chat:not(.collapsed) .log {
+  transition: opacity 160ms ease;
+}
+
+/* 크게 보기: 왼쪽 패널 옆부터 창 오른쪽까지 차지해 구성도를 덮는다(일시적).
+   width 를 auto 로 두면 애니메이션이 안 먹으므로 식으로 적는다(100% - 왼쪽 패널 - 좌우 여백). */
 .wide {
   left: calc(var(--left-inset, 352px) + var(--spacing-md));
-  width: auto;
+  width: calc(100% - var(--left-inset, 352px) - var(--spacing-md) * 2);
 }
 
 /* 넓어져도 말풍선이 너무 길어지지 않게 한다. */
@@ -186,15 +206,94 @@
   box-shadow: 0 0 0 3px var(--color-code-bg);
 }
 
-.form input {
+.form textarea {
   flex: 1;
   min-width: 0;
   padding: 7px 4px;
   border: none;
   background: transparent;
+  /* 높이는 위쪽 손잡이로 조절한다(브라우저 기본 손잡이는 쓰지 않는다 — 아래쪽이라 한계가 있었다). */
+  resize: none;
+  line-height: 1.5;
+  overflow-y: auto;
 }
 
-.form input:focus-visible {
+/* 입력줄 위쪽의 높이 조절 손잡이 — 위로 끌면 입력창이 커진다. */
+.resizeBar {
+  flex: 0 0 100%;
+  height: 6px;
+  margin-bottom: 2px;
+  border-radius: 999px;
+  background: transparent;
+  cursor: ns-resize;
+}
+
+.resizeBar:hover {
+  background: var(--color-code-bg);
+}
+
+/* 붙여넣은 이미지의 칩 썸네일 — 어느 이미지인지 알아볼 수 있게 크게, 누르면 더 크게. */
+.chipThumb {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  object-fit: cover;
+  cursor: zoom-in;
+}
+
+/* 썸네일을 눌렀을 때 뜨는 큰 미리보기(클릭·Esc 로 닫는다). */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: var(--color-overlay);
+  cursor: zoom-out;
+}
+
+.lightboxImage {
+  max-width: 92vw;
+  max-height: 92vh;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-float);
+}
+
+/* 이어갈 작업 고르기 — 채팅 위쪽(대상 선택 아래)에 전체 폭으로 둔다. */
+.continuePick {
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-input-bg);
+  color: var(--color-text);
+  font-size: 12px;
+}
+
+/* 이전 명령 더 보기 — 기록 맨 위에 조용히 둔다(누르면 5개씩 더 읽는다). */
+.loadMore {
+  align-self: center;
+  margin-bottom: var(--spacing-sm);
+  font-size: 12px;
+}
+
+/* 첨부(붙여넣기) 실패 안내 — 조용히 실패하지 않게 보여 준다. */
+.uploadError {
+  margin: 4px 0 0;
+  color: var(--color-error);
+  font-size: 12px;
+}
+
+/* 손잡이가 한 줄을 차지하도록 입력줄이 줄바꿈을 허용한다. */
+.form {
+  flex-wrap: wrap;
+}
+
+.form textarea:focus-visible {
   border-color: transparent;
   box-shadow: none;
 }
@@ -226,4 +325,138 @@
   border-radius: var(--radius);
   color: var(--color-primary);
   font-size: 12px;
+}
+
+/* AI 답변을 마크다운으로 그리는 영역(코드블록·리스트·강조 등). 좁은 말풍선 안에서도 넘치지 않게 한다. */
+.markdown {
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+/* 첫/마지막 블록의 바깥 여백은 없애 말풍선 여백과 겹치지 않게 한다. */
+.markdown > :first-child {
+  margin-top: 0;
+}
+
+.markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown p {
+  margin: 0 0 8px;
+}
+
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  margin: 12px 0 6px;
+  line-height: 1.3;
+}
+
+.markdown h1 {
+  font-size: 1.25rem;
+}
+
+.markdown h2 {
+  font-size: 1.15rem;
+}
+
+.markdown h3 {
+  font-size: 1.05rem;
+}
+
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  font-size: 1rem;
+}
+
+.markdown ul,
+.markdown ol {
+  margin: 0 0 8px;
+  padding-left: 1.4em;
+}
+
+.markdown li {
+  margin: 2px 0;
+}
+
+.markdown li > ul,
+.markdown li > ol {
+  margin: 4px 0 0;
+}
+
+.markdown a {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+/* 내가 보낸 말풍선(강조 배경)에서는 링크도 글자색을 따라간다. */
+.user .markdown a {
+  color: inherit;
+}
+
+.markdown strong {
+  font-weight: 700;
+}
+
+.markdown em {
+  font-style: italic;
+}
+
+.markdown code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--color-code-bg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+}
+
+.markdown pre {
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-code-bg);
+  overflow-x: auto;
+}
+
+.markdown pre code {
+  padding: 0;
+  background: none;
+  font-size: 0.9em;
+  white-space: pre;
+}
+
+.markdown blockquote {
+  margin: 0 0 8px;
+  padding: 2px 12px;
+  border-left: 3px solid var(--color-border-strong);
+  color: var(--color-muted);
+}
+
+.markdown hr {
+  margin: 12px 0;
+  border: none;
+  border-top: 1px solid var(--color-border);
+}
+
+.markdown table {
+  margin: 0 0 8px;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+
+.markdown th,
+.markdown td {
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.markdown th {
+  background: var(--color-code-bg);
 }

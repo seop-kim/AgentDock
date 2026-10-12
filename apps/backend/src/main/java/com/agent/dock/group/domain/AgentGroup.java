@@ -38,6 +38,13 @@ public class AgentGroup {
     @Column(nullable = false, columnDefinition = "text")
     private String prompt = "";
 
+    /**
+     * 그룹 **공유 노트**. 그룹 프롬프트가 "규칙"이라면 이쪽은 **맥락**이다 — 그룹 안에서 일한 실행들이
+     * 알아낸 사실을 적어 두면, 같은 그룹의 실행들이 프롬프트에 함께 실어 보고 일한다(런타임이 달라도 공유된다).
+     */
+    @Column(name = "shared_note", nullable = false, columnDefinition = "text")
+    private String sharedNote = "";
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "leader_agent_id")
     private Agent leaderAgent;

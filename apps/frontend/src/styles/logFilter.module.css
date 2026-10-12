@@ -1,0 +1,27 @@
+/* 실행 로그 검색줄: 콘솔 위에 붙는 한 줄짜리 도구. 터미널 창에서만 쓴다(미리보기는 그대로). */
+
+.filterBar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+}
+
+.filterBar input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-input-bg);
+  color: var(--color-text);
+  font-size: 12px;
+}
+
+.filterCount {
+  flex-shrink: 0;
+  color: var(--color-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

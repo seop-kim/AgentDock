@@ -11,6 +11,7 @@ import com.agent.dock.execution.domain.Execution;
 import com.agent.dock.execution.domain.ExecutionStatus;
 import com.agent.dock.execution.dto.ExecutionFinishedEvent;
 import com.agent.dock.execution.repository.ExecutionRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.group.domain.AgentGroup;
 import com.agent.dock.group.repository.AgentGroupRepository;
 import com.agent.dock.project.domain.Project;
@@ -35,6 +36,20 @@ public class TaskService {
     private final ExecutionRepository executionRepository;
     private final DelegationService delegationService;
     private final AttachmentService attachmentService;
+    /** 전역 SSE 스트림에 "Task 가 바뀌었다"를 알린다. */
+    private final EventPublisher changeEvents;
+
+    /**
+     * 명령(태스크) 목록의 **한 페이지**. 화면은 트리까지 읽느라 비용이 커서 최근 것부터 몇 개씩 가져온다.
+     * `findAll` 이 최신 → 오래된 순(desc)이므로 앞에서 `limit` 개를 자르면 최근 것이 된다.
+     * `beforeId` 를 주면 그보다 **오래된** 것만 준다("이전 명령 더 보기").
+     */
+    public List<TaskResponse> findPage(Long projectId, Long groupId, int limit, Long beforeId) {
+        return findAll(projectId, groupId).stream()
+                .filter(task -> beforeId == null || task.id() < beforeId)
+                .limit(Math.max(1, limit))
+                .toList();
+    }
 
     public List<TaskResponse> findAll(Long projectId, Long groupId) {
         List<Task> tasks;
@@ -84,6 +99,7 @@ public class TaskService {
             task.setAgent(requireAgent(requireMasterAgentId(project)));
         }
         Task saved = taskRepository.save(task);
+        changeEvents.taskChanged(projectId, saved.getId());
 
         // 첨부를 Task 에 연결하고, 실행 프롬프트에 붙일 문장(파일 경로 안내)을 받아 온다.
         String attachmentNote = attachmentService.attachToTask(saved.getId(), request.attachmentIds());
@@ -96,6 +112,7 @@ public class TaskService {
         } catch (RuntimeException ex) {
             saved.setStatus(TaskStatus.FAILED);
             taskRepository.save(saved);
+            changeEvents.taskChanged(projectId, saved.getId());
             throw ex;
         }
     }
@@ -126,6 +143,8 @@ public class TaskService {
         taskRepository.findById(event.taskId()).ifPresent(task -> {
             task.setStatus(event.status() == ExecutionStatus.SUCCEEDED ? TaskStatus.SUCCEEDED : TaskStatus.FAILED);
             taskRepository.save(task);
+            // 트리가 끝나 Task 상태가 바뀌었다 — 화면(Tasks 목록·배지)이 이 알림으로 다시 읽는다.
+            changeEvents.taskChanged(task.getProjectId(), task.getId());
         });
     }
 
@@ -133,6 +152,6 @@ public class TaskService {
         Long latestExecutionId = executionRepository.findFirstByTaskIdOrderByIdDesc(task.getId())
                 .map(execution -> execution.getId())
                 .orElse(null);
-        return TaskResponse.from(task, latestExecutionId);
+        return TaskResponse.from(task, latestExecutionId, attachmentService.listForTask(task.getId()));
     }
 }

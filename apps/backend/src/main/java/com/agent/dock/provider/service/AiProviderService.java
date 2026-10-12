@@ -2,12 +2,16 @@ package com.agent.dock.provider.service;
 
 import com.agent.dock.common.exception.ConflictException;
 import com.agent.dock.common.exception.NotFoundException;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.provider.domain.AiProvider;
+import com.agent.dock.provider.domain.ProviderKey;
 import com.agent.dock.provider.dto.AiProviderResponse;
 import com.agent.dock.provider.dto.CreateAiProviderRequest;
+import com.agent.dock.provider.dto.ProviderCatalogEntry;
 import com.agent.dock.provider.dto.ProviderCapabilities;
 import com.agent.dock.provider.repository.AiProviderRepository;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AiProviderService {
     private final AiProviderRepository providerRepository;
+    /** 전역 SSE 스트림에 "런타임이 바뀌었다"를 알린다. */
+    private final EventPublisher changeEvents;
 
     /** 논리 삭제되지 않은 런타임만 반환한다. */
     public List<AiProviderResponse> findAll() {
@@ -34,7 +40,9 @@ public class AiProviderService {
         provider.setKey(request.key());
         provider.setName(request.name());
         provider.setCapabilities(request.capabilities() != null ? request.capabilities() : new HashMap<>());
-        return AiProviderResponse.from(providerRepository.save(provider));
+        AiProviderResponse response = AiProviderResponse.from(providerRepository.save(provider));
+        changeEvents.runtimeChanged();
+        return response;
     }
 
     /** 논리 삭제. 이 런타임을 쓰던 에이전트는 남고 "사용 불가"가 된다. */
@@ -43,6 +51,17 @@ public class AiProviderService {
         AiProvider provider = findActive(id);
         provider.setDeletedAt(Instant.now());
         providerRepository.save(provider);
+        changeEvents.runtimeChanged();
+    }
+
+    /** 런타임 표시 이름 변경. */
+    @Transactional
+    public AiProviderResponse rename(Long providerId, String name) {
+        AiProvider provider = findActive(providerId);
+        provider.setName(name.trim());
+        AiProviderResponse response = AiProviderResponse.from(providerRepository.save(provider));
+        changeEvents.runtimeChanged();
+        return response;
     }
 
     /** 런타임 on/off. 켜져 있어야 에이전트에 할당하거나 실행할 수 있다. */
@@ -50,7 +69,9 @@ public class AiProviderService {
     public AiProviderResponse setEnabled(Long providerId, boolean enabled) {
         AiProvider provider = findActive(providerId);
         provider.setEnabled(enabled);
-        return AiProviderResponse.from(providerRepository.save(provider));
+        AiProviderResponse response = AiProviderResponse.from(providerRepository.save(provider));
+        changeEvents.runtimeChanged();
+        return response;
     }
 
     /**
@@ -73,7 +94,27 @@ public class AiProviderService {
             capabilities.put("notes", request.notes().trim());
         }
         provider.setCapabilities(capabilities);
-        return AiProviderResponse.from(providerRepository.save(provider));
+        AiProviderResponse response = AiProviderResponse.from(providerRepository.save(provider));
+        changeEvents.runtimeChanged();
+        return response;
+    }
+
+    /** capabilities 를 런타임 기본값(ProviderKey)으로 되돌린다. */
+    @Transactional
+    public AiProviderResponse resetCapabilities(Long providerId) {
+        AiProvider provider = findActive(providerId);
+        provider.setCapabilities(provider.getKey().defaultCapabilities());
+        AiProviderResponse response = AiProviderResponse.from(providerRepository.save(provider));
+        changeEvents.runtimeChanged();
+        return response;
+    }
+
+    /** 등록 가능한 런타임 카탈로그(키·표시 이름·이미 등록됨 여부·기본 capabilities). */
+    public List<ProviderCatalogEntry> catalog() {
+        return Arrays.stream(ProviderKey.values())
+                .map(key -> new ProviderCatalogEntry(key, key.displayName(),
+                        providerRepository.existsByKeyAndDeletedAtIsNull(key), key.defaultCapabilities()))
+                .toList();
     }
 
     private void putOrRemove(Map<String, Object> capabilities, String key, String value) {

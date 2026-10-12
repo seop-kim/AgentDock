@@ -183,9 +183,12 @@
   color: var(--color-muted);
 }
 
+/* 작업 중 배지: 파란 바탕 + 흰 글씨 — 옅은 파랑 글씨는 배경에 묻혀 읽기 어려웠다. */
 .statusWorking {
   border-color: var(--color-primary);
-  color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-weight: 600;
 }
 
 .statusWaiting {
@@ -195,6 +198,105 @@
 
 .statusIdle {
   color: var(--color-muted);
+}
+
+/* 작업 중 상태 배지는 누를 수 있다: 그 에이전트의 터미널 창을 연다(카드 선택·끌기로 번지지 않게 막는다). */
+.statusButton {
+  cursor: pointer;
+}
+
+.statusButton:hover {
+  background: var(--color-code-bg);
+  filter: none;
+}
+
+/* 목록 필터(검색어·상태·그룹) — 셋을 함께 걸 수 있다(복합 조건). */
+/* 검색줄 — 목록 카드와 같은 폭을 쓴다(좌우 여백 없음). 필터 아이콘은 인풋 안 오른쪽에 얹는다. */
+.filters {
+  padding: 0 0 var(--spacing-sm);
+}
+
+.searchWrap {
+  position: relative;
+}
+
+.searchWrap input {
+  width: 100%;
+  padding: 5px 34px 5px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-input-bg);
+  color: var(--color-text);
+  font-size: 12px;
+}
+
+/* 인풋 안 오른쪽에 고정 — 눌러도 자리가 바뀌지 않게 크기·여백을 상수로 두고 색만 바꾼다. */
+.filterButton {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* 켜짐은 색만 바뀐다(굵게·테두리처럼 크기를 바꾸는 값을 쓰면 버튼이 밀린다). */
+.filterButtonOn {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+/* 필터 팝업(버튼 아래에 포털로 뜬다). */
+.popup {
+  composes: glassStrong from '../../styles/glass.module.css';
+  position: fixed;
+  top: var(--top);
+  left: var(--left);
+  z-index: 300;
+  width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border-radius: var(--radius);
+  color: var(--color-text);
+}
+
+.popupLabel {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.popup select {
+  width: 100%;
+  padding: 5px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-input-bg);
+  color: var(--color-text);
+  font-size: 12px;
+}
+
+.popupActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.filterReset {
+  flex-shrink: 0;
+  font-size: 11px;
 }
 
 .warnDot {

@@ -82,6 +82,14 @@
   margin-bottom: 6px;
 }
 
+/* 새로고침·설정 버튼 묶음 — 제목 줄의 space-between 이 둘을 갈라놓지 않게 한 덩어리로 둔다. */
+.titleActions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
 .settingsButton {
   display: inline-flex;
   align-items: center;

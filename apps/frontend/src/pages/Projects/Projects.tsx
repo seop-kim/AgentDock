@@ -5,7 +5,7 @@ import shared from '../../styles/shared.module.css';
 import styles from './Projects.module.css';
 
 export default function Projects() {
-  const { projects, workspaces, agents, tasks, createProject } = useAgentDockStore();
+  const { projects, workspaces, agents, tasks, createProject, loading } = useAgentDockStore();
   const [name, setName] = useState('');
 
   const onCreate = (e: FormEvent) => {
@@ -29,7 +29,8 @@ export default function Projects() {
         </form>
       </div>
 
-      {projects.length === 0 && <p className={shared.muted}>등록된 프로젝트가 없습니다.</p>}
+      {loading && <p className={shared.muted}>불러오는 중…</p>}
+      {!loading && projects.length === 0 && <p className={shared.muted}>등록된 프로젝트가 없습니다.</p>}
 
       <div className={styles.grid}>
         {projects.map((project) => {

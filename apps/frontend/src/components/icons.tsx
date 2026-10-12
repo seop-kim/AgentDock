@@ -34,6 +34,20 @@ export const DashboardIcon = () => (
   </Icon>
 );
 
+/** Tasks(작업 목록) */
+export const ListIcon = () => (
+  <Icon>
+    <path d="M8 6h13M8 12h13M8 18h13" />
+    <path d="M3 6h.01M3 12h.01M3 18h.01" />
+  </Icon>
+);
+
+export const FilterIcon = () => (
+  <Icon>
+    <path d="M4 5h16l-6 7v6l-4 2v-8L4 5z" />
+  </Icon>
+);
+
 export const SettingsIcon = () => (
   <Icon>
     <circle cx="12" cy="12" r="3" />
@@ -54,8 +68,8 @@ export const AlertIcon = () => (
   </Icon>
 );
 
-export const PlusIcon = () => (
-  <Icon>
+export const PlusIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
     <path d="M12 5v14M5 12h14" />
   </Icon>
 );
@@ -96,5 +110,96 @@ export const ChevronRightIcon = ({ size = 20 }: { size?: number }) => (
 export const ChevronDownIcon = () => (
   <Icon>
     <path d="M6 9l6 6 6-6" />
+  </Icon>
+);
+
+/** 에이전트 연결 설정(플러그) */
+export const PlugIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
+    <path d="M9 3v5M15 3v5" />
+    <path d="M6 8h12v3a6 6 0 0 1-12 0V8z" />
+    <path d="M12 17v4" />
+  </Icon>
+);
+
+/** 테마(명암 원) */
+export const ThemeIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none" />
+  </Icon>
+);
+
+/** 라이트 테마(해) */
+export const SunIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4" />
+  </Icon>
+);
+
+/** 다크 테마(달) */
+export const MoonIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
+    <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />
+  </Icon>
+);
+
+/** 터미널/CLI */
+export const TerminalIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <path d="M7 9l3 3-3 3" />
+    <path d="M13 15h4" />
+  </Icon>
+);
+
+/** 삭제(휴지통) */
+export const TrashIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
+    <path d="M4 7h16" />
+    <path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7" />
+    <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" />
+    <path d="M10 11v6M14 11v6" />
+  </Icon>
+);
+/** 예약·반복 실행 */
+export const CalendarIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
+    <rect x="3" y="5" width="18" height="16" rx="2" />
+    <path d="M3 9h18M8 3v4M16 3v4" />
+  </Icon>
+);
+
+/** 비용·예산(동전) */
+export const CoinIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
+    <circle cx="12" cy="12" r="8" />
+    <path d="M12 8v8M9.6 9.7h4.3a1.8 1.8 0 0 1 0 3.6h-3.8a1.8 1.8 0 0 0 0 3.6h4.3" />
+  </Icon>
+);
+
+/** 알림 */
+export const BellIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
+    <path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z" />
+    <path d="M10.5 20a1.8 1.8 0 0 0 3 0" />
+  </Icon>
+);
+
+/** 병합 정책 */
+export const MergeIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
+    <circle cx="7" cy="6" r="2" />
+    <circle cx="7" cy="18" r="2" />
+    <circle cx="17" cy="12" r="2" />
+    <path d="M7 8v8M9 7.5c4 .2 6 1.7 6 3.1" />
+  </Icon>
+);
+
+/** 즉시 실행 */
+export const PlayIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
+    <path d="M7 5l12 7-12 7V5z" />
   </Icon>
 );

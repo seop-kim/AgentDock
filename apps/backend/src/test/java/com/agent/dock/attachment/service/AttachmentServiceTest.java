@@ -1,7 +1,10 @@
 package com.agent.dock.attachment.service;
 
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.attachment.domain.Attachment;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.attachment.repository.AttachmentRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.workspace.repository.WorkspaceRepository;
 import java.util.List;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,6 +21,7 @@ import static org.mockito.Mockito.when;
 class AttachmentServiceTest {
     @Mock AttachmentRepository attachmentRepository;
     @Mock WorkspaceRepository workspaceRepository;
+    @Mock EventPublisher changeEvents;
     @InjectMocks AttachmentService service;
 
     @Test

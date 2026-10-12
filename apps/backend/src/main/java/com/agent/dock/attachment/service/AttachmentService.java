@@ -5,6 +5,7 @@ import com.agent.dock.attachment.dto.AttachmentResponse;
 import com.agent.dock.attachment.repository.AttachmentRepository;
 import com.agent.dock.common.exception.BadRequestException;
 import com.agent.dock.common.exception.NotFoundException;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.workspace.domain.Workspace;
 import com.agent.dock.workspace.repository.WorkspaceRepository;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +37,12 @@ public class AttachmentService {
     /** 첨부를 복사해 두는 폴더(워크스페이스 기준 상대 경로). 화면 안내 문구와 같아야 한다. */
     public static final String ATTACHMENT_FOLDER = ".agentdock/attachments";
 
+    /**
+     * 실행 프롬프트 끝에 붙이는 첨부 안내 절의 머리말. 위임이 이 절을 지시 파일의 "첨부 파일" 로 떼어 내므로
+     * (거기서 참조) 머리말을 한 곳에서만 정의한다.
+     */
+    public static final String ATTACHMENT_PROMPT_HEADER = "[첨부 파일]";
+
     private static final int MAX_FILES = 2000;
     private static final int MAX_DEPTH = 8;
     /** 파일 목록에서 건너뛸 폴더(용량이 크고 첨부와 무관하다). */
@@ -44,6 +51,8 @@ public class AttachmentService {
 
     private final AttachmentRepository attachmentRepository;
     private final WorkspaceRepository workspaceRepository;
+    /** 전역 SSE 스트림에 "첨부가 바뀌었다"를 알린다(파일 목록·Task 연결). */
+    private final EventPublisher changeEvents;
 
     /** 첨부 창에 보여 줄 파일 목록(워크스페이스 기준 상대 경로). */
     public List<String> listFiles(Long workspaceId, String subPath) {
@@ -104,6 +113,8 @@ public class AttachmentService {
             attachment.setSizeBytes(file.getSize());
             saved.add(AttachmentResponse.from(attachmentRepository.save(attachment)));
         }
+        // 파일 목록이 바뀌었다(워크스페이스 단위라 프로젝트를 모른다 — projectId 는 null).
+        changeEvents.attachmentChanged(null, null);
         return saved;
     }
 
@@ -122,14 +133,26 @@ public class AttachmentService {
         }
         attachments.forEach(attachment -> attachment.setTaskId(taskId));
         attachmentRepository.saveAll(attachments);
+        changeEvents.attachmentChanged(null, taskId);
 
         StringBuilder prompt = new StringBuilder();
-        prompt.append("\n\n[첨부 파일]\n아래 경로는 프로젝트 폴더 기준입니다. 이 경로로 파일을 읽으세요.\n");
+        prompt.append("\n\n").append(ATTACHMENT_PROMPT_HEADER)
+                .append("\n아래 경로는 프로젝트 폴더 기준입니다. 이 경로로 파일을 읽으세요.\n");
         for (Attachment attachment : attachments) {
             prompt.append("- ").append(attachment.getStoredPath())
                     .append(" (").append(attachment.getOriginalName()).append(")\n");
         }
         return prompt.toString();
+    }
+
+    /** Task 재조회 시 채팅 말풍선 첨부를 복원하기 위해 이 명령(Task)에 붙은 첨부를 돌려준다. */
+    public List<AttachmentResponse> listForTask(Long taskId) {
+        if (taskId == null) {
+            return List.of();
+        }
+        return attachmentRepository.findByTaskIdOrderByIdAsc(taskId).stream()
+                .map(AttachmentResponse::from)
+                .toList();
     }
 
     /** 워크스페이스 폴더가 사라졌거나 잘못됐을 때를 대비한 기준 경로. */

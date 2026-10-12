@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FileIcon } from '../../components/icons';
 import { ATTACHMENT_FOLDER, displayName, fileName } from '../../lib/attachments';
@@ -23,10 +23,15 @@ export default function AttachFilesModal({
   onClose: () => void;
   onApply: (files: AttachedFile[]) => void;
 }) {
-  const { workspaces, workspaceFiles } = useAgentDockStore();
+  const { workspaces, workspaceFiles, loadWorkspaceFiles } = useAgentDockStore();
   const initialWorkspaceId = project.workspaces.find((w) => w.isDefault)?.workspaceId ?? project.workspaces[0]?.workspaceId ?? 0;
   const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId);
   const [picked, setPicked] = useState<AttachedFile[]>(attached);
+
+  // 파일 목록은 **이 창이 열려 있는 동안에만** 필요하다 — 열릴 때(워크스페이스를 바꿀 때) 그때 읽는다.
+  useEffect(() => {
+    loadWorkspaceFiles(workspaceId);
+  }, [loadWorkspaceFiles, workspaceId]);
 
   const workspace = workspaces.find((w) => w.id === workspaceId);
   const files = workspaceFiles[workspaceId] ?? [];

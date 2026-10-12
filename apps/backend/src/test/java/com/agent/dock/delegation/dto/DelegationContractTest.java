@@ -46,6 +46,44 @@ class DelegationContractTest {
     }
 
     @Test
+    void readsAskContractWithQuestionAndOptions() {
+        DelegationContract contract = DelegationContract.parse(Map.of(
+                "action", "ask",
+                "question", "새 파일 이름을 무엇으로 할까요?",
+                "options", List.of("A안", "B안"))).orElseThrow();
+
+        assertThat(contract.action()).isEqualTo(ExecutionDecision.ASK);
+        assertThat(contract.question()).isEqualTo("새 파일 이름을 무엇으로 할까요?");
+        assertThat(contract.options()).containsExactly("A안", "B안");
+        assertThat(contract.orders()).isEmpty();
+    }
+
+    @Test
+    void readsAskContractWithoutOptions() {
+        DelegationContract contract = DelegationContract.parse(
+                Map.of("action", "ask", "question", "이대로 진행할까요?")).orElseThrow();
+
+        assertThat(contract.action()).isEqualTo(ExecutionDecision.ASK);
+        assertThat(contract.options()).isEmpty();
+    }
+
+    @Test
+    void rejectsAskWithoutAQuestion() {
+        assertThat(DelegationContract.parse(Map.of("action", "ask"))).isEmpty();
+        assertThat(DelegationContract.parse(Map.of("action", "ask", "question", "  "))).isEmpty();
+    }
+
+    @Test
+    void ignoresNonStringOptions() {
+        DelegationContract contract = DelegationContract.parse(Map.of(
+                "action", "ask",
+                "question", "무엇으로 할까요?",
+                "options", List.of("A안", 3, Map.of("x", 1)))).orElseThrow();
+
+        assertThat(contract.options()).containsExactly("A안");
+    }
+
+    @Test
     void rejectsPayloadsThatAreNotTheContract() {
         assertThat(DelegationContract.parse(null)).isEmpty();
         assertThat(DelegationContract.parse(Map.of())).isEmpty();
@@ -62,5 +100,24 @@ class DelegationContractTest {
                 "targets", List.of(Map.of("agentId", 12))))).isEmpty();
         assertThat(DelegationContract.parse(Map.of("action", "delegate",
                 "targets", List.of("문자열")))).isEmpty();
+    }
+
+    @Test
+    void readsFinishContractAsDone() {
+        DelegationContract contract = DelegationContract.parse(
+                Map.of("action", "finish", "summary", "자식이 모두 성공했습니다")).orElseThrow();
+
+        assertThat(contract.action()).isEqualTo(ExecutionDecision.DONE);
+        assertThat(contract.summary()).isEqualTo("자식이 모두 성공했습니다");
+        assertThat(contract.orders()).isEmpty();
+    }
+
+    @Test
+    void finishFactoryProducesADoneContract() {
+        DelegationContract contract = DelegationContract.finish("모두 성공");
+
+        assertThat(contract.action()).isEqualTo(ExecutionDecision.DONE);
+        assertThat(contract.summary()).isEqualTo("모두 성공");
+        assertThat(contract.orders()).isEmpty();
     }
 }

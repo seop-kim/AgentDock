@@ -1,0 +1,438 @@
+import { api } from './api';
+
+/**
+ * 전역 이벤트 스트림이 실어 오는 알림. 스토어의 `DataChanged` 와 **구조가 같다** —
+ * 스토어가 이 모듈을 쓰게 되므로 순환 import 를 피하려고 여기서 최소 모양만 정의한다.
+ */
+export interface LiveEvent {
+  type: string;
+  projectId: number | null;
+}
+
+/**
+ * 탭 사이에 SSE 를 **하나로 모으는** 채널.
+ *
+ * <p>브라우저는 오리진당 HTTP/1.1 연결 6개만 허용한다. 탭마다 전역 이벤트 스트림과 실행 로그 스트림을 열면
+ * 이 6칸이 다 차고, 그 순간 초기 로딩(`reload`) 요청이 큐에 갇혀 화면이 "불러오는 중"에서 끝나지 않는다.
+ *
+ * <p>그래서 **Web Locks** 로 탭 중 하나를 리더로 뽑아 그 탭만 SSE 를 열고, 받은 것을
+ * **BroadcastChannel** 로 모든 탭에 뿌린다. 리더 탭이 닫히면 락이 풀려 **대기하던 다음 탭이 자동으로 승격**된다
+ * (Web Locks 는 문서가 사라지면 브라우저가 알아서 해제하므로 좀비 리더가 남지 않는다).
+ *
+ * <p>알려진 단순화: 리더가 이미 열어 둔 실행을 나중에 구독한 탭은 **서버 재생(replay)을 받지 못한다**(새 줄부터 본다).
+ * 처음 구독한 탭(=스트림을 여는 탭)은 재생을 받는다. 필요해지면 리더에 링 버퍼를 두고 승격 시 재전송하면 된다.
+ */
+
+const CHANNEL = 'agentdock-live';
+const LOCK = 'agentdock-live-leader';
+
+type LiveMessage =
+  | { kind: 'event'; payload: LiveEvent }
+  | { kind: 'connection'; connected: boolean }
+  | { kind: 'log'; executionId: number; stream: string; text: string }
+  | { kind: 'replay'; executionId: number; lines: { stream: string; text: string }[] }
+  | { kind: 'exit'; executionId: number; status: string }
+  | { kind: 'want'; executionId: number }
+  | { kind: 'drop'; executionId: number }
+  | { kind: 'hello' }
+  | { kind: 'leader' };
+
+// ── 바깥에 보여 주는 구독 ────────────────────────────────────────────────────────
+
+const eventHandlers = new Set<(event: LiveEvent) => void>();
+const connectionHandlers = new Set<(connected: boolean) => void>();
+interface LogHandlers {
+  onLine: (line: { stream: string; text: string }) => void;
+  /** 나중에 구독했을 때 리더가 보내 주는 최근 로그(있으면 이걸로 다시 채운다). */
+  onReplay: (lines: { stream: string; text: string }[]) => void;
+  onExit: () => void;
+}
+const logHandlers = new Map<number, Set<LogHandlers>>();
+
+/** 전역 데이터 변경 알림 + 실시간 연결 여부. 리더가 열고, 팔로워는 채널로 받는다. */
+export function subscribeEvents(handlers: {
+  onEvent: (event: LiveEvent) => void;
+  onConnection: (connected: boolean) => void;
+}): () => void {
+  eventHandlers.add(handlers.onEvent);
+  connectionHandlers.add(handlers.onConnection);
+  // 리더가 이미 연결돼 있으면 지금 상태를 알려 준다(팔로워는 연결이 없어 모른다).
+  if (leaderActive) handlers.onConnection(connected);
+  // 그리고 리더에게 상태를 물어본다 — 모듈 로드 때 보낸 hello 는 이 구독자가 붙기 전이라 답을 놓친다.
+  send({ kind: 'hello' });
+  return () => {
+    eventHandlers.delete(handlers.onEvent);
+    connectionHandlers.delete(handlers.onConnection);
+  };
+}
+
+/** 한 실행의 로그. 구독이 0이 되면 `drop` 을 보내 리더가 그 스트림을 닫는다(연결을 놀리지 않는다). */
+export function subscribeLog(executionId: number, handlers: LogHandlers): () => void {
+  const set = logHandlers.get(executionId) ?? new Set<LogHandlers>();
+  const first = set.size === 0;
+  set.add(handlers);
+  logHandlers.set(executionId, set);
+  if (first) send({ kind: 'want', executionId });
+  if (leaderActive) scheduleSyncLogStreams();
+  return () => {
+    const current = logHandlers.get(executionId);
+    if (!current) return;
+    current.delete(handlers);
+    if (current.size === 0) {
+      logHandlers.delete(executionId);
+      send({ kind: 'drop', executionId });
+      if (leaderActive) scheduleSyncLogStreams();
+    }
+  };
+}
+
+// ── 채널·락 ────────────────────────────────────────────────────────────────────
+
+const channel = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel(CHANNEL);
+/** 다중화 스트림을 못 쓰는 서버(구버전)일 때만 쓰는 실행별 스트림. */
+const eventSource = new Map<number, EventSource>();
+/** 다중화 스트림(`GET /executions/stream?ids=`) — 여러 실행 로그를 **한 연결**로 받는다. */
+let muxSource: EventSource | null = null;
+let muxIds: number[] = [];
+/** 다중화 엔드포인트가 없으면(404) 참으로 두고 실행별 스트림으로 내려간다. */
+let muxBlocked = false;
+/** id 집합이 바뀔 때 연결을 즉시 여닫지 않고 모으는 시간(ms) — 실행 수명 동안 연결이 요동치지 않게. */
+const MUX_SYNC_MS = 100;
+let muxSyncTimer: number | null = null;
+let globalSource: EventSource | null = null;
+let leaderActive = false;
+let connected = false;
+/** 리더 락 요청이 이미 줄에 서 있는지(중복 요청 방지 — pageshow 마다 다시 부르기 때문). */
+let electing = false;
+
+function send(message: LiveMessage): void {
+  channel?.postMessage(message);
+}
+
+function broadcast(message: LiveMessage): void {
+  // 리더 자신에게는 BroadcastChannel 이 전달하지 않으므로, 보내고 나서 직접 적용한다.
+  send(message);
+  apply(message);
+}
+
+function apply(message: LiveMessage): void {
+  switch (message.kind) {
+    case 'event':
+      eventHandlers.forEach((handler) => handler(message.payload));
+      return;
+    case 'connection':
+      connected = message.connected;
+      connectionHandlers.forEach((handler) => handler(message.connected));
+      return;
+    case 'log':
+      logHandlers.get(message.executionId)?.forEach((handler) =>
+        handler.onLine({ stream: message.stream, text: message.text }),
+      );
+      return;
+    case 'replay':
+      logHandlers.get(message.executionId)?.forEach((handler) => handler.onReplay(message.lines));
+      return;
+    case 'exit':
+      logHandlers.get(message.executionId)?.forEach((handler) => handler.onExit());
+      return;
+    case 'want':
+      // 이미 열려 있으면 그 실행의 최근 줄을 다시 보내 준다(나중에 구독한 탭이 빈 화면을 보지 않게).
+      sendBuffered(message.executionId);
+      scheduleSyncLogStreams();
+      return;
+    case 'drop':
+      scheduleSyncLogStreams();
+      return;
+    case 'hello':
+      // 새 탭이 상태를 물었다 — 리더만 답한다(팔로워가 답하면 중복이 된다).
+      if (leaderActive) {
+        send({ kind: 'connection', connected });
+        send({ kind: 'leader' });
+      }
+      return;
+    case 'leader':
+      // 리더가 바뀌었다 — 내가 보고 있는 로그를 새 리더에게 다시 요청한다(승격한 리더는 상태가 없다).
+      logHandlers.forEach((_, executionId) => send({ kind: 'want', executionId }));
+      return;
+    default:
+      return;
+  }
+}
+
+channel?.addEventListener('message', (event: MessageEvent<LiveMessage>) => apply(event.data));
+
+/** 리더가 유지하는 실행별 최근 로그. 나중에 구독한 탭에 되돌려 준다(서버 재생을 놓친 경우 대비). */
+const REPLAY_LINES = 400;
+const buffers = new Map<number, { stream: string; text: string }[]>();
+
+/** 리더만: 아직 열려 있는 실행이면 최근 줄을 되돌려 보낸다. */
+function sendBuffered(executionId: number): void {
+  if (!leaderActive || !isStreaming(executionId)) return;
+  const lines = buffers.get(executionId) ?? [];
+  if (lines.length > 0) {
+    send({ kind: 'replay', executionId, lines: [...lines] });
+  }
+}
+
+function remember(executionId: number, line: { stream: string; text: string }): void {
+  const lines = buffers.get(executionId) ?? [];
+  lines.push(line);
+  if (lines.length > REPLAY_LINES) lines.splice(0, lines.length - REPLAY_LINES);
+  buffers.set(executionId, lines);
+}
+
+// ── 리더가 여는 스트림 ───────────────────────────────────────────────────────────
+
+function startGlobalStream(): void {
+  const source = new EventSource(`${api.base}/events/stream`);
+  source.onopen = () => broadcast({ kind: 'connection', connected: true });
+  source.onmessage = (event) => {
+    try {
+      const payload = JSON.parse(event.data as string) as LiveEvent;
+      if (typeof (payload as { type?: string })?.type === 'string') {
+        broadcast({ kind: 'event', payload });
+      }
+    } catch {
+      // 못 읽은 알림은 무시한다(안전망 폴링이 따라잡는다).
+    }
+  };
+  source.onerror = () => {
+    broadcast({ kind: 'connection', connected: false });
+    // EventSource 가 스스로 다시 붙는다 — 상태만 알린다.
+  };
+  globalSource = source;
+}
+
+/** 지금 로그를 구독 중인 실행 id(정렬). */
+function streamedIds(): number[] {
+  return [...logHandlers.keys()].sort((a, b) => a - b);
+}
+
+function sameIds(a: number[], b: number[]): boolean {
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+}
+
+/** id 집합 변화를 잠깐 모았다가 스트림을 맞춘다(연결을 계속 여닫지 않게). */
+function scheduleSyncLogStreams(): void {
+  if (muxSyncTimer !== null) window.clearTimeout(muxSyncTimer);
+  muxSyncTimer = window.setTimeout(() => {
+    muxSyncTimer = null;
+    syncLogStreams();
+  }, MUX_SYNC_MS);
+}
+
+/**
+ * 리더가 로그 스트림을 원하는 집합에 맞춘다.
+ * 여러 실행은 **다중화 스트림 하나**(`GET /executions/stream?ids=`)로 받고, 그 엔드포인트가 없으면
+ * 실행별 `/executions/{id}/stream` 으로 내려간다.
+ */
+function syncLogStreams(): void {
+  if (!leaderActive) return;
+  const ids = streamedIds();
+  if (muxBlocked) {
+    syncSingles(ids);
+    return;
+  }
+  if (ids.length === 0) {
+    closeMux();
+    closeAllSingles();
+    return;
+  }
+  if (muxSource !== null && sameIds(ids, muxIds)) return;
+  closeMux();
+  openMux(ids);
+}
+
+function openMux(ids: number[]): void {
+  const source = new EventSource(`${api.base}/executions/stream?ids=${ids.join(',')}`);
+  muxIds = ids;
+  source.onmessage = (event) => {
+    const parsed = parseLog(event.data);
+    if (parsed !== null) deliverLog(parsed.executionId, parsed.line);
+  };
+  // 이름 있는 `log` 이벤트도 받아 준다(백엔드가 이름을 붙여 보내는 경우).
+  source.addEventListener('log', (event) => {
+    const parsed = parseLog((event as MessageEvent).data);
+    if (parsed !== null) deliverLog(parsed.executionId, parsed.line);
+  });
+  source.addEventListener('exit', (event) => {
+    const executionId = parseId((event as MessageEvent).data);
+    if (executionId !== null) deliverExit(executionId);
+  });
+  source.onerror = () => {
+    // 엔드포인트가 없으면(구버전 404) 브라우저가 연결을 닫는다 — 실행별 스트림으로 내려간다.
+    if (source.readyState === EventSource.CLOSED) {
+      muxBlocked = true;
+      if (muxSource === source) muxSource = null;
+      muxIds = [];
+      scheduleSyncLogStreams();
+    }
+  };
+  muxSource = source;
+}
+
+function parseId(data: unknown): number | null {
+  try {
+    const payload = JSON.parse(String(data)) as { executionId?: unknown; id?: unknown };
+    if (typeof payload.executionId === 'number') return payload.executionId;
+    if (typeof payload.id === 'number') return payload.id;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function parseLog(data: unknown): { executionId: number; line: { stream: string; text: string } } | null {
+  try {
+    const payload = JSON.parse(String(data)) as {
+      executionId?: unknown;
+      id?: unknown;
+      stream?: unknown;
+      content?: unknown;
+      text?: unknown;
+    };
+    const executionId =
+      typeof payload.executionId === 'number'
+        ? payload.executionId
+        : typeof payload.id === 'number'
+          ? payload.id
+          : null;
+    if (executionId === null) return null;
+    const stream = typeof payload.stream === 'string' ? payload.stream : 'stdout';
+    const text =
+      typeof payload.content === 'string' ? payload.content : typeof payload.text === 'string' ? payload.text : '';
+    return { executionId, line: { stream, text } };
+  } catch {
+    return null;
+  }
+}
+
+function deliverLog(executionId: number, line: { stream: string; text: string }): void {
+  // 최근 줄을 남겨 둔다 — 나중에 구독한 탭이나 승격한 리더가 이어서 볼 수 있게.
+  remember(executionId, line);
+  broadcast({ kind: 'log', executionId, ...line });
+}
+
+function deliverExit(executionId: number): void {
+  broadcast({ kind: 'exit', executionId, status: 'exit' });
+  buffers.delete(executionId);
+}
+
+function openSingle(executionId: number): void {
+  const source = new EventSource(`${api.base}/executions/${executionId}/stream`);
+  source.onmessage = (event) => {
+    try {
+      const payload = JSON.parse(event.data as string) as { stream?: string; content?: string };
+      deliverLog(executionId, { stream: payload.stream ?? 'stdout', text: payload.content ?? '' });
+    } catch {
+      // JSON 이 아니면 무시한다.
+    }
+  };
+  source.addEventListener('exit', () => {
+    deliverExit(executionId);
+    source.close();
+    eventSource.delete(executionId);
+  });
+  source.onerror = () => source.close();
+  eventSource.set(executionId, source);
+}
+
+/** 다중화 엔드포인트를 못 쓸 때(구버전) 실행별 스트림을 원하는 집합에 맞춘다. */
+function syncSingles(ids: number[]): void {
+  ids.forEach((executionId) => {
+    if (!eventSource.has(executionId)) openSingle(executionId);
+  });
+  [...eventSource.keys()].forEach((executionId) => {
+    if (!ids.includes(executionId)) closeSingle(executionId);
+  });
+}
+
+function closeSingle(executionId: number): void {
+  const source = eventSource.get(executionId);
+  if (!source) return;
+  source.close();
+  eventSource.delete(executionId);
+  buffers.delete(executionId);
+}
+
+function closeAllSingles(): void {
+  eventSource.forEach((source) => source.close());
+  eventSource.clear();
+}
+
+function closeMux(): void {
+  muxSource?.close();
+  muxSource = null;
+  muxIds = [];
+}
+
+/** 이 실행의 로그 스트림이 지금 열려 있는지(버퍼를 되돌려 줄지 판단). */
+function isStreaming(executionId: number): boolean {
+  if (muxBlocked) return eventSource.has(executionId);
+  return muxSource !== null && muxIds.includes(executionId);
+}
+
+function startLeading(): void {
+  if (leaderActive) return;
+  leaderActive = true;
+  startGlobalStream();
+  scheduleSyncLogStreams();
+  broadcast({ kind: 'leader' });
+}
+
+function stopLeading(): void {
+  leaderActive = false;
+  if (muxSyncTimer !== null) {
+    window.clearTimeout(muxSyncTimer);
+    muxSyncTimer = null;
+  }
+  globalSource?.close();
+  globalSource = null;
+  closeMux();
+  closeAllSingles();
+  broadcast({ kind: 'connection', connected: false });
+}
+
+/**
+ * 탭 중 하나만 리더가 된다. 다른 탭들은 여기서 **대기**하다가 리더가 사라지면 자동으로 승격된다
+ * (콜백이 끝나거나 문서가 사라지면 Web Locks 가 락을 풀어 준다).
+ */
+function electLeader(): void {
+  if (!navigator.locks) {
+    // Web Locks 가 없으면 예전처럼 이 탭이 직접 연결한다(중복 연결을 감수).
+    startLeading();
+    return;
+  }
+  if (electing) return;
+  electing = true;
+  void navigator.locks
+    .request(LOCK, { mode: 'exclusive' }, () => {
+      startLeading();
+      // 리더인 동안 유지한다. 페이지가 사라지거나 뒤로/앞으로(bfcache)로 떠나면 놓는다 —
+      // bfcache 로 들어가면 브라우저가 연결을 끊으므로 붙잡고 있어도 손해다(돌아오면 다시 줄을 선다).
+      return new Promise<void>((resolve) => {
+        const release = () => {
+          electing = false;
+          stopLeading();
+          window.removeEventListener('pagehide', release);
+          resolve();
+        };
+        window.addEventListener('pagehide', release);
+      });
+    })
+    .then(() => {
+      electing = false;
+    })
+    .catch(() => {
+      electing = false;
+      stopLeading();
+    });
+}
+
+// 뒤로/앞으로로 돌아왔으면(bfcache) 연결이 끊긴 상태다 — 다시 리더 줄에 선다(이미 리더면 그대로).
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) electLeader();
+});
+
+// 리더 선출을 시작한다(구독자가 생기면 그때 hello 로 상태를 확인한다).
+electLeader();

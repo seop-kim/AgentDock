@@ -21,7 +21,7 @@ Command Code처럼 위 세 파일 중 아무것도 자동으로 읽지 않는 �
 - Backend: **Java 25 + Spring Boot 4.1.1** + Gradle(Groovy DSL) + Spring Data JPA(Hibernate) + QueryDSL + Flyway + Lombok + PostgreSQL (`apps/backend`)
 - Frontend: **Vite 5 + React 18 + React Router 6** + TypeScript + CSS Modules (`apps/frontend`, 순수 SPA)
 - Local Runtime 실행: `ProcessBuilder` (shell 미경유), 브라우저가 CLI를 직접 실행하지 않음
-- 실시간 로그/출력: SSE (Server-Sent Events, `SseEmitter`)
+- 실시간 로그/출력: SSE (Server-Sent Events, `SseEmitter`) — 실행 로그는 `GET /executions/{id}/stream`, **데이터 변경 알림은 전역 `GET /events/stream`**
 
 ## 핵심 설계 원칙 (스펙 33장)
 
@@ -42,7 +42,7 @@ Command Code처럼 위 세 파일 중 아무것도 자동으로 읽지 않는 �
 | **프로젝트** (`project`) | 워크스페이스를 **N개** 할당(`project_workspace`, 기본 1개). 에이전트를 프로젝트 안에서 만든다 |
 | **에이전트** (`agent`) | **프로젝트 소속**(`project_id NOT NULL`). 런타임 + Role + Permission + **페르소나**(`persona`, 그 에이전트만의 성격/일하는 방식 프롬프트) + model/mode |
 | **그룹** (`agent_group`) | 프로젝트 안에서 에이전트를 묶고 리더를 지정 |
-| **Task / Execution** | 프로젝트 소속. 실행 디렉터리는 프로젝트의 **기본 워크스페이스** |
+| **Task / Execution** | 프로젝트 소속. 실행 디렉터리는 프로젝트의 **기본 워크스페이스**(git 저장소면 그 저장소의 **worktree**, 아래 "워크트리 격리") |
 | **Agents 메뉴** | 전 프로젝트 에이전트 목록(읽기용) + 이 화면에서도 생성 가능(Stage 2 에서 프로젝트 상세로 이동 예정) |
 | **Tasks 메뉴** | 진행/종료 작업 목록 |
 
@@ -64,7 +64,7 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
 - **글래스 스타일**: 위에 떠 있는 패널은 반투명 + 블러(`styles/glass.module.css` 의 `glass`/`glassStrong` 를 `composes` 로 가져다 쓴다). 라이트는 배경에 색이 번진 그라데이션(`--app-bg`)을 깔고, 다크는 무채색으로 배경을 너무 어둡지 않게(#161616) 두되 **떠 있는 것들(패널, 채팅, 그룹 상자, 노드)은 배경보다 확실히 밝은 회색**으로 구분한다. 왼쪽 사이드바는 글래스가 아니라 평평한 기본 디자인(`--color-sidebar`)이다. **글래스(backdrop-filter) 요소에는 `overflow` 를 두지 않는다** — 크롬이 blur 를 모서리 밖으로 **네모나게** 그려 둥근 모서리 바깥에 색이 새어 보인다. 자르기가 필요하면 안쪽 요소(`.cards` 처럼 블러가 없는 것)에서 한다.
 - **다크모드 지원**: `tokens.css` 가 라이트/다크 값을 정의한다. `html[data-theme]` 명시값 > 시스템 설정 > 라이트. 새 색이 필요하면 토큰을 라이트·다크 양쪽(그리고 `prefers-color-scheme` 블록)에 함께 추가한다.
 - **메뉴는 왼쪽 사이드바**(`components/Sidebar.tsx`)에 모은다. 기본은 아이콘만 보이고, 위의 메뉴 버튼을 누르면 이름까지 펼쳐지며 다시 누르면 접힌다. 메뉴를 추가하려면 `Sidebar.tsx` 의 `MENUS` 에 항목을, `components/icons.tsx` 에 아이콘을 추가한다.
-- **설정 화면**(`/settings`)은 사이드바에 "설정" 아이콘 하나만 두고, 화면 안쪽 왼쪽 메뉴(`pages/Settings/Settings.tsx`)로 항목을 구분한다(탭·사이드바 하위 메뉴 아님): **에이전트 연결 설정**(`/settings/agents`, 런타임 카드), **테마**(`/settings/theme`, 시스템/라이트/다크. `store/ThemeContext.tsx`). 항목을 추가하려면 `Settings.tsx` 의 `SECTIONS` 와 `App.tsx` 의 중첩 라우트에 추가한다.
+- **설정 화면**(`/settings`)은 사이드바에 "설정" 아이콘 하나만 두고, 화면 안쪽 왼쪽 메뉴(`pages/Settings/Settings.tsx`)로 항목을 구분한다(탭·사이드바 하위 메뉴 아님): **에이전트 연결 설정**(`/settings/agents`, 런타임 카드), **테마**(`/settings/theme`, 시스템/라이트/다크. `store/ThemeContext.tsx`). 항목을 추가하려면 `Settings.tsx` 의 `SECTIONS` 와 `App.tsx` 의 중첩 라우트에 추가한다. 런타임 카드는 **표시 이름 변경**(`PUT /ai-providers/{id}`)·**CLI 상태 일괄**(`GET /ai-providers/cli`)·**capabilities 기본값 되돌리기**(`GET /ai-providers/catalog` 의 기본값)를 제공한다. 실행 로그는 리더 탭이 `GET /executions/stream?ids=`(다중화)로 받고, 그 엔드포인트가 없으면 실행별 스트림으로 내려간다(`lib/liveChannel.ts`).
 - 내용 영역은 사이드바를 뺀 화면 전체 폭을 쓴다(`max-width` 로 가운데 정렬하지 않는다).
 - **프로젝트**: 목록(`/projects`)은 **카드 뷰**로 이름·워크스페이스·에이전트 수·총 Task 수를 보여 주고 카드를 누르면 상세(`/projects/:id`)로 간다. 상세는 **구성도 캔버스**(`GroupCanvas.tsx`)가 사이드바를 뺀 화면 전체를 채우고, 그 위에 헤더 카드(이름 줄 오른쪽 끝에 **설정** 아이콘 버튼, 기본 워크스페이스, 에이전트/그룹/Task 수), 왼쪽 **에이전트 패널**(기본은 열림), 가 떠 있다. **왼쪽 아이콘 사이드바는 모든 화면에서 항상 있다**(프로젝트 상세도 마찬가지). **워크스페이스 할당과 프로젝트 이름 변경/삭제는 설정 창**(`ProjectSettingsModal.tsx`)에서만 한다.
 - **왼쪽 패널**: 헤더 카드 아래에 **에이전트 카드 목록**(`AgentList.tsx`)과 그 밑의 **그룹 카드 목록**(`GroupList.tsx`)이 있다. 그룹은 여기서 만들고 지운다(새 그룹은 이름을 받는 **창**, `GroupFormModal.tsx`). 에이전트/그룹 추가 버튼은 색·글자 없이 **+ 아이콘**만 쓴다(`shared.addButton`). **각 상자 안 상단 중앙에는 얇은 화살표 손잡이**(⌃ 펼침 / ⌄ 접힘, 보이는 것은 화살표뿐이고 누를 수 있는 넓이는 `padding` 으로 확보한다)가 있고, **머리말 줄을 눌러도 같은 동작**을 한다. 접고 펼 때는 **높이가 부드럽게 바뀐다**(패널 `flex-grow` 전환 + 몸통 `grid-template-rows` 1fr↔0fr, 0.22s. 접었을 때 높이는 손잡이+머리말 = `min-height: 69px`). 상자 안쪽 여백은 **위 3px, 좌우·아래 10px**(화살표 손잡이를 상단에 붙이려고 위만 좁게 둔다). 머리말 오른쪽의 `+` 는 `stopPropagation` 으로 창만 연다. 둘 다 접으면 구성도가 화면 전체를 쓴다. 에이전트 카드를 그룹 카드(또는 구성도의 그룹 상자)로 끌어 놓으면 멤버가 된다(`lib/useGroupDrop.ts` 가 공통 처리).
@@ -78,9 +78,10 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
   ② **채팅 창에 파일을 끌어다 놓기**: 창 밖의 **아무 파일이나** 붙일 수 있다(폴더는 받지 않는다 — 파일만). 에이전트는 워크스페이스 폴더 밖을 볼 수 없으므로 **프로젝트 안 폴더(`.agentdock/attachments`)로 복사한 것으로 치고**, 그 사본 경로를 첨부로 단다(끌어오는 동안 창에 점선 테두리와 안내가 뜬다). **저장 이름은 `<uuid 앞 8자>-원래이름`** 으로 붙여(`lib/attachments.ts` 의 `storedName`) 같은 이름을 여러 번 붙여도 충돌하지 않게 한다. 화면에는 **첨부 칩 = 원래 이름**, **파일 목록 = 저장 이름**을 보여 준다(`displayName` 이 앞의 id 를 떼어 낸다). 복사된 파일은 **워크스페이스 파일 목록에 더해져** 첨부 창에도 나타난다(`MockStore` 의 `workspaceFiles`, 시드는 `SEED_FILES`).
   붙인 파일은 입력줄 위 **칩**(원래 이름 + ×, 툴팁에 저장 경로)으로 보이고, 보내면 사용자 말풍선에 그대로 남는다(보내고 나면 입력줄 칩은 비운다). **첨부는 라우팅에도 쓰인다**: 문장에 팀 키워드가 없어도 **경로·확장자**(`.java`·`/test/`·`.tsx` 등)로 팀이 정해진다(`lib/executionSim.ts` 의 `FILE_ROUTES`). 실행 지시에는 ` · 첨부: 원래이름` 이 붙어 하위 실행까지 내려간다. 파일만 붙이고 보내면 지시는 "첨부한 파일을 확인해줘" 로 채운다.
 - **실행(위임) 흐름**(`types.ts` 의 `Execution`, `lib/executionSim.ts`, `lib/executions.ts`, `pages/Projects/ExecutionTree.tsx`, `styles/execution.module.css`): 명령 하나가 실행 트리 하나가 된다(루트는 명령을 받은 에이전트 = 보통 마스터, `parentExecutionId` 로 자식). **상태**: `QUEUED` → `RUNNING` → (자식이 있으면) `WAITING_CHILD` → 자식이 모두 끝나면 다시 `RUNNING` → `DONE`. **판단이 필요한 실행(마스터·리더)은 계약**(`{action: 'delegate' | 'done'}`)을 남기고, 위임한 실행은 **위임 대상이 화면에 남는다**(마지막 `done` 으로 덮지 않는다). **라우팅은 규칙 먼저**(Rule Router): 요청에 팀 키워드가 걸리면 그 팀 리더에게 맡기고, 걸리는 팀이 없으면 마스터가 직접 처리한다. 리더는 팀이 크면(리더가 아닌 멤버가 2명 이상) 하위 한 명에게 한 번 더 넘기고, 작으면 직접 처리한다(그룹에 직접 보낸 명령도 같다). 채팅 응답 카드의 **실행 트리 보기**로 창(`ExecutionTreeModal`)을 열면 실행별 상태·계약·Handoff 요약·변경 파일·토큰·비용·시간·세션 id 를 본다. **계약·지표·세션 id 는 모두 모의 값**이고, 화면에 모의임을 밝히고 실제 출처(CLI `-p --output-format json` 의 `usage` / `total_cost_usd` / `duration_ms` / `session_id`)를 적는다. 재생 속도도 압축되어 있다(실제 도구는 실행마다 수십 초).
+- **Tasks 화면**(`/tasks`, `pages/Tasks/Tasks.tsx`): 전 프로젝트 작업 목록(`GET /tasks`)과 최근 실행 목록(`GET /executions`)을 표로 보여 준다(진행/종료 필터, 프로젝트 상세로 가는 링크). 실행 트리·로그는 프로젝트 상세에서 본다.
 - **현실성 점검**(`pages/RealityCheck.tsx`, `/reality-check`): 실제 구현으로 갈 때 막히는 지점 9가지를 **흐름도 + 위험 카드**로 모아 본 화면. 내용은 그 파일의 `RISKS` 배열(데이터)이고, 항목마다 **결정**(여러 안 중 고른 것)과 **할 일**을 적는다. 위쪽에는 **확인된 사실**(`VERIFIED`: CLI `--help` 와 실측 1회로 확인한 세션 재개·`--json-schema`·계측값·호출 고정비·내장 서브에이전트)을 함께 둔다. 결정이 바뀌면 그 배열을 고친다.
 - **구성도 캔버스**: 그룹은 상자, 에이전트는 노드로 그리고 그룹 안에서 리더가 위, 멤버가 아래에서 선으로 이어진다(배치는 `lib/canvasLayout.ts` 의 순수 함수). **에이전트는 그룹에 속하지 않아도 되며** 속하지 않은 에이전트는 "그룹 없음" 같은 이름표나 상자 없이 노드만 놓인다. 왼쪽 목록의 **에이전트 카드**와 **그룹 멤버 칩**은 **HTML5 DnD**(`lib/dnd.ts`)로 그룹 상자/그룹 카드에 넣거나 뺄 수 있고, **에이전트 카드를 캔버스 빈 곳에 놓으면 그 자리에 배치된다**(미배치는 배치되고, 그룹에 있던 것은 그룹에서 빠진다 — 캔버스의 드롭 처리가 `setAgentPlaced` + `setAgentPosition` 을 한다). **구성도 노드는 포인터로 끌어** 옮긴다(HTML5 DnD 를 쓰지 않는다). 배경 드래그로 이동, 휠로 확대/축소하고, **아래 가운데 뜬 도구**(−/+·배율·맞춤·위치 초기화)로 화면에 맞춘다(왼쪽·오른쪽 패널을 뺀 빈 곳의 가운데에 온다). **노드를 끌어 자유 위치로 옮길 수 있다**(그룹에 속하지 않은 노드만 자유 위치를 갖는다): 그룹 상자 위에 놓으면 그 그룹으로 들어가고, 빈 곳에 놓으면 그룹에서 빠져 그 자리에 선다. 자유 위치는 스토어의 `nodePositions` 에 쌓이고 `canvasLayout` 이 그 좌표를 쓴다(맞춤 크기에도 포함). **그룹 상자도 머리말을 끌어 통째로 옮긴다**(그 안의 노드·선도 함께, `groupPositions`). 그룹 상자 머리말의 **`⋮` 메뉴**에서 프롬프트 편집·삭제를 한다(왼쪽 그룹 카드와 같다). 손으로 옮긴 것은 **제자리를 차지한 채 좌표만 바뀌어** 다른 노드·그룹이 밀리지 않는다. 좌표는 **음수도 될 수 있어 캔버스 왼쪽·위까지 쓸 수 있고**, 맞춤은 경계 상자(`layout.minX`·`minY`)를 기준으로 한다. **위치 초기화** 버튼이 모두 지워 자동 배치로 되돌리고, 손으로 옮기기 시작하면 자동 맞춤은 멈춘다(`touchedRef`). 첫 멤버는 자동으로 리더가 되고, 한 에이전트는 여러 그룹에 속할 수 있다. 위치/크기는 CSS 변수(`--x`, `--y`, `--w`, `--h`, `--vx`, `--vy`, `--vs`)로만 넘기고 모양은 CSS 파일이 정한다.
-- 현재 화면: Dashboard, 프로젝트(`/projects`, `/projects/:id`), 현실성 점검(`/reality-check`), 설정. 나머지 화면은 순서대로 추가한다.
+- 현재 화면: Dashboard, 프로젝트(`/projects`, `/projects/:id`), Tasks(`/tasks`), 현실성 점검(`/reality-check`), 설정. 나머지 화면은 순서대로 추가한다.
 
 ## 실행(위임) 흐름 — 구현됨 (1차)
 
@@ -92,6 +93,45 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
 - **프롬프트 계층**: `project.masterPrompt` → `agent_group.prompt` → `agent.persona` 를 빈 줄로 이어 붙여 `--append-system-prompt` 로 넘긴다(`agent/PromptLayers`). 그룹 프롬프트는 그 에이전트가 **리더인 그룹 → 없으면 속한 첫 그룹** 것을 쓴다.
 - **상태 표시**: 한 실행이 여러 스텝으로 이어지면 스텝이 끝나도 `SUCCEEDED` 로 두지 않는다 — `markRunning` 으로 되돌리고, 자식을 기다리는 동안은 `WAITING_CHILD`, 마지막에만 `markSucceeded`/`markEscalated`. **위임한 실행은 마지막 계약이 마무리여도 위임 대상(`delegatedTargetAgentId`)이 남는다**(누구에게 맡겼는지 화면에 남긴다).
 - **위임한 트리의 Task 상태**는 트리가 전부 끝났을 때 **한 번만** `ExecutionFinishedEvent` 로 알린다(스텝마다 알리면 Task 가 일찍 끝난 것으로 표시된다).
+
+### 워크트리 격리 (실행 디렉터리)
+
+**명령 하나(루트 실행)가 git worktree 하나를 갖는다.** 루트와 그 자식은 **같은** worktree 에서 돈다 — 자식의 편집을 부모가 봐야 하기 때문이다. 서로 다른 명령(다른 루트)만 서로 격리된다. `WorktreeService`(`execution/service`)가 담당하고, `DelegationService.start` 가 루트 실행 행을 만든 직후에 만든다.
+
+- **위치**: 저장소 **밖** — 워크스페이스 폴더의 형제 폴더 `<워크스페이스폴더>-wt/<루트실행id>` (예: `C:\Users\chey.kim\Documents\GitHub\AgentDock-wt\42`). 브랜치는 `agentdock/exec-<루트실행id>`. **저장소 안에 만들지 않는다**(`git status` 와 첨부 파일 목록을 더럽힌다).
+- **언제/어떻게**: 워크스페이스가 git 저장소면 `git worktree add -b <브랜치> <경로>` 로 만들고, 그 트리 전체가 **cwd = worktree 경로** 로 돈다(`ExecutionGuard.Target.cwd()`, `--add-dir` 이 필요 없다). 자식은 부모의 worktree 경로·브랜치를 물려받고(`ExecutionFactory`), 루트에는 `execution.worktree_path`/`worktree_branch` 로 기록된다. 응답에는 `ExecutionResponse`(따라서 트리 노드 `execution`)에 실린다.
+- **실패는 실행을 막지 않는다**: git 저장소가 아니거나 git 이 실패하면 워크스페이스에서 그대로 돌리고 SYSTEM 로그에 사유를 남긴다. 성공하면 `⎿ 워크트리: <경로> (브랜치 <브랜치>)`, 실패하면 `⎿ 워크트리를 만들지 못해 워크스페이스에서 실행합니다: <사유>`.
+- **트리 끝에 결과를 모아 되돌린다(커밋 + 자동 병합)**: 트리(루트 실행)가 끝나면 `WorktreeService.collect` 가 그 워크트리의 변경을 트리 브랜치에 **커밋 하나**로 남긴다. 커밋 제목은 루트 실행의 최종 요약(계약 `done.summary` / `result_text`)이고 본문은 실행 id·참여 에이전트 이름 목록·변경 파일 수다(**`Co-Authored-By` 트레일러는 붙이지 않는다**). 커밋할 것이 없으면 빈 커밋을 만들지 않고 `NONE` 이다.
+  - **메인 저장소로 병합**: 메인 작업 트리가 깨끗하면(`git status` 가 비었으면) `git merge --no-ff <트리브랜치>` 로 되돌려 `MERGED`. 더럽거나 충돌하면 `git merge --abort` 로 **절대 반쯤 병합된 상태를 남기지 않고** `MANUAL`(사유 + 직접 병합할 브랜치)로 넘긴다. 병합은 여러 트리가 동시에 끝날 수 있어 **전역 직렬화**(공정 세마포어)한다.
+  - **삭제는 여전히 사람이 한다**: 워크트리·브랜치의 **자동 삭제는 없다**. 정리는 `DELETE /executions/{id}/worktree`(`?branch=true` 면 브랜치도 삭제, 204). 아직 도는 실행(`PENDING`/`RUNNING`/`WAITING_CHILD`)이면 **409**. 지운 뒤에는 실행의 경로·브랜치를 비운다(두 번째 호출은 404).
+  - **기록**: 커밋 sha·병합 상태·사유·변경 파일을 **루트 실행에만** 남기고(V14) 응답(`ExecutionResponse`, 트리 노드)에 실린다. SYSTEM 로그: `⎿ 변경 N개를 커밋했습니다 (<sha>)` 다음에 `⎿ 메인 저장소(<브랜치>)로 병합했습니다` 또는 `⎿ 자동 병합하지 못했습니다(사유). 브랜치 <브랜치> 를 직접 병합하세요`.
+- **셸을 쓰지 않는다**: git 도 `ProcessService`(내부적으로 `Executables`)로 실행한다. 프롬프트 규칙(마스터·그룹 프롬프트에 넣는다): "한 트리 안에서 같은 파일을 동시에 고치지 말고 나눠 맡긴다. 워크트리 병합은 사람이 판단한다." 에 더해 "작업이 끝나면 변경 사항을 트리 브랜치에 커밋하고, 메인 저장소가 깨끗하면 자동으로 병합한다. 병합하지 못하면 사유와 브랜치를 사용자에게 알린다." 를 덧붙인다. 뒤 문장이 앞 문장의 "사람이 판단한다"를 좁힌다 — **깨끗할 때만 자동으로 병합**하고, 아니면 사유와 브랜치만 알려 사람이 병합한다.
+- **CLI 권한 모드 주의(실측)**: 에이전트의 `mode`(=`--permission-mode`)가 파일 쓰기를 막는 기본값이면 무인 실행에서 CLI 가 쓰기를 거부해 **트리에 변경이 남지 않고 `NONE` 으로 끝난다**(실제로 확인). 파일을 고쳐야 하는 에이전트는 `acceptEdits` 같은 쓰기 허용 모드를 지정한다(모드는 DB 데이터다).
+- **화면**: 터미널 창 머리말에 브랜치와 커밋 sha, 실행 트리 창의 각 행에 브랜치가 보이고, 트리 **루트 행**에는 병합 상태 배지(병합됨 / 수동 병합 필요)·커밋 sha·변경 파일 목록(`A path` 등)과 정리 버튼이 있다. 채팅 **실행 요약 카드**(`ExecutionSummaryCard`)에도 같은 결과 한 줄이 붙는다(`apps/frontend`, 기존 토큰·CSS 모듈 클래스만 쓴다).
+
+### 위임 프롬프트는 파일로 넘긴다
+
+지시가 길어질수록 CLI 입력이 커져 토큰이 낭비되고 기록이 읽기 어려워진다. 그래서 **자식 실행의 전체 지시와 부모의 재판단 문맥은 프롬프트에 인라인하지 않고 마크다운 파일로 넘긴다**(`delegation/util/DelegationPrompts` 가 문자열을, `delegation/service/DelegationService` 가 파일 쓰기를 맡는다).
+
+- **지시 파일**: 자식 실행을 만들 때 전체 지시를 마크다운 한 장(절: **원래 요청 / 맡은 일 / 기대 결과 / 지난 결과 / 첨부 파일**)으로 만들어 **작업 디렉터리(cwd — worktree 가 있으면 그 안, 없으면 워크스페이스) 기준** `<cwd>/.agentdock/prompts/<자식실행id>.md` 에 UTF-8 로 쓴다(`java.nio.file`, 셸 미경유). 빈 절(기대 결과·지난 결과·첨부)은 넣지 않는다.
+- **자식 프롬프트(짧다)**: 파일을 가리키는 1~3줄만 넣는다 — `지시 파일: .agentdock/prompts/42.md — 이 파일을 먼저 읽고 그 내용대로 작업하세요. 기대 결과: <expects>`(expects 가 없으면 그 부분을 뺀다). 위임받은 판단 자식도 같은 지시 파일 참조를 지시로 받고, **팀 로스터·판단 규칙·계약 스키마는 짧으므로 그대로 인라인**한다.
+- **재판단 문맥**: 부모가 자식 결과를 붙여 다시 판단할 때 그 문맥(자식 결과·사람의 답)은 `<cwd>/.agentdock/prompts/<실행id>-step<N>.md` 로 쓰고 스텝 프롬프트에는 참조 한 줄만 넣는다.
+- **폴백 — 실패가 실행을 막지 않는다**: 파일을 쓰지 못하면(권한·경로 오류) 사유를 남기고 예전처럼 지시·문맥을 프롬프트에 인라인한다.
+- **로그(SYSTEM)**: 파일마다 `⎿ 지시 파일: .agentdock/prompts/42.md (1,240자)`, 스텝마다 실제로 보낸 프롬프트 크기를 `⎿ 프롬프트 240자`.
+- **gitignore**: 이 파일들은 워크트리 안에 생긴다 — 저장소 루트 `.gitignore` 에 **`.agentdock/`** 을 둬 프롬프트·첨부가 작업 트리를 더럽히거나 자동 병합을 막지 않게 한다.
+
+### 실행 상태와 컨텍스트 (취소·만료·세션·그룹 노트)
+
+- **취소는 자손까지**: `POST /executions/{id}/cancel` 은 그 실행과 **자손 전부**의 CLI 프로세스를 끊고 `CANCELLED` 로 전이한다(부모만 멈추면 자식 CLI 가 계속 돈다). 이미 끝난 실행의 상태는 건드리지 않지만 그 아래에서 도는 것은 멈춘다.
+- **입력 대기 만료**: `WAITING_INPUT` 이 오래(기본 12시간, `agentdock.delegation.waiting-input-ttl-minutes`) 방치되면 10분 주기 검사(`@Scheduled`, 앱의 `@EnableScheduling`)가 만료로 취소한다. 만료도 취소와 같은 경로라 자손까지 정리된다. **기동 시 고아 정리에서 `WAITING_INPUT` 은 제외**한다(사람이 답할 차례를 없애면 안 된다).
+- **세션 재사용**: 같은 실행의 다음 스텝은 자기 CLI 세션을 이어받는다(Claude Code `--resume`, cmdc `--resume`). 자식 분기는 Claude 의 `--fork-session` 만 — cmdc 에는 확인된 분기 플래그가 없어 자식은 새 세션으로 시작한다(맥락은 지시 파일·그룹 노트가 맡는다).
+- **그룹 공유 노트**: `agent_group.shared_note` 는 규칙이 아니라 **맥락**이다. 그룹 실행의 시스템 프롬프트 맨 뒤에 실리고, 트리가 끝나면 `#<실행id> <요약>` 한 줄이 자동으로 붙는다(최근 2000자 유지). 화면에서는 그룹 프롬프트 창에서 본다 — 수정 요청에 `sharedNote` 를 보내지 않으면 기존 값을 지킨다.
+- **계약 수리**: 계약 JSON 이 조금 망가져도(군더더기 쉼표·홑따옴표·스마트 따옴표·주석) `JsonObjects.repair` 가 건져낸다. 원문이 그대로 파싱되면 수리본은 쓰지 않는다.
+- **프롬프트 규칙(DB, V19·V20)**: 자기 자신이나 부모에게 되돌려 맡기지 않는다(순환은 거부된다) / 작업 디렉터리 밖은 읽지도 쓰지도 않는다(밖에 있는 것이 필요하면 사람에게 물어 위치를 확인한다).
+- **되풀이 위임 차단(서버)**: 판단이 매 단계 같은 팀원에게 같은 일을 다시 맡겨 실행만 늘던 문제를 백엔드가 막는다 — 한 부모가 같은 에이전트에게 맡긴 자식이 상한(기본 3, `agentdock.delegation.max-repeat-per-agent`)을 넘거나 같은 지시(공백만 다른 것 포함)를 이미 맡겼으면 `⎿ 위임 거부: …` 로 남기고 받지 않는다(`DelegationService.repeatReason`). 거부되면 판단은 직접 정리(done)하거나 사람에게 묻는 길로 간다.
+- **이어가기(이전 작업을 이어서 시키기)**: 채팅 입력줄 바로 위에서 이전 작업을 고르면 그 트리의 작업 내역(마스터 요약 + 에이전트별 결과 전문 + 변경 파일 + 커밋·병합)을 **`이어가기-<실행id>.md` 로 만들어 첨부로 올리고**, 프롬프트에는 "첨부한 이어가기 파일을 읽고 이어서 하세요" 한 줄만 남긴다(긴 내역이 입력을 먹지 않게 — 지시 파일과 같은 방식). 서버 변경 없이 프론트가 처리한다.
+- **알림(토스트) 규칙**: 실행 알림은 **종류별로 한 번**만 뜬다(시작·하위 대기·완료·실패·취소). "시작"은 `QUEUED → RUNNING` 일 때만 — **재개(대기 → RUNNING)를 시작으로 알리면 새로고침할 때마다 돌고 있는 작업이 '시작'으로 다시 뜬다**. `WAITING_INPUT` 은 매번 알린다. 위치는 화면 중앙 상단.
+- **새로고침은 부분 실패를 견딘다**: `reload()` 는 조각별로 실패를 삼키고 콘솔에만 남긴다(예전 `Promise.all` 은 한 엔드포인트 404 로 전체가 실패한 것처럼 보였다). 프로젝트 목록만 실패하면 상세 읽기는 건너뛴다.
 
 ### CLI 출력을 다루는 법 (실측으로 확인한 사실 — 추측 금지)
 
@@ -111,17 +151,18 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
 - `agent/` — `domain/` Agent(프로젝트 소속, 페르소나) · `service/` AgentService + `AgentAvailability` · `util/` `PromptLayers`(프롬프트 계층 조립) · `repository/`(QueryDSL fetch join) · `dto/`
 - `role/`, `permission/` — Role, PermissionProfile(도메인/서비스/리포지토리/DTO). `PermissionService.isAllowed(profile, action)` 가 enforcement primitive
 - `workspace/` — `domain/`(Workspace, WorkspaceRuntimeStatus) · `service/`(WorkspaceService, WorkspaceRuntimeService) · `util/` `WorkspaceFs`(폴더 브라우징·UNC 차단) · `repository/` · `dto/`
-- `project/` — `domain/`(Project, ProjectWorkspace) · `service/` ProjectService(`defaultWorkspace`, `updateMaster` — 기본 워크스페이스를 바꿀 때는 기존 기본을 먼저 내려야 부분 유니크 인덱스를 위반하지 않는다) · `repository/` · `dto/`
+- `project/` — `domain/`(Project, ProjectWorkspace) · `service/` ProjectService(`defaultWorkspace`, `updateMaster`, `updateDefaultWorkspace` — 기본 워크스페이스를 바꿀 때는 기존 기본을 먼저 내려야 부분 유니크 인덱스를 위반하지 않는다) · `repository/` · `dto/`
 - `group/` — `domain/`(AgentGroup, AgentGroupMember) · `service/` GroupService · `repository/` · `dto/`
 - `task/` — `domain/`(Task, TaskStatus) · `service/` TaskService(작업 실행·채팅 명령) · `repository/` · `dto/`
 - `process/` — `service/` `ProcessService`(ProcessBuilder 래퍼) · `util/` `Executables`(PATH/PATHEXT 해석)
 - `runtime/` — `interfaces/` `AgentRuntime` · `service/`(ClaudeCodeRuntime, CommandCodeRuntime, RuntimeRegistry) · `dto/`(AgentExecutionRequest/Result, ExecutionMetrics) · `util/` `ClaudeStreamJson`(stream-json → 로그·계측) · `CommandCodeStreamJson`(cmdc NDJSON → 로그·계측) · `JsonObjects`(결과 텍스트에서 JSON 객체 찾기 — Claude/Command Code 공용)
-- `execution/` — `domain/`(Execution, ExecutionStatus, ExecutionDecision, ExecutionLog, LogStream) · `controller/` · `service/`(ExecutionService, ExecutionGuard, ExecutionFactory, ExecutionRunner, ExecutionStreamHub) · `repository/` · `dto/`(응답·트리·이벤트 등)
+- `execution/` — `domain/`(Execution, ExecutionStatus, ExecutionDecision, ExecutionLog, LogStream) · `controller/` · `service/`(ExecutionService, ExecutionGuard, ExecutionFactory, ExecutionRunner, ExecutionStreamHub, **WorktreeService**) · `repository/` · `dto/`(응답·트리·이벤트 등)
 - `delegation/` — `controller/`(ProjectCommandController) · `service/`(DelegationService, RuleRouter) · `dto/`(DelegationContract) · `util/`(ContractSchemas, DelegationPrompts)
+- `event/` — 전역 데이터 변경 스트림. `controller/`(`GET /events/stream`) · `service/`(EventStreamService 허브, EventPublisher) · `dto/`(`DataChangedEvent`, `EventTypes`). 알림은 **페이로드가 아니다** — `{"type","projectId","executionId","taskId"}` 만 실어 보내고 화면이 바뀐 조각만 REST 로 다시 읽는다(타입: `execution.changed`·`task.changed`·`agent.changed`·`group.changed`·`project.changed`·`workspace.changed`·`runtime.changed`·`attachment.changed`). 구독 직후 `hello` 한 번, 이후 25초마다 하트비트 주석 줄. 발행은 **서비스 계층에서 데이터가 실제로 바뀌는 자리에만** 한다(예: `ExecutionService.update` 가 모든 상태·계약·결과 저장을 지나므로 그 한 곳에서 `execution.changed`). AOP 는 쓰지 않는다.
 
 ## DB 스키마
 
-단일 진실은 **Flyway 마이그레이션**(`apps/backend/src/main/resources/db/migration/`, 현재 V1~V10)이며 컬럼명은 snake_case다. JPA는 `ddl-auto: validate` 로 일치만 검증한다.
+단일 진실은 **Flyway 마이그레이션**(`apps/backend/src/main/resources/db/migration/`, 현재 V1~V14)이며 컬럼명은 snake_case다. JPA는 `ddl-auto: validate` 로 일치만 검증한다.
 
 테이블: `ai_provider`, `agent_role`, `permission_profile`, `workspace`, `workspace_runtime_status`, `project`, `project_workspace`, `agent_group`, `agent_group_member`, `agent`, `task`, `execution`, `execution_log`.
 
@@ -134,7 +175,9 @@ Workflow/WorkflowStep, Shared Context, Message, Artifact, Review, Decision 은 �
 - `project_workspace`(V7): 프로젝트↔워크스페이스 N:N. `is_default` 는 프로젝트당 1개(부분 유니크 인덱스). 기존 `project.workspace_id` 는 V7 에서 이관 후 제거됐다.
 - `agent.project_id NOT NULL`, `agent.persona TEXT`(V7). `agent.connection_id` 와 `ai_connection` 테이블은 V8 에서 제거됐다.
 - `agent_group` 은 SQL 예약어 `group` 회피용 이름. `task` 는 `group_id`/`agent_id` 중 정확히 하나만 갖는다(CHECK + 서비스 검증).
-- `execution.workspace_id` 는 실행 디렉터리(프로젝트 기본 워크스페이스)를 기록한다. `task.workspace_id` 는 아직 없다(필요해지면 추가).
+- `execution.workspace_id` 는 실행 디렉터리(프로젝트 기본 워크스페이스)를 기록한다. 실제 작업 디렉터리는 격리됐으면 `worktree_path`(아래 V13)다. `task.workspace_id` 는 아직 없다(필요해지면 추가).
+- `execution.worktree_path`(`VARCHAR(1024)`) / `worktree_branch`(`VARCHAR(200)`)(V13, 멱등): 그 실행 트리가 도는 git worktree 경로와 브랜치(`agentdock/exec-<루트실행id>`). 루트가 만들고 자식이 물려받는다. 격리하지 못했으면 비어 있고, 정리하면 다시 비운다.
+- `execution.result_commit`(`VARCHAR(64)`) / `merge_status`(`VARCHAR(20)`, `MERGED`/`MANUAL`/`NONE`) / `merge_detail`(TEXT) / `changed_files`(JSONB)(V14, 멱등): 트리(루트 실행)가 끝나 그 워크트리를 커밋해 메인 저장소로 되돌린 결과(**루트 실행에만** 채운다). `changed_files` 는 `{status, path}` 배열이다. `merge_status` 는 `MERGED`(자동 병합) / `MANUAL`(사람이 병합해야 함) / `NONE`(커밋할 변경 없음) 중 하나다.
 - `ai_provider.capabilities`(JSONB): `{"models": [...], "modes": [...], "notes": "..."}`. V5 시드, 화면에서 편집.
 
 ## 런타임 연결과 자격증명
@@ -228,6 +271,7 @@ DB 확인: `C:\Program Files\PostgreSQL\17\bin\psql.exe -U postgres -d AGENT_DOC
 - 오래 걸리는 작업(probe, 로그인 세션)에는 `@Transactional` 을 붙이지 않는다. 필요한 관계는 fetch join 으로 조회 시점에 함께 읽는다.
 - POST 는 **201**, 삭제는 **204**(프론트 `request()` 가 204 를 따로 처리).
 - 변하지 않는 규칙(권한, 런타임 enabled, 폴더 상태)은 백엔드가 강제하고, 자주 변하는 값(모델/모드)은 데이터로 두고 CLI 에 위임한다.
+- **실시간 갱신은 이벤트 스트림(SSE) 우선, 폴링은 보조(느린 주기·포커스 시)로만.** 화면은 `GET /events/stream` 을 한 번 구독해 "무엇이 바뀌었는지"를 받고 **바뀐 조각만 기존 REST 로 다시 읽는다**(주기적 전체 폴링 금지 — 3초마다 ~20건을 부르던 방식은 쓰지 않는다). 새 화면·새 갱신도 이 규칙을 따른다.
 
 ## 브랜치 흐름과 커밋 컨벤션
 

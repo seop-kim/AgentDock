@@ -1,28 +1,62 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { toast, type ToastTone } from '../components/Toaster';
+import { subscribeEvents } from '../lib/liveChannel';
 import {
   Attachment as ApiAttachment,
   Execution as ApiExecution,
   ExecutionTree,
   api,
+  isUnsupportedError,
   type Agent as ApiAgent,
   type AgentGroup as ApiGroup,
+  type ChannelCreateRequest,
+  type ChannelResponse,
+  type ChannelUpdateRequest,
+  type ExecutionDiffResponse,
+  type MergePolicyResponse,
+  type ProjectBudgetResponse,
+  type RuleCreateRequest,
+  type RuleResponse,
+  type ScheduleCreateRequest,
+  type ScheduleResponse,
+  type ScheduleUpdateRequest,
+  type UsageResponse,
+  type ExecutionListQuery,
+  type ExecutionSummary as ApiExecutionSummary,
   type Project as ApiProject,
   type Provider as ApiProvider,
   type Task as ApiTask,
 } from '../lib/api';
-import { DEFAULT_PROVIDER_NAMES } from './seed';
+import { formatDuration, workLog } from '../lib/executions';
+import { DEFAULT_CAPABILITIES, DEFAULT_PROVIDER_NAMES } from './seed';
 import type {
   Agent,
   AgentGroup,
   AttachedFile,
   ChatMessage,
   ChatTarget,
+  CostUsage,
   Execution,
+  ExecutionDiff,
+  FeatureStatus,
+  MergePolicy,
+  NewNotificationChannel,
+  NewNotificationRule,
+  NewSchedule,
+  NotificationChannel,
+  NotificationChannelKind,
+  NotificationRule,
   Project,
+  ProjectBudget,
   Provider,
+  Schedule,
+  ScheduleCadence,
   Task,
   Workspace,
 } from '../types';
+
+/** 채팅(명령) 한 페이지 크기. 이만큼만 태스크를 읽으므로 트리도 이만큼만 읽힌다(채팅 5 + 트리 5 = 10). */
+const CHAT_PAGE_SIZE = 5;
 
 export type NewAgentInput = Omit<Agent, 'id' | 'placed'>;
 export type AgentUpdateInput = Omit<Agent, 'id' | 'projectId' | 'placed'>;
@@ -32,6 +66,8 @@ type Position = { x: number; y: number };
 interface AgentDockStore {
   loading: boolean;
   error: string | null;
+  /** 전역 이벤트 스트림(SSE)이 붙어 있는지. 끊긴 동안에는 폴링이 빨라진다(30초 → 5초). */
+  streamConnected: boolean;
 
   providers: Provider[];
   availableProviderKeys: string[];
@@ -42,6 +78,8 @@ interface AgentDockStore {
   groups: AgentGroup[];
   tasks: Task[];
   executions: Execution[];
+  /** 실행 목록 API(`GET /executions`)로 읽은 평평한 목록(전역 또는 한 프로젝트). 화면이 요청할 때 채워진다. */
+  executionList: Execution[];
   chats: ChatMessage[];
   roles: AgentRole[];
   permissionProfiles: PermissionProfile[];
@@ -49,6 +87,14 @@ interface AgentDockStore {
   groupPositions: Record<number, Position>;
 
   reload: () => Promise<void>;
+  /** 프로젝트별로 아직 안 읽은(더 오래된) 명령이 남아 있는지. */
+  chatHasMore: Record<number, boolean>;
+  /** 이전 명령을 한 페이지(5개) 더 읽는다. */
+  loadMoreChats: (projectId: number) => void;
+  /** 실행 트리 창을 열어 둔 트리를 알린다(닫으면 null). 열어 둔 트리는 계속 다시 읽는다. */
+  watchExecutionTree: (projectId: number, rootExecutionId: number | null) => void;
+  /** 실행 목록을 읽는다(projectId 를 주면 그 프로젝트만, 없으면 전역). 읽은 조건으로 이벤트·폴링 때 다시 읽는다. */
+  loadExecutionList: (query?: ExecutionListQuery) => void;
 
   toggleProvider: (id: number) => void;
   deleteProvider: (id: number) => void;
@@ -78,10 +124,69 @@ interface AgentDockStore {
   removeGroupMember: (groupId: number, agentId: number) => void;
   setGroupLeader: (groupId: number, agentId: number | null) => void;
   setGroupPrompt: (groupId: number, prompt: string) => void;
+  /** 그룹 공유 노트(그룹 안 실행들이 함께 보는 맥락). 사람이 고쳐 저장한다. */
+  setGroupNote: (groupId: number, sharedNote: string) => void;
 
   sendCommand: (projectId: number, target: ChatTarget, text: string, attachments: AttachedFile[]) => void;
+  /** 실행 트리의 워크트리를 정리한다(사람이 판단해 부른다). deleteBranch 면 전용 브랜치도 지운다. */
+  removeWorktree: (executionId: number, deleteBranch: boolean) => void;
+  /** 자동 병합이 MANUAL 로 끝난 트리를 다시 병합한다(사람이 변경을 정리한 뒤 부른다). */
+  retryMerge: (executionId: number) => void;
+  /** `WAITING_INPUT` 인 실행에 사람의 답을 넣고 그 실행을 이어서 돌린다. */
+  answerExecution: (executionId: number, text: string) => void;
   uploadAttachments: (workspaceId: number, files: File[]) => Promise<AttachedFile[]>;
+  /** 파일 목록은 필요할 때만 읽는다(첨부 창이 열릴 때). */
   loadWorkspaceFiles: (workspaceId: number) => void;
+
+  // ── C. 실행 변경사항 diff ───────────────────────────────────────────────────────
+  /** 실행 id(트리 루트) → 파일별 unified diff. 창이 연 실행만 채워진다. */
+  executionDiffs: Record<number, ExecutionDiff | null>;
+  diffStatus: Record<number, FeatureStatus>;
+  /** 실행 하나의 diff 를 읽는다(트리 루트 행에서 창을 열 때). */
+  loadExecutionDiff: (executionId: number) => void;
+
+  // ── D. 예약 실행 ───────────────────────────────────────────────────────────────
+  schedules: Schedule[];
+  schedulesStatus: FeatureStatus;
+  loadSchedules: () => void;
+  createSchedule: (input: NewSchedule) => void;
+  deleteSchedule: (id: number) => void;
+  /** 예약을 켜고 끈다(스케줄러가 그대로 반영한다). */
+  setScheduleEnabled: (id: number, enabled: boolean) => void;
+  /** 예약을 지금 한 번 실행한다. */
+  runScheduleNow: (id: number) => void;
+
+  // ── E. 병합 정책 ───────────────────────────────────────────────────────────────
+  mergePolicy: MergePolicy | null;
+  mergePolicyStatus: FeatureStatus;
+  loadMergePolicy: () => void;
+  saveMergePolicy: (policy: MergePolicy) => void;
+
+  // ── G. 비용·예산 ───────────────────────────────────────────────────────────────
+  costUsage: CostUsage | null;
+  costBudgets: ProjectBudget[];
+  costStatus: FeatureStatus;
+  /** 기간(from~to) 사용량을 읽는다. 같은 기간을 기억해 SSE 갱신 때 다시 쓴다. */
+  loadCostUsage: (from: string, to: string) => void;
+  /** 프로젝트 예산을 설정한다(null 이면 삭제). */
+  setProjectBudget: (projectId: number, budgetUsd: number | null) => void;
+  /** 프로젝트 예산 목록만 다시 읽는다(비용 화면). */
+  loadCostBudgets: () => void;
+
+  // ── H. 알림 채널·규칙 ──────────────────────────────────────────────────────────
+  notificationChannels: NotificationChannel[];
+  notificationRules: NotificationRule[];
+  notificationStatus: FeatureStatus;
+  /** 채널과 규칙을 함께 읽는다. */
+  loadNotifications: () => void;
+  createChannel: (input: NewNotificationChannel) => void;
+  updateChannel: (id: number, input: NewNotificationChannel) => void;
+  deleteChannel: (id: number) => void;
+  /** 채널로 시험 발송한다. */
+  testChannel: (id: number) => void;
+  createRule: (input: NewNotificationRule) => void;
+  deleteRule: (id: number) => void;
+  setRuleEnabled: (id: number, enabled: boolean) => void;
 }
 
 export interface AgentRole {
@@ -95,6 +200,24 @@ export interface PermissionProfile {
 }
 
 const StoreContext = createContext<AgentDockStore | null>(null);
+
+/** 이벤트가 몰려 올 때 한 번에 처리하려고 모으는 시간(ms). */
+const EVENT_DEBOUNCE_MS = 250;
+/** 안전망 폴링 주기(ms). 평소에는 이벤트가 갱신하고, 이 주기는 놓친 것만 줍는다. */
+const SAFETY_POLL_MS = 30000;
+/** 스트림이 끊겨 있는 동안의 폴링 주기(ms). 스트림이 스스로 다시 붙으므로 자주 돌 이유가 없다. */
+const DISCONNECTED_POLL_MS = 15000;
+
+/**
+ * 전역 이벤트 스트림(`GET /events/stream`)이 실어 오는 알림.
+ * **값이 아니라 알림**이다 — 화면은 이걸 받아 바뀐 조각만 REST 로 다시 읽는다(모르는 필드는 null).
+ */
+interface DataChanged {
+  type: string;
+  projectId: number | null;
+  executionId: number | null;
+  taskId: number | null;
+}
 
 const text = (value: string | null | undefined) => value ?? '';
 
@@ -134,11 +257,12 @@ function executionStatus(status: string): Execution['status'] {
       return 'QUEUED';
     case 'SUCCEEDED':
       return 'DONE';
-    case 'CANCELLED':
-      return 'FAILED';
     case 'RUNNING':
     case 'WAITING_CHILD':
+    case 'WAITING_INPUT':
+    case 'WAITING_PARENT':
     case 'FAILED':
+    case 'CANCELLED':
       return status;
     default:
       return 'QUEUED';
@@ -161,7 +285,7 @@ function taskStatus(status: string): Task['status'] {
   }
 }
 
-function executionOf(execution: ApiExecution, projectId: number): Execution {
+export function executionOf(execution: ApiExecution, projectId: number): Execution {
   const summary = summaryOf(execution.resultText);
   const changedFiles = changedFilesOf(execution.resultText);
   const decision: Execution['decision'] =
@@ -169,15 +293,19 @@ function executionOf(execution: ApiExecution, projectId: number): Execution {
       ? { action: 'done', summary }
       : execution.decision === 'DELEGATE' && execution.delegatedTargetAgentId !== null
         ? { action: 'delegate', targetAgentId: execution.delegatedTargetAgentId, prompt: '' }
-        : null;
+        : execution.decision === 'ASK'
+          ? { action: 'ask', question: execution.question ?? '' }
+          : null;
   return {
     id: execution.id,
     projectId,
     agentId: execution.agentId,
     parentExecutionId: execution.parentExecutionId,
+    rootExecutionId: execution.rootExecutionId,
     status: executionStatus(execution.status),
     prompt: execution.prompt,
     decision,
+    errorMessage: execution.errorMessage,
     handoff:
       execution.resultText === null || execution.resultText === undefined
         ? null
@@ -192,7 +320,323 @@ function executionOf(execution: ApiExecution, projectId: number): Execution {
             durationMs: execution.durationMs ?? 0,
           },
     sessionId: text(execution.sessionId),
+    worktreePath: execution.worktreePath ?? null,
+    worktreeBranch: execution.worktreeBranch ?? null,
+    resultCommit: execution.resultCommit ?? null,
+    mergeStatus: execution.mergeStatus ?? null,
+    mergeDetail: execution.mergeDetail ?? null,
+    changedFiles: execution.changedFiles ?? [],
+    question: execution.question ?? null,
+    options: execution.questionOptions ?? [],
+    answer: execution.answer ?? null,
   };
+}
+
+/**
+ * 실행 목록 한 줄(`ExecutionSummaryResponse`)을 화면이 쓰는 `Execution` 으로 바꾼다.
+ * 목록에는 prompt·resultText·handoff·sessionId 가 없으므로 그 값들은 비운다 —
+ * 요청 창·집계가 필요로 하는 상태·질문·병합만 채운다.
+ */
+function executionSummaryOf(summary: ApiExecutionSummary): Execution {
+  const decision: Execution['decision'] =
+    summary.decision === 'DONE'
+      ? { action: 'done', summary: '' }
+      : summary.decision === 'DELEGATE' && summary.delegatedTargetAgentId !== null
+        ? { action: 'delegate', targetAgentId: summary.delegatedTargetAgentId, prompt: '' }
+        : summary.decision === 'ASK'
+          ? { action: 'ask', question: summary.question ?? '' }
+          : null;
+  return {
+    id: summary.id,
+    projectId: summary.projectId ?? 0,
+    agentId: summary.agentId ?? 0,
+    parentExecutionId: summary.parentExecutionId,
+    rootExecutionId: summary.rootExecutionId,
+    groupId: summary.groupId,
+    groupName: summary.groupName,
+    status: executionStatus(summary.status),
+    prompt: summary.taskTitle ?? '',
+    decision,
+    handoff: null,
+    metrics:
+      summary.inputTokens === null && summary.costUsd === null
+        ? null
+        : {
+            inputTokens: summary.inputTokens ?? 0,
+            outputTokens: summary.outputTokens ?? 0,
+            costUsd: summary.costUsd ?? 0,
+            durationMs: summary.durationMs ?? 0,
+          },
+    sessionId: '',
+    worktreePath: null,
+    worktreeBranch: summary.worktreeBranch ?? null,
+    resultCommit: summary.resultCommit ?? null,
+    mergeStatus: summary.mergeStatus ?? null,
+    mergeDetail: summary.mergeDetail ?? null,
+    changedFiles: [],
+    question: summary.question ?? null,
+    options: summary.questionOptions ?? [],
+    answer: null,
+    // 목록(lean) 응답에는 실패 사유가 없다 — 실패 표시는 트리에서 읽은 실행이 담당한다.
+    errorMessage: null,
+  };
+}
+
+/** 끝나지 않은 실행인지(대기·실행 중·하위 대기·사람 입력 대기). */
+const unfinished = (status: Execution['status']) =>
+  status !== 'DONE' && status !== 'FAILED' && status !== 'CANCELLED';
+
+function mapProvider(provider: ApiProvider): Provider {
+  return {
+    id: provider.id,
+    key: provider.key,
+    name: provider.name,
+    enabled: provider.enabled,
+    capabilities: {
+      models: provider.capabilities?.models ?? [],
+      modes: provider.capabilities?.modes ?? [],
+      notes: provider.capabilities?.notes ?? null,
+      install: provider.capabilities?.install ?? [],
+      installRequire: provider.capabilities?.installRequire ?? null,
+      installPrerequisite: provider.capabilities?.installPrerequisite ?? [],
+    },
+  };
+}
+
+function mapProject(project: ApiProject): Project {
+  return {
+    id: project.id,
+    name: project.name,
+    workspaces: project.workspaces.map((workspace) => ({
+      workspaceId: workspace.workspaceId,
+      isDefault: workspace.isDefault,
+    })),
+    masterAgentId: project.masterAgent?.id ?? null,
+    masterPrompt: text(project.masterPrompt),
+  };
+}
+
+function mapAgent(agent: ApiAgent): Agent {
+  return {
+    id: agent.id,
+    projectId: agent.projectId,
+    name: agent.name,
+    roleId: agent.role?.id ?? 0,
+    permissionProfileId: agent.permissionProfile?.id ?? 0,
+    providerId: agent.providerId,
+    persona: text(agent.persona),
+    model: text(agent.model),
+    mode: text(agent.mode),
+    placed: agent.placed ?? true,
+    available: agent.available,
+    unavailableReason: agent.unavailableReason,
+  };
+}
+
+function mapGroup(group: ApiGroup): AgentGroup {
+  return {
+    id: group.id,
+    projectId: group.projectId,
+    name: group.name,
+    leaderAgentId: group.leader?.id ?? null,
+    memberIds: group.members.map((member) => member.id),
+    prompt: text(group.prompt),
+    sharedNote: text(group.sharedNote),
+  };
+}
+
+/** 서버 첨부 레코드 → 화면이 쓰는 첨부(경로는 워크스페이스 기준 저장 경로, 이름은 원래 이름). */
+function attachedFileOf(attachment: ApiAttachment): AttachedFile {
+  return {
+    id: attachment.id,
+    workspaceId: attachment.workspaceId,
+    path: attachment.storedPath,
+    name: attachment.originalName,
+  };
+}
+
+function mapTask(projectId: number, task: ApiTask): Task {
+  return {
+    id: task.id,
+    projectId,
+    title: task.title,
+    status: taskStatus(task.status),
+    agentId: task.agent?.id ?? null,
+    attachments: (task.attachments ?? []).map(attachedFileOf),
+  };
+}
+
+/** 좌표가 있는 에이전트만 골라낸다(구성도 배치). */
+function positionsOfAgents(rows: ApiAgent[]): Record<number, Position> {
+  const positions: Record<number, Position> = {};
+  rows.forEach((agent) => {
+    if (agent.nodeX !== null && agent.nodeX !== undefined && agent.nodeY !== null && agent.nodeY !== undefined) {
+      positions[agent.id] = { x: agent.nodeX, y: agent.nodeY };
+    }
+  });
+  return positions;
+}
+
+/**
+ * 다시 읽은 트리만 새 값으로 갈아 끼운다. 나머지 실행(다른 트리·다른 프로젝트)은 그대로 둔다 —
+ * 자식 실행은 `parentExecutionId` 로 따라가며 함께 지운다(한 트리 안의 노드는 통째로 새로 읽는다).
+ */
+function mergeExecutions(prev: Execution[], roots: Set<number>, fresh: Execution[]): Execution[] {
+  const dropped = new Set<number>();
+  let grew = true;
+  while (grew) {
+    grew = false;
+    prev.forEach((execution) => {
+      if (dropped.has(execution.id)) return;
+      if (
+        roots.has(execution.id) ||
+        (execution.parentExecutionId !== null && dropped.has(execution.parentExecutionId))
+      ) {
+        dropped.add(execution.id);
+        grew = true;
+      }
+    });
+  }
+  return [...prev.filter((execution) => !dropped.has(execution.id)), ...fresh];
+}
+
+/** 예약 화면이 고른 cadence 를 백엔드 cron(6필드)으로 바꾼다(CRON 이면 입력한 식을 그대로). */
+function scheduleCron(cadence: ScheduleCadence, cron: string | null): string {
+  switch (cadence) {
+    case 'HOURLY':
+      return '0 0 * * * *';
+    case 'DAILY':
+      return '0 0 0 * * *';
+    case 'WEEKLY':
+      return '0 0 0 * * 1';
+    default:
+      return (cron ?? '').trim();
+  }
+}
+
+/** 백엔드 예약 → 화면 Schedule. cadence 는 서버에 없으므로 CRON 으로 두고 cron 을 그대로 보여 준다. */
+function mapSchedule(schedule: ScheduleResponse): Schedule {
+  return {
+    id: schedule.id,
+    projectId: schedule.project?.id ?? 0,
+    name: schedule.name,
+    cadence: 'CRON',
+    cron: schedule.cron,
+    prompt: schedule.prompt,
+    targetAgentId: schedule.targetAgent?.id ?? null,
+    groupId: schedule.targetGroup?.id ?? null,
+    enabled: schedule.enabled,
+    nextRunAt: schedule.nextRunAt,
+    lastRunAt: schedule.lastRunAt,
+    lastExecutionId: schedule.lastTaskId,
+  };
+}
+
+function scheduleCreateRequest(input: NewSchedule): ScheduleCreateRequest {
+  return {
+    projectId: input.projectId,
+    name: input.name,
+    prompt: input.prompt,
+    targetAgentId: input.targetAgentId,
+    groupId: input.groupId,
+    cron: scheduleCron(input.cadence, input.cron),
+  };
+}
+
+function scheduleUpdateRequest(schedule: Schedule, enabled: boolean): ScheduleUpdateRequest {
+  return {
+    name: schedule.name,
+    prompt: schedule.prompt,
+    targetAgentId: schedule.targetAgentId,
+    groupId: schedule.groupId,
+    cron: schedule.cron ?? '',
+    enabled,
+  };
+}
+
+/** 백엔드 diff 응답 → 화면 ExecutionDiff. patch→diff(없으면 빈 문자열). available=false 면 빈 files. */
+function mapExecutionDiff(response: ExecutionDiffResponse): ExecutionDiff {
+  return {
+    executionId: response.executionId,
+    files: response.files.map((file) => ({ path: file.path, status: file.status, diff: file.patch ?? '' })),
+  };
+}
+
+/** 백엔드 병합 정책 → 화면 MergePolicy. */
+function mapMergePolicy(policy: MergePolicyResponse): MergePolicy {
+  return {
+    autoMerge: true,
+    autoCleanupWorktree: policy.autoCleanupEnabled,
+    autoCleanupBranch: policy.cleanupDeleteBranch,
+    requireCleanTarget: false,
+  };
+}
+
+function mergePolicyRequest(policy: MergePolicy): MergePolicyResponse {
+  return {
+    autoCleanupEnabled: policy.autoCleanupWorktree,
+    cleanupDeleteBranch: policy.autoCleanupBranch,
+    updatedAt: null,
+  };
+}
+
+/** 백엔드 사용량 → 화면 CostUsage. 프로젝트별 버킷은 서버가 주지 않으므로 비워 둔다. */
+function mapCostUsage(usage: UsageResponse): CostUsage {
+  return {
+    from: usage.from,
+    to: usage.to,
+    totalCostUsd: usage.totalCostUsd,
+    totalInputTokens: usage.totalInputTokens,
+    totalOutputTokens: usage.totalOutputTokens,
+    totalExecutions: usage.executionCount,
+    byDay: usage.buckets.map((bucket) => ({
+      key: bucket.start,
+      label: bucket.start.slice(0, 10),
+      costUsd: bucket.costUsd,
+      inputTokens: bucket.inputTokens,
+      outputTokens: bucket.outputTokens,
+      executions: bucket.executionCount,
+    })),
+    byProject: [],
+  };
+}
+
+/** 백엔드 예산 → 화면 ProjectBudget. */
+function mapBudget(budget: ProjectBudgetResponse, projectName: string): ProjectBudget {
+  return {
+    projectId: budget.projectId,
+    projectName,
+    budgetUsd: budget.amountUsd ?? 0,
+    spentUsd: budget.usedUsd,
+  };
+}
+
+/** 백엔드 채널 → 화면 NotificationChannel. type→kind, config 의 대상(url/to/email)→target. */
+function mapChannel(channel: ChannelResponse): NotificationChannel {
+  const config = channel.config ?? {};
+  const target = String(config.url ?? config.to ?? config.email ?? config.recipient ?? '');
+  return { id: channel.id, kind: channel.type, name: channel.name, target, enabled: channel.enabled };
+}
+
+function channelConfig(kind: NotificationChannelKind, target: string): Record<string, unknown> {
+  return kind === 'EMAIL' ? { to: target } : { url: target };
+}
+
+function channelCreateRequest(input: NewNotificationChannel): ChannelCreateRequest {
+  return { type: input.kind, name: input.name, config: channelConfig(input.kind, input.target), enabled: input.enabled };
+}
+
+function channelUpdateRequest(input: NewNotificationChannel): ChannelUpdateRequest {
+  return { name: input.name, config: channelConfig(input.kind, input.target), enabled: input.enabled };
+}
+
+/** 백엔드 알림 규칙 → 화면 NotificationRule. eventType→event. */
+function mapRule(rule: RuleResponse): NotificationRule {
+  return { id: rule.id, channelId: rule.channelId, event: rule.eventType, enabled: rule.enabled };
+}
+
+function ruleCreateRequest(input: NewNotificationRule): RuleCreateRequest {
+  return { channelId: input.channelId, eventType: input.event as RuleCreateRequest['eventType'], enabled: input.enabled };
 }
 
 export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
@@ -204,6 +648,8 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
   const [groups, setGroups] = useState<AgentGroup[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [executions, setExecutions] = useState<Execution[]>([]);
+  /** 실행 목록 API 로 읽은 평평한 목록(전역 또는 한 프로젝트). 화면이 요청할 때만 채운다. */
+  const [executionList, setExecutionList] = useState<Execution[]>([]);
   const [chats, setChats] = useState<ChatMessage[]>([]);
   const [roles, setRoles] = useState<AgentRole[]>([]);
   const [permissionProfiles, setPermissionProfiles] = useState<PermissionProfile[]>([]);
@@ -211,9 +657,21 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
   const [groupPositions, setGroupPositions] = useState<Record<number, Position>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [streamConnected, setStreamConnected] = useState(false);
+  const [executionDiffs, setExecutionDiffs] = useState<Record<number, ExecutionDiff | null>>({});
+  const [diffStatus, setDiffStatus] = useState<Record<number, FeatureStatus>>({});
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [schedulesStatus, setSchedulesStatus] = useState<FeatureStatus>('idle');
+  const [mergePolicy, setMergePolicy] = useState<MergePolicy | null>(null);
+  const [mergePolicyStatus, setMergePolicyStatus] = useState<FeatureStatus>('idle');
+  const [costUsage, setCostUsage] = useState<CostUsage | null>(null);
+  const [costBudgets, setCostBudgets] = useState<ProjectBudget[]>([]);
+  const [costStatus, setCostStatus] = useState<FeatureStatus>('idle');
+  const [notificationChannels, setNotificationChannels] = useState<NotificationChannel[]>([]);
+  const [notificationRules, setNotificationRules] = useState<NotificationRule[]>([]);
+  const [notificationStatus, setNotificationStatus] = useState<FeatureStatus>('idle');
 
   const seqRef = useRef(1000);
-  const pollRef = useRef<number | null>(null);
   const nextId = useCallback(() => {
     seqRef.current += 1;
     return seqRef.current;
@@ -221,216 +679,710 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
 
   const fail = useCallback((ex: unknown) => setError(String(ex)), []);
 
-  /** 서버 상태를 통째로 다시 읽어 화면 모양으로 바꾼다. */
-  const reload = useCallback(async () => {
-    try {
-      const [providerList, workspaceList, projectList, agentList, roleList, profileList] = await Promise.all([
-        api.listProviders(),
-        api.listWorkspaces(),
-        api.listProjects(),
-        api.listAgents(),
-        api.listRoles(),
-        api.listPermissionProfiles(),
-      ]);
+  // 조각을 다시 읽을 때 "이미 아는 것"을 판단해야 한다 — 콜백이 낡은 상태를 붙들지 않게 최신값을 ref 로도 들고 있는다.
+  const executionsRef = useRef<Execution[]>([]);
+  const agentsRef = useRef<ApiAgent[]>([]);
+  const groupsRef = useRef<AgentGroup[]>([]);
+  const filesRef = useRef<Record<number, string[]>>({});
+  /** 프로젝트 목록의 최신값(예산 목록을 프로젝트별로 읽을 때 쓴다). */
+  const projectsRef = useRef<Project[]>([]);
+  /** 태스크 → 최신 실행(트리 루트). 이벤트로 태스크 목록만 다시 읽을 때 트리의 뿌리를 알려면 필요하다. */
+  const taskRootsRef = useRef<Map<number, number | null>>(new Map());
+  /** 채팅(명령) 페이지 크기. '이전 명령 더 보기' 로 늘어난다 — 콜백에서 최신 값을 읽으려고 ref 로도 둔다. */
+  const chatPageSizeRef = useRef(CHAT_PAGE_SIZE);
+  /** 지금 **열려 있는 프로젝트**(상세 화면). 목록에서는 이 프로젝트의 slice 만 읽는다. */
+  const openProjectRef = useRef<number | null>(null);
+  /** 실행 목록을 어떤 조건으로 읽었는지. 화면이 요청하기 전에는 null 이라 아무 것도 부르지 않는다. */
+  const executionListQueryRef = useRef<ExecutionListQuery | null>(null);
+  /**
+   * 프로젝트별 "실행 id → 그 실행이 속한 트리의 루트 id" 표.
+   *
+   * <p>태스크의 `latestExecutionId` 는 **마지막으로 생긴 실행**이라 자손일 수 있다(실측: task 74 의 latest 는
+   * 손자 255 였고, 그것을 루트로 삼아 총괄 242 를 아예 읽지 않아 "작업 없음"으로 보였다).
+   * 평평한 실행 목록(`ExecutionSummaryResponse`)이 `rootExecutionId` 를 들고 있어 한 번에 풀 수 있다.
+   */
+  const rootOfRef = useRef<Map<number, Map<number, number>>>(new Map());
+  /** 화면이 요청했는지(=이벤트로 다시 읽을 필요가 있는지). 요청한 적 있을 때만 이벤트가 조각을 다시 읽는다. */
+  const schedulesLoadedRef = useRef(false);
+  const mergePolicyLoadedRef = useRef(false);
+  const costLoadedRef = useRef(false);
+  const notificationsLoadedRef = useRef(false);
+  /** 사용량을 어떤 기간으로 읽었는지. 화면이 요청하기 전에는 null(이벤트가 다시 읽지 않는다). */
+  const costRangeRef = useRef<{ from: string; to: string } | null>(null);
+  /** 지금 열어 둔 diff 실행 id 집합(실행이 바뀌면 이 diff 만 다시 읽는다). */
+  const diffIdsRef = useRef<Set<number>>(new Set());
+  const [chatHasMore, setChatHasMore] = useState<Record<number, boolean>>({});
+  /** 실행 트리 창을 열어 둔 트리(프로젝트 → 루트 실행). 그 트리만 계속 다시 읽는다. */
+  const openTreesRef = useRef<Map<number, Set<number>>>(new Map());
+  /** 스트림이 알려 준 변화(디바운스로 모았다가 한 번에 처리한다). */
+  const pendingRef = useRef<Map<string, DataChanged>>(new Map());
+  const flushRef = useRef<number | null>(null);
+  const reloadRef = useRef<() => Promise<void>>(async () => {});
+  const applyEventRef = useRef<(event: DataChanged) => Promise<void>>(async () => {});
 
-      const groupList: AgentGroup[] = [];
-      const taskList: Task[] = [];
-      const executionList: Execution[] = [];
-      const chatList: ChatMessage[] = [];
-      const positions: Record<number, Position> = {};
-      const boxPositions: Record<number, Position> = {};
-
-      const nameOf = (agentId: number) => agentList.find((agent) => agent.id === agentId)?.name ?? '에이전트';
-
-      for (const project of projectList) {
-        const [projectGroups, projectTasks] = await Promise.all([
-          api.listGroups(project.id),
-          api.listTasks(project.id),
-        ]);
-
-        projectGroups.forEach((group: ApiGroup) => {
-          groupList.push({
-            id: group.id,
-            projectId: group.projectId,
-            name: group.name,
-            leaderAgentId: group.leader?.id ?? null,
-            memberIds: group.members.map((member) => member.id),
-            prompt: text(group.prompt),
-          });
-          if (group.nodeX !== null && group.nodeX !== undefined && group.nodeY !== null && group.nodeY !== undefined) {
-            boxPositions[group.id] = { x: group.nodeX, y: group.nodeY };
-          }
-        });
-
-        // 채팅은 도착 순서대로 쌓는다(명령 하나 = 내 말풍선 + 그 응답). 위가 옛날, 아래가 최신.
-        // 예전에는 메시지를 id 로 정렬했는데, 응답 id 를 크게 잡아 두는 바람에 내 말풍선이 전부 위로 몰렸다.
-        // 백엔드는 태스크를 최신순(id desc)으로 주므로 화면 순서에 맞춰 오름차순으로 뒤집는다.
-        const orderedTasks = [...projectTasks].sort((left, right) => left.id - right.id);
-        for (const task of orderedTasks) {
-          taskList.push({
-            id: task.id,
-            projectId: project.id,
-            title: task.title,
-            status: taskStatus(task.status),
-            agentId: task.agent?.id ?? null,
-          });
-          chatList.push({
-            id: task.id,
-            projectId: project.id,
-            role: 'user',
-            author: '나',
-            text: task.title,
-            status: 'done',
-            rootExecutionId: task.latestExecutionId,
-            attachments: [],
-          });
-          if (task.latestExecutionId === null) continue;
-          try {
-            const tree: ExecutionTree = await api.getExecutionTree(task.latestExecutionId);
-            tree.nodes.forEach((node) => executionList.push(executionOf(node.execution, project.id)));
-            const root = tree.nodes.find((node) => node.depth === 0)?.execution;
-            if (root !== undefined) {
-              chatList.push({
-                id: task.id + 100000,
-                projectId: project.id,
-                role: 'agent',
-                author: nameOf(root.agentId),
-                text: summaryOf(root.resultText) || '실행이 끝났습니다.',
-                status: root.status === 'FAILED' ? 'error' : 'done',
-                rootExecutionId: root.id,
-                attachments: [],
-              });
-            }
-          } catch {
-            // 트리를 못 읽는 실행은 건너뛴다.
-          }
-        }
+  /**
+   * 작업 알림: 실행 상태가 **바뀔 때** 토스트로 알린다(시작·완료·실패·취소·질문 대기).
+   * 사용자가 화면을 안 보고 있어도 무슨 일이 일어나는지 알 수 있게 한다.
+   */
+  const prevStatusRef = useRef<Map<number, Execution['status']>>(new Map());
+  /**
+   * 이미 알린 것(실행 id + 종류). 한 실행이 `RUNNING → WAITING_CHILD → RUNNING` 을 반복해도
+   * 토스트는 종류마다 한 번만 띄운다(같은 말이 계속 뜨면 알림이 쓸모없어진다).
+   */
+  const notifiedRef = useRef<Set<string>>(new Set());
+  const notifyOnce = (key: string, text: string, tone: ToastTone = 'info') => {
+    if (notifiedRef.current.has(key)) return;
+    notifiedRef.current.add(key);
+    toast(text, tone);
+  };
+  useEffect(() => {
+    const previous = prevStatusRef.current;
+    const next = new Map<number, Execution['status']>();
+    executions.forEach((execution) => {
+      next.set(execution.id, execution.status);
+      const before = previous.get(execution.id);
+      if (before === undefined || before === execution.status) return;
+      const who = agentsRef.current.find((agent) => agent.id === execution.agentId)?.name ?? '에이전트';
+      const label = `#${execution.id} ${who}`;
+      if (execution.status === 'RUNNING' && before === 'QUEUED') {
+        // 시작은 **대기(QUEUED)에서 처음 돌기 시작할 때만** — 재개(대기·하위 대기 → RUNNING)는 시작이 아니다.
+        // (재개까지 시작으로 치면, 화면을 새로고침할 때마다 돌고 있는 작업이 "시작"으로 다시 뜬다.)
+        notifyOnce(`start:${execution.id}`, `${label} 작업을 시작했습니다`);
+      } else if (execution.status === 'DONE') {
+        const ms = execution.metrics?.durationMs ?? 0;
+        notifyOnce(`done:${execution.id}`, `${label} 작업 완료${ms > 0 ? ` (${formatDuration(ms)})` : ''}`, 'success');
+      } else if (execution.status === 'FAILED') {
+        notifyOnce(`fail:${execution.id}`, `${label} 작업이 실패했습니다`, 'error');
+      } else if (execution.status === 'CANCELLED') {
+        notifyOnce(`cancel:${execution.id}`, `${label} 작업이 취소되었습니다`);
+      } else if (execution.status === 'WAITING_CHILD') {
+        // 위임한 자식을 기다리는 구간에 들어갔다(다음 판단 스텝은 시작이 아니다).
+        notifyOnce(`waitChild:${execution.id}`, `${label} 하위 작업을 기다립니다`);
+      } else if (execution.status === 'WAITING_INPUT') {
+        // 질문은 여러 번 올 수 있으므로 매번 알린다(같은 질문이 반복되면 그때 다시 볼 일이다).
+        // 사람이 답해야 진행되므로 주황(확인 필요)으로 띄운다.
+        toast(`${label} 답을 기다립니다 — 요청 창에서 답해 주세요`, 'warn');
       }
+    });
+    prevStatusRef.current = next;
+  }, [executions]);
 
-      agentList.forEach((agent: ApiAgent) => {
-        if (agent.nodeX !== null && agent.nodeX !== undefined && agent.nodeY !== null && agent.nodeY !== undefined) {
-          positions[agent.id] = { x: agent.nodeX, y: agent.nodeY };
+  useEffect(() => {
+    executionsRef.current = executions;
+  }, [executions]);
+  useEffect(() => {
+    groupsRef.current = groups;
+  }, [groups]);
+  useEffect(() => {
+    filesRef.current = workspaceFiles;
+  }, [workspaceFiles]);
+  useEffect(() => {
+    projectsRef.current = projects;
+  }, [projects]);
+
+  /** AI 런타임 목록. */
+  const loadProviders = useCallback(async () => {
+    const rows = await api.listProviders();
+    setProviders(rows.map(mapProvider));
+  }, []);
+
+  /** 워크스페이스 목록. **파일 목록은 여기서 읽지 않는다** — 필요할 때만(첨부 창) 읽는다. */
+  const loadWorkspaces = useCallback(async () => {
+    const rows = await api.listWorkspaces();
+    setWorkspaces(rows.map((workspace) => ({ id: workspace.id, name: workspace.name, path: workspace.path })));
+  }, []);
+
+  /** 역할·권한 프로필(거의 변하지 않는다 — 전체 새로 읽기에서만 부른다). */
+  const loadCatalog = useCallback(async () => {
+    const [roleList, profileList] = await Promise.all([api.listRoles(), api.listPermissionProfiles()]);
+    setRoles(roleList.map((role) => ({ id: role.id, name: role.name })));
+    setPermissionProfiles(profileList.map((profile) => ({ id: profile.id, name: profile.name })));
+  }, []);
+
+  /** 프로젝트 목록(이름·마스터·워크스페이스 할당). 읽은 목록을 돌려줘 호출부가 이어 쓸 수 있게 한다. */
+  const loadProjects = useCallback(async (): Promise<Project[]> => {
+    const rows = await api.listProjects();
+    const mapped = rows.map(mapProject);
+    setProjects(mapped);
+    return mapped;
+  }, []);
+
+  /** 에이전트 목록(전역)과 구성도 좌표. */
+  const loadAgents = useCallback(async () => {
+    const rows = await api.listAgents();
+    agentsRef.current = rows;
+    setAgents(rows.map(mapAgent));
+    setNodePositions(positionsOfAgents(rows));
+  }, []);
+
+  /** 한 프로젝트의 그룹 목록. 다른 프로젝트의 그룹·좌표는 그대로 둔다. */
+  const loadGroups = useCallback(async (projectId: number) => {
+    const rows = await api.listGroups(projectId);
+    const previousIds = new Set(
+      groupsRef.current.filter((group) => group.projectId === projectId).map((group) => group.id),
+    );
+    setGroups((prev) => [...prev.filter((group) => group.projectId !== projectId), ...rows.map(mapGroup)]);
+    setGroupPositions((prev) => {
+      const next: Record<number, Position> = {};
+      Object.entries(prev).forEach(([key, position]) => {
+        if (!previousIds.has(Number(key))) next[Number(key)] = position;
+      });
+      rows.forEach((group) => {
+        if (group.nodeX !== null && group.nodeX !== undefined && group.nodeY !== null && group.nodeY !== undefined) {
+          next[group.id] = { x: group.nodeX, y: group.nodeY };
         }
       });
+      return next;
+    });
+  }, []);
 
-      const files: Record<number, string[]> = {};
-      for (const workspace of workspaceList) {
+  /** 한 실행 트리를 읽어 화면 모양으로 바꾼다(못 읽으면 빈 배열 — 실행이 지워졌을 수 있다). */
+  const fetchTree = useCallback(async (rootExecutionId: number, projectId: number): Promise<Execution[]> => {
+    try {
+      const tree: ExecutionTree = await api.getExecutionTree(rootExecutionId);
+      return tree.nodes.map((node) => executionOf(node.execution, projectId));
+    } catch {
+      return [];
+    }
+  }, []);
+
+  /** 실행 목록을 읽어 화면 모양으로 바꾼다. 못 읽어도 지금 목록을 그대로 둔다(조각별 실패를 견딘다). */
+  const fetchExecutionList = useCallback(async (query: ExecutionListQuery) => {
+    try {
+      const rows = await api.listExecutions(query);
+      setExecutionList(rows.map(executionSummaryOf));
+    } catch (ex) {
+      console.warn('[AgentDock] 실행 목록을 갱신하지 못했습니다', ex);
+    }
+  }, []);
+
+  /**
+   * 실행 목록을 읽는다(화면이 부른다). 읽은 조건을 기억해 이벤트·안전망 폴링이 같은 조건으로 다시 읽는다.
+   * **식별자가 executionList 가 바뀌어도 그대로여야 한다** — 화면의 `useEffect([loadExecutionList])` 가
+   * 목록 갱신마다 다시 돌면 조회가 끝없이 반복된다(스토어 객체는 executionList 를 의존성으로 갖는다).
+   */
+  const loadExecutionList = useCallback(
+    (query: ExecutionListQuery = {}) => {
+      executionListQueryRef.current = query;
+      void fetchExecutionList(query);
+    },
+    [fetchExecutionList],
+  );
+
+  /**
+   * 한 프로젝트의 채팅 기록을 서버 상태(태스크 + 실행 트리)에서 다시 만든다.
+   * 명령 하나 = 내 말풍선 + 그 응답이고, 응답 문구·상태는 트리 루트의 상태·요약에서 온다(위가 옛날, 아래가 최신).
+   */
+  const rebuildChats = useCallback((projectId: number, taskList: Task[], executionList: Execution[]) => {
+    const nameOf = (agentId: number | null) =>
+      agentsRef.current.find((agent) => agent.id === agentId)?.name ?? '에이전트';
+    const messages: ChatMessage[] = [];
+    [...taskList].sort((left, right) => left.id - right.id).forEach((task) => {
+      messages.push({
+        id: task.id,
+        projectId,
+        role: 'user',
+        author: '나',
+        text: task.title,
+        status: 'done',
+        rootExecutionId: taskRootsRef.current.get(task.id) ?? null,
+        attachments: task.attachments,
+      });
+      const rootId = taskRootsRef.current.get(task.id) ?? null;
+      if (rootId === null) return;
+      const candidate = executionList.find((execution) => execution.id === rootId);
+      if (candidate === undefined) {
+        // 트리를 아직 못 읽었어도 **지금 도는 작업**은 응답을 기다리는 중으로 보여 준다(다음 갱신에서 채워진다).
+        if (task.status === 'PENDING' || task.status === 'RUNNING') {
+          messages.push({
+            id: task.id + 100000,
+            projectId,
+            role: 'agent',
+            author: nameOf(task.agentId),
+            text: '',
+            status: 'pending',
+            rootExecutionId: rootId,
+            attachments: [],
+          });
+        }
+        return;
+      }
+      /*
+       * 부모를 따라 올라가 트리의 **진짜 루트**를 찾는다.
+       * `latestExecutionId` 가 자식일 수 있는데, 그때 자식 하나의 상태만 보면 **아직 돌고 있는 트리를
+       * "끝났다"로 오판**한다(2026-10-08 실측: 실행 162 가 WAITING_CHILD 인데 채팅은 종료로 표시됐다).
+       * 판정은 트리 안 **모든 실행**을 보고, 하나라도 안 끝났으면 진행 중으로 둔다.
+       */
+      const byId = new Map(executionList.map((execution) => [execution.id, execution]));
+      let treeRoot = candidate;
+      while (treeRoot.parentExecutionId !== null) {
+        const parent = byId.get(treeRoot.parentExecutionId);
+        if (parent === undefined) break;
+        treeRoot = parent;
+      }
+      const belongsToTree = (execution: Execution): boolean => {
+        let cursor: Execution | undefined = execution;
+        while (cursor !== undefined) {
+          if (cursor.id === treeRoot.id) return true;
+          cursor = cursor.parentExecutionId === null ? undefined : byId.get(cursor.parentExecutionId);
+        }
+        return false;
+      };
+      const members = executionList.filter(belongsToTree);
+      const finished = !members.some((execution) => unfinished(execution.status));
+      const root = members.find((execution) => execution.id === treeRoot.id) ?? treeRoot;
+      messages.push({
+        id: task.id + 100000,
+        projectId,
+        role: 'agent',
+        author: nameOf(root.agentId),
+        // 끝났으면 **무엇을 했는지**를 정리해 보여 준다(마스터 요약 + 에이전트별 작업 + 결과).
+        text: finished ? workLog(executionList, root.id, nameOf) || '실행이 끝났습니다.' : '',
+        status: finished ? (root.status === 'FAILED' ? 'error' : 'done') : 'pending',
+        rootExecutionId: root.id,
+        attachments: [],
+      });
+    });
+    setChats((prev) => [...prev.filter((message) => message.projectId !== projectId), ...messages]);
+  }, []);
+
+  /**
+   * 한 프로젝트의 태스크 목록(+필요하면 실행 트리)을 다시 읽는다.
+   *
+   * <p>실행 트리는 **필요할 때만** 읽는다 — 트리 창을 열어 둔 트리, 아직 모르는 트리,
+   * 그리고 실행이 바뀌었다는 알림을 받은(`forceTrees`) **아직 끝나지 않은** 트리뿐이다.
+   * 끝난 트리는 이미 들고 있는 것으로 충분하다(태스크의 `latestExecutionId` + 마지막으로 읽은 트리).
+   */
+  const loadProjectSlice = useCallback(
+    async (projectId: number, forceTrees = false) => {
+      const limit = chatPageSizeRef.current;
+      const rows = await api.listTasks(projectId, limit);
+      const taskList = rows.map((task) => mapTask(projectId, task));
+      // latestExecutionId 는 자손일 수 있으므로, 평평한 실행 목록에서 **진짜 루트**를 찾아 쓴다
+      // (새 실행이 생기면 실행 알림이 forceTrees 로 들어와 표를 새로 만든다).
+      let rootOf = rootOfRef.current.get(projectId);
+      if (rootOf === undefined || forceTrees) {
         try {
-          files[workspace.id] = await api.listWorkspaceFiles(workspace.id);
+          const flat = await api.listExecutions({ projectId, limit: 200 });
+          rootOf = new Map(flat.map((execution) => [execution.id, execution.rootExecutionId ?? execution.id]));
+          rootOfRef.current.set(projectId, rootOf);
         } catch {
-          files[workspace.id] = [];
+          rootOf = rootOf ?? new Map(); // 못 읽으면 latestExecutionId 로 폴백한다(예전 동작).
         }
       }
+      rows.forEach((task, index) => {
+        const latest = task.latestExecutionId;
+        taskRootsRef.current.set(taskList[index].id, latest === null ? null : (rootOf.get(latest) ?? latest));
+      });
+      setTasks((prev) => [...prev.filter((task) => task.projectId !== projectId), ...taskList]);
+      // 요청한 만큼 받았으면 더 있을 수 있고, 그보다 적으면 그게 끝이다.
+      setChatHasMore((prev) => ({ ...prev, [projectId]: rows.length >= limit }));
 
-      setProviders(
-        providerList.map((provider: ApiProvider) => ({
-          id: provider.id,
-          key: provider.key,
-          name: provider.name,
-          enabled: provider.enabled,
-          capabilities: {
-            models: provider.capabilities?.models ?? [],
-            modes: provider.capabilities?.modes ?? [],
-            notes: provider.capabilities?.notes ?? null,
-            install: provider.capabilities?.install ?? [],
-            installRequire: provider.capabilities?.installRequire ?? null,
-            installPrerequisite: provider.capabilities?.installPrerequisite ?? [],
-          },
-        })),
-      );
-      setWorkspaces(workspaceList.map((workspace) => ({ id: workspace.id, name: workspace.name, path: workspace.path })));
-      setWorkspaceFiles(files);
-      setProjects(
-        projectList.map((project: ApiProject) => ({
-          id: project.id,
-          name: project.name,
-          workspaces: project.workspaces.map((workspace) => ({
-            workspaceId: workspace.workspaceId,
-            isDefault: workspace.isDefault,
-          })),
-          masterAgentId: project.masterAgent?.id ?? null,
-          masterPrompt: text(project.masterPrompt),
-        })),
-      );
-      setAgents(
-        agentList.map((agent: ApiAgent) => ({
-          id: agent.id,
-          projectId: agent.projectId,
-          name: agent.name,
-          roleId: agent.role?.id ?? 0,
-          permissionProfileId: agent.permissionProfile?.id ?? 0,
-          providerId: agent.providerId,
-          persona: text(agent.persona),
-          model: text(agent.model),
-          mode: text(agent.mode),
-          placed: agent.placed ?? true,
-          available: agent.available,
-          unavailableReason: agent.unavailableReason,
-        })),
-      );
-      setGroups(groupList);
-      setTasks(taskList);
+      const known = new Map(executionsRef.current.map((execution) => [execution.id, execution]));
+      const openTrees = openTreesRef.current.get(projectId) ?? new Set<number>();
+      const wanted = new Set<number>(openTrees);
+      taskList.forEach((task) => {
+        const rootId = taskRootsRef.current.get(task.id) ?? null;
+        if (rootId === null) return;
+        const knownRoot = known.get(rootId);
+        if (knownRoot === undefined || (forceTrees && unfinished(knownRoot.status))) wanted.add(rootId);
+      });
+
+      const trees = await Promise.all([...wanted].map((rootId) => fetchTree(rootId, projectId)));
+      const executionList = mergeExecutions(executionsRef.current, wanted, trees.flat());
+      executionsRef.current = executionList;
       setExecutions(executionList);
-      // 정렬하지 않는다: 위에서 만든 순서(도착 순서)가 곧 화면 순서다.
-      setChats(chatList);
-      setRoles(roleList.map((role) => ({ id: role.id, name: role.name })));
-      setPermissionProfiles(profileList.map((profile) => ({ id: profile.id, name: profile.name })));
-      setNodePositions(positions);
-      setGroupPositions(boxPositions);
-      setLoading(false);
-      setError(null);
-    } catch (ex) {
-      setLoading(false);
-      fail(ex);
+      rebuildChats(projectId, taskList, executionList);
+    },
+    [fetchTree, rebuildChats],
+  );
+
+  /** 파일 목록은 **요청이 있을 때만** 읽는다(첨부 창이 열릴 때). */
+  const fetchWorkspaceFiles = useCallback(async (workspaceId: number) => {
+    try {
+      const paths = await api.listWorkspaceFiles(workspaceId);
+      setWorkspaceFiles((prev) => ({ ...prev, [workspaceId]: paths }));
+    } catch {
+      // 못 읽으면 화면은 빈 목록으로 둔다(첨부 창이 안내 문구를 보여 준다).
     }
-  }, [fail]);
+  }, []);
+
+  /** 첨부가 바뀌면 **파일 목록을 요청한 적 있는 워크스페이스만** 다시 읽는다(첨부 창이 열려 있지 않으면 아무 일도 없다). */
+  const refreshOpenFileLists = useCallback(async () => {
+    await Promise.all(Object.keys(filesRef.current).map((key) => fetchWorkspaceFiles(Number(key))));
+  }, [fetchWorkspaceFiles]);
+
+  /** 한 실행의 변경사항 diff 를 읽는다(창을 열 때). 서버가 아직 없으면 '미지원' 으로 남긴다. */
+  const loadExecutionDiff = useCallback(async (executionId: number) => {
+    diffIdsRef.current.add(executionId);
+    setDiffStatus((prev) => ({ ...prev, [executionId]: 'loading' }));
+    try {
+      const response = await api.getExecutionDiff(executionId);
+      setExecutionDiffs((prev) => ({ ...prev, [executionId]: mapExecutionDiff(response) }));
+      setDiffStatus((prev) => ({ ...prev, [executionId]: 'ready' }));
+    } catch (ex) {
+      setDiffStatus((prev) => ({
+        ...prev,
+        [executionId]: isUnsupportedError(ex) ? 'unsupported' : 'error',
+      }));
+    }
+  }, []);
+
+  /** 예약 목록을 읽는다. */
+  const loadSchedules = useCallback(async () => {
+    schedulesLoadedRef.current = true;
+    setSchedulesStatus('loading');
+    try {
+      const rows = await api.listSchedules();
+      setSchedules(rows.map(mapSchedule));
+      setSchedulesStatus('ready');
+    } catch (ex) {
+      setSchedulesStatus(isUnsupportedError(ex) ? 'unsupported' : 'error');
+    }
+  }, []);
+
+  /** 병합 정책을 읽는다. */
+  const loadMergePolicy = useCallback(async () => {
+    mergePolicyLoadedRef.current = true;
+    setMergePolicyStatus('loading');
+    try {
+      setMergePolicy(mapMergePolicy(await api.getMergePolicy()));
+      setMergePolicyStatus('ready');
+    } catch (ex) {
+      setMergePolicyStatus(isUnsupportedError(ex) ? 'unsupported' : 'error');
+    }
+  }, []);
+
+  /** 기간(from~to) 사용량을 읽는다(화면이 고른 기간을 기억해 이벤트 때 같은 기간으로 다시 읽는다). */
+  const loadCostUsage = useCallback(async (from: string, to: string) => {
+    costLoadedRef.current = true;
+    costRangeRef.current = { from, to };
+    setCostStatus('loading');
+    try {
+      setCostUsage(mapCostUsage(await api.getCostUsage(from, to)));
+      setCostStatus('ready');
+    } catch (ex) {
+      setCostStatus(isUnsupportedError(ex) ? 'unsupported' : 'error');
+    }
+  }, []);
+
+  /** 프로젝트 예산 목록을 읽는다. 서버에 목록 API 가 없어 프로젝트별 GET 을 모은다. */
+  const loadCostBudgets = useCallback(async () => {
+    costLoadedRef.current = true;
+    setCostStatus('loading');
+    try {
+      const list = projectsRef.current;
+      const nameOf = new Map(list.map((project) => [project.id, project.name]));
+      const rows = await Promise.all(list.map((project) => api.getProjectBudget(project.id)));
+      setCostBudgets(rows.map((row) => mapBudget(row, nameOf.get(row.projectId) ?? `프로젝트 #${row.projectId}`)));
+      setCostStatus('ready');
+    } catch (ex) {
+      setCostStatus(isUnsupportedError(ex) ? 'unsupported' : 'error');
+    }
+  }, []);
+
+  /** 프로젝트 예산을 설정하고 목록을 다시 읽는다(null 이면 삭제). */
+  const setProjectBudget = useCallback(
+    async (projectId: number, budgetUsd: number | null) => {
+      try {
+        if (budgetUsd === null) await api.deleteProjectBudget(projectId);
+        else await api.setProjectBudget(projectId, { amountUsd: budgetUsd });
+        await loadCostBudgets();
+      } catch (ex) {
+        setCostStatus(isUnsupportedError(ex) ? 'unsupported' : 'error');
+        fail(ex);
+      }
+    },
+    [fail, loadCostBudgets],
+  );
+
+  /** 알림 채널과 규칙을 함께 읽는다. */
+  const loadNotifications = useCallback(async () => {
+    notificationsLoadedRef.current = true;
+    setNotificationStatus('loading');
+    try {
+      const [channels, rules] = await Promise.all([api.listNotificationChannels(), api.listNotificationRules()]);
+      setNotificationChannels(channels.map(mapChannel));
+      setNotificationRules(rules.map(mapRule));
+      setNotificationStatus('ready');
+    } catch (ex) {
+      setNotificationStatus(isUnsupportedError(ex) ? 'unsupported' : 'error');
+    }
+  }, []);
+
+  /** 조각을 바꾸는 요청을 보내고, 성공하면 그 조각을 다시 읽는다. 실패는 그 조각 상태(미지원/오류)로 남긴다. */
+  const mutateSlice = useCallback(
+    async (
+      action: () => Promise<unknown>,
+      reloadSlice: () => Promise<void>,
+      setStatus: (status: FeatureStatus) => void,
+    ) => {
+      try {
+        await action();
+        await reloadSlice();
+      } catch (ex) {
+        setStatus(isUnsupportedError(ex) ? 'unsupported' : 'error');
+        fail(ex);
+      }
+    },
+    [fail],
+  );
+
+  /**
+   * 알림 하나를 "다시 읽을 조각"으로 옮긴다. 프로젝트를 알 수 없는 알림은 그 조각 전체(`reload`)를 다시 읽는다.
+   * 바뀌지 않은 조각은 건드리지 않는다 — 3초마다 20건을 부르던 방식을 대신한다.
+   */
+  const applyEvent = useCallback(
+    async (event: DataChanged): Promise<void> => {
+      switch (event.type) {
+        case 'execution.changed':
+          if (event.projectId === null) await reloadRef.current();
+          else await loadProjectSlice(event.projectId, true);
+          // 실행 목록을 읽어 둔 화면(요청 창 등)은 **필터가 맞을 때만** 같은 조건으로 다시 읽는다(계약 §7).
+          {
+            const listQuery = executionListQueryRef.current;
+            const matches =
+              listQuery !== null &&
+              (listQuery.projectId === undefined ||
+                listQuery.projectId === null ||
+                event.projectId === null ||
+                event.projectId === listQuery.projectId);
+            if (matches && listQuery !== null) await fetchExecutionList(listQuery);
+          }
+          // 열어 둔 diff 창이 있으면 그 실행의 변경사항도 다시 읽는다(파일이 바뀌었을 수 있다).
+          if (diffIdsRef.current.size > 0) {
+            await Promise.all([...diffIdsRef.current].map((id) => loadExecutionDiff(id)));
+          }
+          return;
+        case 'task.changed':
+          if (event.projectId === null) await reloadRef.current();
+          else await loadProjectSlice(event.projectId);
+          return;
+        case 'agent.changed':
+          if (event.projectId === null) await reloadRef.current();
+          else {
+            await loadAgents();
+            await loadGroups(event.projectId);
+          }
+          return;
+        case 'group.changed':
+          if (event.projectId === null) await reloadRef.current();
+          else {
+            await loadGroups(event.projectId);
+            await loadAgents();
+          }
+          return;
+        case 'project.changed':
+          await loadProjects();
+          return;
+        case 'workspace.changed':
+          await loadWorkspaces();
+          return;
+        case 'runtime.changed':
+          await loadProviders();
+          return;
+        case 'attachment.changed':
+          await refreshOpenFileLists();
+          return;
+        case 'schedule.changed':
+          if (schedulesLoadedRef.current) await loadSchedules();
+          return;
+        case 'notification.changed':
+          if (notificationsLoadedRef.current) await loadNotifications();
+          return;
+        case 'mergePolicy.changed':
+        case 'merge-policy.changed':
+        case 'settings.changed':
+          if (mergePolicyLoadedRef.current) await loadMergePolicy();
+          return;
+        case 'budget.changed':
+        case 'cost.changed': {
+          const range = costRangeRef.current;
+          if (range !== null) await loadCostUsage(range.from, range.to);
+          if (costLoadedRef.current) await loadCostBudgets();
+          return;
+        }
+        default:
+          return;
+      }
+    },
+    [
+      fetchExecutionList,
+      loadAgents,
+      loadCostBudgets,
+      loadCostUsage,
+      loadExecutionDiff,
+      loadGroups,
+      loadMergePolicy,
+      loadNotifications,
+      loadProjectSlice,
+      loadProjects,
+      loadProviders,
+      loadSchedules,
+      loadWorkspaces,
+      refreshOpenFileLists,
+    ],
+  );
+
+  /**
+   * `reload()` 가 겹쳐 도는 것을 막는 표시. 서버가 느릴 때 폴링이 다음 `reload()` 를 시작하면
+   * **끝나지 않은 요청이 계속 쌓인다**(실측: Network 패널에 같은 6개 요청이 4중으로 pending, 총 3,679건).
+   */
+  const reloadInFlightRef = useRef(false);
+
+  /**
+   * 서버 상태를 통째로 다시 읽는다(첫 로드·화면 조작 뒤·안전망 폴링).
+   * 조각 로더를 그대로 조립하고, 실행 트리도 같은 규칙(아직 모르는 것만)으로 읽는다.
+   */
+  const reload = useCallback(async () => {
+    if (reloadInFlightRef.current) return;
+    reloadInFlightRef.current = true;
+    /**
+     * 한 엔드포인트가 실패해도 나머지는 갱신한다. 예전에는 `Promise.all` 이라 하나만 죽어도
+     * 새로고침 전체가 실패한 것처럼 보였다(구버전 서버에서 `/runtimes` 404 하나로 화면이 '모두 에러'처럼 보였다).
+     */
+    const tolerantly = async <T,>(name: string, load: () => Promise<T>, fallback: T): Promise<T> => {
+      try {
+        return await load();
+      } catch (ex) {
+        console.warn(`[AgentDock] ${name} 를 갱신하지 못했습니다`, ex);
+        return fallback;
+      }
+    };
+
+    const [projectList] = await Promise.all([
+      tolerantly<Project[]>('프로젝트 목록', loadProjects, []),
+      tolerantly('제공자 목록', loadProviders, undefined),
+      tolerantly('워크스페이스 목록', loadWorkspaces, undefined),
+      tolerantly('에이전트 목록', loadAgents, undefined),
+      tolerantly('모델 목록', loadCatalog, undefined),
+    ]);
+
+    // 목록에는 프로젝트별 상세(그룹·태스크·트리)를 읽지 않는다 — **지금 열려 있는 프로젝트**만 읽는다.
+    const openProjectId = openProjectRef.current;
+    if (openProjectId !== null && projectList.some((project) => project.id === openProjectId)) {
+      await tolerantly('팀 목록', () => loadGroups(openProjectId), undefined);
+      await tolerantly('프로젝트 상세', () => loadProjectSlice(openProjectId), undefined);
+    }
+    // 실행 목록은 화면이 한 번 요청했으면(요청 창·실행 목록 화면) 같은 조건으로 계속 최신으로 둔다.
+    const listQuery = executionListQueryRef.current;
+    if (listQuery !== null) {
+      await tolerantly('실행 목록', () => fetchExecutionList(listQuery), undefined);
+    }
+    // 화면이 한 번 요청한 C/D/E/G/H 조각도 새로고침 때 같은 조건으로 최신으로 둔다(이벤트를 놓쳐도 따라잡는다).
+    if (schedulesLoadedRef.current) await tolerantly('예약 목록', loadSchedules, undefined);
+    if (mergePolicyLoadedRef.current) await tolerantly('병합 정책', loadMergePolicy, undefined);
+    if (notificationsLoadedRef.current) await tolerantly('알림 설정', loadNotifications, undefined);
+    const costRange = costRangeRef.current;
+    if (costRange !== null) {
+      await tolerantly('사용량', () => loadCostUsage(costRange.from, costRange.to), undefined);
+    }
+    if (costLoadedRef.current) await tolerantly('프로젝트 예산', loadCostBudgets, undefined);
+
+    setLoading(false);
+    setError(null);
+    reloadInFlightRef.current = false;
+  }, [
+    fetchExecutionList,
+    loadAgents,
+    loadCatalog,
+    loadCostBudgets,
+    loadCostUsage,
+    loadGroups,
+    loadMergePolicy,
+    loadNotifications,
+    loadProjectSlice,
+    loadProjects,
+    loadProviders,
+    loadSchedules,
+    loadWorkspaces,
+  ]);
 
   useEffect(() => {
     void reload();
   }, [reload]);
 
-  useEffect(
-    () => () => {
-      if (pollRef.current !== null) window.clearTimeout(pollRef.current);
-    },
-    [],
-  );
+  useEffect(() => {
+    reloadRef.current = reload;
+  }, [reload]);
 
-  /** 실행 트리를 따라가며 화면을 갱신하고, 끝나면 서버 상태를 다시 읽는다. */
-  const watch = useCallback(
-    (projectId: number, rootExecutionId: number, agentMessageId: number) => {
-      const poll = async () => {
-        try {
-          const tree = await api.getExecutionTree(rootExecutionId);
-          const rows = tree.nodes.map((node) => executionOf(node.execution, projectId));
-          const root = tree.nodes.find((node) => node.depth === 0)?.execution;
-          const finished = root !== undefined && (root.status === 'SUCCEEDED' || root.status === 'FAILED');
-          setExecutions((prev) => [...prev.filter((execution) => execution.projectId !== projectId), ...rows]);
-          setChats((prev) =>
-            prev.map((message) =>
-              message.id === agentMessageId
-                ? {
-                    ...message,
-                    status: finished ? (root.status === 'SUCCEEDED' ? 'done' : 'error') : 'pending',
-                    text: finished ? summaryOf(root.resultText) || '실행이 끝났습니다.' : '',
-                  }
-                : message,
-            ),
-          );
-          if (finished) {
-            pollRef.current = null;
-            await reload();
-            return;
-          }
-        } catch (ex) {
-          fail(ex);
-        }
-        pollRef.current = window.setTimeout(() => void poll(), 1500);
-      };
-      void poll();
-    },
-    [fail, reload],
-  );
+  useEffect(() => {
+    applyEventRef.current = applyEvent;
+  }, [applyEvent]);
+
+  /**
+   * 전역 이벤트 스트림(`GET /events/stream`)을 **한 번** 구독한다.
+   * 데이터 이벤트는 이름 없이 오므로 `onmessage` 하나로 모두 받고, 250ms 모았다가 바뀐 조각만 다시 읽는다.
+   * 끊기면 EventSource 가 스스로 다시 붙고, 그동안은 폴링 안전망이 빨라진다(`streamConnected`).
+   */
+  useEffect(() => {
+    // 실제 SSE 연결은 **탭 중 리더 하나만** 연다(Web Locks + BroadcastChannel) — 팔로워 탭은 채널로 받는다.
+    // 탭마다 스트림을 열면 브라우저 연결(오리진당 6개)이 차서 초기 로딩 요청이 큐에 갇힌다.
+    const flush = () => {
+      flushRef.current = null;
+      const events = [...pendingRef.current.values()];
+      pendingRef.current.clear();
+      // 한 번에 하나씩 순서대로 다시 읽는다(같은 조각은 이미 하나로 합쳐져 있다).
+      void events.reduce((chain, event) => chain.then(() => applyEventRef.current(event)), Promise.resolve());
+    };
+
+    const queue = (event: DataChanged) => {
+      // 같은 조각(타입 + 프로젝트)은 한 번만 읽는다.
+      pendingRef.current.set(`${event.type}:${event.projectId ?? ''}`, event);
+      if (flushRef.current !== null) window.clearTimeout(flushRef.current);
+      flushRef.current = window.setTimeout(flush, EVENT_DEBOUNCE_MS);
+    };
+
+    const off = subscribeEvents({
+      // 채널은 구조가 같은 최소 타입으로 오므로 스토어 타입으로 좁혀 받는다.
+      onEvent: (event) => queue(event as DataChanged),
+      onConnection: (value) => setStreamConnected(value),
+    });
+
+    return () => {
+      off();
+      if (flushRef.current !== null) window.clearTimeout(flushRef.current);
+      flushRef.current = null;
+      pendingRef.current.clear();
+    };
+  }, []);
+
+  /**
+   * 폴링은 **안전망**이다 — 평소에는 이벤트가 화면을 갱신하고, 이 주기는 놓친 것만 줍는다(30초).
+   * 스트림이 끊겨 있으면 그동안만 15초로 돌고, 탭이 숨겨져 있으면 아예 돌지 않는다(다시 보이면 한 번 읽는다).
+   */
+  useEffect(() => {
+    let timer: number | undefined;
+    const period = streamConnected ? SAFETY_POLL_MS : DISCONNECTED_POLL_MS;
+
+    const stop = () => {
+      if (timer === undefined) return;
+      window.clearInterval(timer);
+      timer = undefined;
+    };
+
+    const start = () => {
+      stop();
+      if (document.hidden) return;
+      timer = window.setInterval(() => void reloadRef.current(), period);
+    };
+
+    const onVisibility = () => {
+      if (document.hidden) {
+        stop();
+        return;
+      }
+      void reloadRef.current();
+      start();
+    };
+
+    start();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [streamConnected]);
 
   const sendCommand = useCallback(
     (projectId: number, target: ChatTarget, input: string, attachments: AttachedFile[]) => {
@@ -511,12 +1463,13 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
               message.id === agentMessageId ? { ...message, rootExecutionId: result.rootExecutionId } : message,
             ),
           );
+          taskRootsRef.current.set(result.taskId, result.rootExecutionId);
           setTasks((prev) => [
             ...prev,
-            { id: result.taskId, projectId, title, status: 'RUNNING', agentId: receiver.id },
+            { id: result.taskId, projectId, title, status: 'RUNNING', agentId: receiver.id, attachments },
           ]);
-          if (pollRef.current !== null) window.clearTimeout(pollRef.current);
-          watch(projectId, result.rootExecutionId, agentMessageId);
+          // 이후 갱신은 **전역 이벤트 스트림**이 몰고 간다 — 실행이 바뀔 때마다 `execution.changed` 가 오고,
+          // 그 알림이 이 프로젝트의 태스크·실행 트리·채팅을 다시 읽는다(주기 폴링 없음).
         })
         .catch((ex) => {
           fail(ex);
@@ -529,7 +1482,7 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
           );
         });
     },
-    [agents, fail, groups, nextId, watch],
+    [agents, fail, groups, nextId],
   );
 
   /** 화면 조작을 서버에 반영하고, 성공하면 서버 상태를 다시 읽는다. */
@@ -550,6 +1503,7 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
     () => ({
       loading,
       error,
+      streamConnected,
       providers,
       availableProviderKeys: Object.keys(DEFAULT_PROVIDER_NAMES).filter(
         (key) => !providers.some((provider) => provider.key === key),
@@ -561,6 +1515,7 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
       groups,
       tasks,
       executions,
+      executionList,
       chats,
       roles,
       permissionProfiles,
@@ -568,12 +1523,30 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
       groupPositions,
       reload,
 
+      watchExecutionTree: (projectId, rootExecutionId) => {
+        const next = new Map(openTreesRef.current);
+        if (rootExecutionId === null) next.delete(projectId);
+        else next.set(projectId, new Set([rootExecutionId]));
+        openTreesRef.current = next;
+        /*
+         * 상세에 **처음 들어올 때만** 그 프로젝트를 읽는다.
+         * 이 함수는 스토어 값 객체에 있어 렌더마다 새로 만들어지고, 상세 화면 효과가 이 함수를 의존성으로 다시
+         * 부르므로 여기서 매번 읽으면 tasks 가 무한 호출된다(2026-10-08 실측). 이미 열려 있으면 아무것도 하지 않는다.
+         */
+        if (openProjectRef.current === projectId) return;
+        openProjectRef.current = projectId;
+        void loadGroups(projectId);
+        void loadProjectSlice(projectId, true);
+      },
+      loadExecutionList,
+
       toggleProvider: (id) => {
         const provider = providers.find((candidate) => candidate.id === id);
         if (provider !== undefined) call(() => api.setProviderEnabled(id, !provider.enabled));
       },
       deleteProvider: (id) => call(() => api.deleteProvider(id)),
-      addProvider: (key, name) => call(() => api.createProvider({ key, name })),
+      addProvider: (key, name) =>
+        call(() => api.createProvider({ key, name, capabilities: DEFAULT_CAPABILITIES[key] })),
       updateCapabilities: (id, capabilities) => call(() => api.updateProviderCapabilities(id, capabilities)),
 
       createProject: (name) => call(() => api.createProject({ name })),
@@ -661,13 +1634,37 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
         setGroups((prev) => prev.map((candidate) => (candidate.id === groupId ? { ...candidate, prompt } : candidate)));
         call(() => api.updateGroup(groupId, { name: group.name, prompt, leaderAgentId: group.leaderAgentId }));
       },
+      setGroupNote: (groupId, sharedNote) => {
+        const group = groups.find((candidate) => candidate.id === groupId);
+        if (group === undefined) return;
+        setGroups((prev) =>
+          prev.map((candidate) => (candidate.id === groupId ? { ...candidate, sharedNote } : candidate)),
+        );
+        // 노트만 바꾼다 — 프롬프트와 리더는 지금 값을 그대로 보내 덮어쓰지 않게 한다.
+        call(() =>
+          api.updateGroup(groupId, {
+            name: group.name,
+            prompt: group.prompt,
+            sharedNote,
+            leaderAgentId: group.leaderAgentId,
+          }),
+        );
+      },
 
       sendCommand,
+      removeWorktree: (executionId, deleteBranch) =>
+        call(() => api.removeExecutionWorktree(executionId, deleteBranch)),
+      chatHasMore,
+      loadMoreChats: (projectId) => {
+        chatPageSizeRef.current += CHAT_PAGE_SIZE;
+        void loadProjectSlice(projectId, true);
+      },
+      retryMerge: (executionId) => call(() => api.retryExecutionMerge(executionId)),
+      answerExecution: (executionId, text) => call(() => api.answerExecution(executionId, text)),
       uploadAttachments: async (workspaceId, files) => {
         try {
           const uploaded: ApiAttachment[] = await api.uploadAttachments(workspaceId, files);
-          const paths = await api.listWorkspaceFiles(workspaceId);
-          setWorkspaceFiles((prev) => ({ ...prev, [workspaceId]: paths }));
+          await fetchWorkspaceFiles(workspaceId);
           return uploaded.map((attachment) => ({
             id: attachment.id,
             workspaceId: attachment.workspaceId,
@@ -679,11 +1676,63 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
           return [];
         }
       },
-      loadWorkspaceFiles: (workspaceId) => {
-        api
-          .listWorkspaceFiles(workspaceId)
-          .then((paths) => setWorkspaceFiles((prev) => ({ ...prev, [workspaceId]: paths })))
-          .catch(() => {});
+      loadWorkspaceFiles: (workspaceId) => void fetchWorkspaceFiles(workspaceId),
+
+      executionDiffs,
+      diffStatus,
+      loadExecutionDiff: (executionId) => void loadExecutionDiff(executionId),
+
+      schedules,
+      schedulesStatus,
+      loadSchedules: () => void loadSchedules(),
+      createSchedule: (input) => void mutateSlice(() => api.createSchedule(scheduleCreateRequest(input)), loadSchedules, setSchedulesStatus),
+      deleteSchedule: (id) => void mutateSlice(() => api.deleteSchedule(id), loadSchedules, setSchedulesStatus),
+      setScheduleEnabled: (id, enabled) => {
+        const schedule = schedules.find((candidate) => candidate.id === id);
+        if (schedule === undefined) return;
+        void mutateSlice(() => api.updateSchedule(id, scheduleUpdateRequest(schedule, enabled)), loadSchedules, setSchedulesStatus);
+      },
+      runScheduleNow: (id) => void mutateSlice(() => api.runSchedule(id), loadSchedules, setSchedulesStatus),
+
+      mergePolicy,
+      mergePolicyStatus,
+      loadMergePolicy: () => void loadMergePolicy(),
+      saveMergePolicy: (policy) => {
+        setMergePolicy(policy);
+        void mutateSlice(() => api.updateMergePolicy(mergePolicyRequest(policy)), loadMergePolicy, setMergePolicyStatus);
+      },
+
+      costUsage,
+      costBudgets,
+      costStatus,
+      loadCostUsage: (from, to) => void loadCostUsage(from, to),
+      setProjectBudget: (projectId, budgetUsd) => void setProjectBudget(projectId, budgetUsd),
+      loadCostBudgets: () => void loadCostBudgets(),
+
+      notificationChannels,
+      notificationRules,
+      notificationStatus,
+      loadNotifications: () => void loadNotifications(),
+      createChannel: (input) =>
+        void mutateSlice(() => api.createNotificationChannel(channelCreateRequest(input)), loadNotifications, setNotificationStatus),
+      updateChannel: (id, input) =>
+        void mutateSlice(() => api.updateNotificationChannel(id, channelUpdateRequest(input)), loadNotifications, setNotificationStatus),
+      deleteChannel: (id) =>
+        void mutateSlice(() => api.deleteNotificationChannel(id), loadNotifications, setNotificationStatus),
+      testChannel: (id) =>
+        void mutateSlice(() => api.testNotificationChannel(id), loadNotifications, setNotificationStatus),
+      createRule: (input) =>
+        void mutateSlice(() => api.createNotificationRule(ruleCreateRequest(input)), loadNotifications, setNotificationStatus),
+      deleteRule: (id) =>
+        void mutateSlice(() => api.deleteNotificationRule(id), loadNotifications, setNotificationStatus),
+      setRuleEnabled: (id, enabled) => {
+        const rule = notificationRules.find((candidate) => candidate.id === id);
+        if (rule === undefined) return;
+        void mutateSlice(
+          () => api.updateNotificationRule(id, { channelId: rule.channelId, eventType: rule.event as RuleCreateRequest['eventType'], enabled }),
+          loadNotifications,
+          setNotificationStatus,
+        );
       },
     }),
     [
@@ -692,9 +1741,14 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
       chats,
       error,
       executions,
+      executionList,
       fail,
+      fetchExecutionList,
+      fetchWorkspaceFiles,
+      loadExecutionList,
       groupPositions,
       groups,
+      loadProjectSlice,
       loading,
       nodePositions,
       permissionProfiles,
@@ -704,9 +1758,30 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
       roles,
       saveLayout,
       sendCommand,
+      streamConnected,
       tasks,
       workspaceFiles,
       workspaces,
+      executionDiffs,
+      diffStatus,
+      loadExecutionDiff,
+      schedules,
+      schedulesStatus,
+      loadSchedules,
+      mergePolicy,
+      mergePolicyStatus,
+      loadMergePolicy,
+      costUsage,
+      costBudgets,
+      costStatus,
+      loadCostUsage,
+      setProjectBudget,
+      loadCostBudgets,
+      notificationChannels,
+      notificationRules,
+      notificationStatus,
+      loadNotifications,
+      mutateSlice,
     ],
   );
 

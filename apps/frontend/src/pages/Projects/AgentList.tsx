@@ -1,19 +1,64 @@
 import { DragEvent, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { askConfirm } from '../../components/ConfirmDialog';
 import { unavailableReason } from '../../lib/agentAvailability';
 import { agentStatus } from '../../lib/agentStatus';
 import { isAgentDrag, readAgentDrag, startAgentDrag } from '../../lib/dnd';
+import { isLive, waitingInputs } from '../../lib/executions';
 import { openTerminalWindow } from '../../lib/windowSync';
-import { ChevronDownIcon, ChevronUpIcon, PlusIcon } from '../../components/icons';
+import { ChevronDownIcon, ChevronUpIcon, FilterIcon, PlusIcon } from '../../components/icons';
 import { useAgentDockStore } from '../../store/AgentDockStore';
 import shared from '../../styles/shared.module.css';
-import type { Agent, Project } from '../../types';
+import type { Agent, AgentGroup, AgentRole, Execution, Project, Task } from '../../types';
 import AgentCardMenu from './AgentCardMenu';
 import AgentFormModal from './AgentFormModal';
 import AgentHoverCard from './AgentHoverCard';
+import WaitingInputPopup from './WaitingInputPopup';
 import styles from './AgentList.module.css';
+import waiting from './WaitingInput.module.css';
 
 /** 마우스를 올린 뒤 정보 창이 뜨기까지의 지연(스쳐 지나갈 때 깜빡이지 않게) */
 const HOVER_DELAY_MS = 250;
+
+/** 에이전트 목록 필터. 셋을 **함께**(AND) 만족해야 보인다 — 복합 조건. */
+interface AgentFilters {
+  /** 이름·역할·모델에서 찾는 검색어 */
+  query: string;
+  status: 'all' | 'WORKING' | 'UNPLACED' | 'IDLE' | 'WAITING';
+  groupId: number | 'all';
+}
+
+const NO_FILTERS: AgentFilters = { query: '', status: 'all', groupId: 'all' };
+
+/** 검색어를 뺀 **필터 항목**이 몇 개 걸렸는지(버튼에 숫자로 보여 준다). */
+const activeFilterCount = (filters: AgentFilters): number =>
+  (filters.status === 'all' ? 0 : 1) + (filters.groupId === 'all' ? 0 : 1);
+
+/** 이 에이전트가 지금 조건에 맞는지(검색어 AND 상태 AND 그룹). */
+function matchesFilters(
+  agent: Agent,
+  filters: AgentFilters,
+  groups: AgentGroup[],
+  roles: AgentRole[],
+  tasks: Task[],
+  executions: Execution[],
+): boolean {
+  const needle = filters.query.trim().toLowerCase();
+  if (needle !== '') {
+    const roleName = roles.find((role) => role.id === agent.roleId)?.name ?? '';
+    const haystack = `${agent.name} ${roleName} ${agent.model ?? ''}`.toLowerCase();
+    if (!haystack.includes(needle)) return false;
+  }
+  if (filters.status !== 'all' && agentStatus(agent, tasks, executions).kind !== filters.status) {
+    return false;
+  }
+  if (filters.groupId !== 'all') {
+    const group = groups.find((candidate) => candidate.id === filters.groupId);
+    const memberIds = group === undefined ? [] : group.memberIds;
+    if (!memberIds.includes(agent.id) && group?.leaderAgentId !== agent.id) return false;
+  }
+  return true;
+}
 
 /**
  * 프로젝트 상세에서 구성도 위에 떠 있는 에이전트 패널. 카드는 이름과 역할만 보이는 작은 카드다.
@@ -26,44 +71,96 @@ const HOVER_DELAY_MS = 250;
 export default function AgentList({
   project,
   selectedAgentId,
+  focusSeq,
   onSelectAgent,
   open,
   onToggle,
 }: {
   project: Project;
   selectedAgentId: number | null;
+  /** 값이 바뀔 때마다 선택된 에이전트의 카드를 보이는 자리로 스크롤한다(구성도에서 노드를 눌렀을 때). */
+  focusSeq: number;
   onSelectAgent: (agentId: number) => void;
   /** 패널을 펼쳐 둘지(접으면 머리말만 남는다) */
   open: boolean;
   onToggle: () => void;
 }) {
-  const { agents, groups, providers, tasks, roles, removeGroupMember, deleteAgent, setAgentPlaced } =
+  const { agents, groups, providers, tasks, executions, roles, removeGroupMember, deleteAgent, setAgentPlaced } =
     useAgentDockStore();
+  /** 목록 필터(검색어·상태·그룹) — 복합으로 걸린다. */
+  const [filters, setFilters] = useState<AgentFilters>(NO_FILTERS);
+  /** 필터 팝업을 띄울지(버튼 아래에 뜬다). */
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterButtonRef = useRef<HTMLButtonElement>(null);
+
+  // 필터 팝업: 바깥을 누르거나 Esc, 스크롤하면 닫는다(다른 메뉴와 같은 방식).
+  useEffect(() => {
+    if (!filterOpen) return;
+    const closeOnScroll = () => setFilterOpen(false);
+    const onPointerDown = (e: PointerEvent) => {
+      if (!(e.target as HTMLElement).closest('[data-agent-filter-popup], [data-agent-filter-button]')) {
+        setFilterOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFilterOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', closeOnScroll, true);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', closeOnScroll, true);
+    };
+  }, [filterOpen]);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Agent | null>(null);
   const [dropActive, setDropActive] = useState(false);
   const [hover, setHover] = useState<{ agent: Agent; rect: DOMRect } | null>(null);
   const [menu, setMenu] = useState<{ agent: Agent; rect: DOMRect } | null>(null);
+  // 카드의 말풍선(💬)을 누르면 그 자리에 뜨는 입력 대기 팝업.
+  const [waitingPopup, setWaitingPopup] = useState<{ execution: Execution; rect: DOMRect } | null>(null);
   const hoverTimer = useRef<number | undefined>(undefined);
+  /** 카드 DOM. 구성도에서 노드를 누르면 그 카드로 스크롤하려고 들고 있는다. */
+  const cardRefs = useRef(new Map<number, HTMLDivElement>());
 
   const projectAgents = agents.filter((a) => a.projectId === project.id);
+  // 에이전트마다 답을 기다리는 첫 실행(부모·자식 모두 포함). 그 에이전트 카드에 말풍선을 붙인다.
+  const waitingByAgent = new Map<number, Execution>();
+  waitingInputs(executions.filter((execution) => execution.projectId === project.id)).forEach((execution) => {
+    if (!waitingByAgent.has(execution.agentId)) waitingByAgent.set(execution.agentId, execution);
+  });
 
   useEffect(() => () => window.clearTimeout(hoverTimer.current), []);
+
+  // 구성도에서 노드를 눌렀을 때(반대 방향): 그 에이전트 카드를 보이는 자리로 스크롤한다.
+  // 카드 강조는 선택 상태(selectedAgentId)가 이미 하므로 여기서는 스크롤만 맡는다.
+  useEffect(() => {
+    if (focusSeq === 0 || selectedAgentId === null) return;
+    cardRefs.current.get(selectedAgentId)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusSeq]);
 
   const showHover = (agent: Agent, el: HTMLElement) => {
     window.clearTimeout(hoverTimer.current);
     hoverTimer.current = window.setTimeout(() => setHover({ agent, rect: el.getBoundingClientRect() }), HOVER_DELAY_MS);
   };
 
+  /** 바로 닫지 않는다 — 정보 창으로 마우스를 옮기는 동안(250ms) 살아 있게. */
   const hideHover = () => {
     window.clearTimeout(hoverTimer.current);
-    setHover(null);
+    hoverTimer.current = window.setTimeout(() => setHover(null), HOVER_DELAY_MS);
   };
 
-  const onDelete = (agent: Agent) => {
+  /** 정보 창에 마우스가 들어오면 닫힘 예약을 취소한다. */
+  const keepHover = () => window.clearTimeout(hoverTimer.current);
+
+  const onDelete = async (agent: Agent) => {
     const memberOf = groups.filter((g) => g.memberIds.includes(agent.id)).length;
     const extra = memberOf > 0 ? `\n${memberOf}개 그룹에서도 빠집니다.` : '';
-    if (!window.confirm(`"${agent.name}" 에이전트를 삭제할까요?${extra}`)) return;
+    const ok = await askConfirm(`"${agent.name}" 에이전트를 삭제할까요?${extra}`, '삭제');
+    if (!ok) return;
     deleteAgent(agent.id);
   };
 
@@ -132,15 +229,119 @@ export default function AgentList({
         </button>
       </div>
 
+      {/* 검색 + 필터 버튼. 상태·그룹은 버튼을 눌러 뜨는 팝업에서 고른다. */}
+      {open && (
+        <div className={styles.filters} onClick={(e) => e.stopPropagation()}>
+          <div className={styles.searchWrap}>
+            <input
+              type="search"
+              value={filters.query}
+              onChange={(e) => setFilters((prev) => ({ ...prev, query: e.target.value }))}
+              placeholder="이름·역할·모델 검색"
+              aria-label="에이전트 검색"
+            />
+            <button
+            type="button"
+            ref={filterButtonRef}
+            data-agent-filter-button
+            className={`${styles.filterButton} ${activeFilterCount(filters) > 0 ? styles.filterButtonOn : ''}`}
+            onClick={() => setFilterOpen((prev) => !prev)}
+            aria-expanded={filterOpen}
+            aria-haspopup="dialog"
+            aria-label="필터"
+            title={
+              activeFilterCount(filters) > 0
+                ? `필터 ${activeFilterCount(filters)}개 걸림 — 눌러서 바꾸기`
+                : '상태·그룹으로 거르기'
+            }
+          >
+            <FilterIcon />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 필터 팝업: 상태·그룹을 고르고, 초기화도 여기서 한다. */}
+      {open &&
+        filterOpen &&
+        filterButtonRef.current !== null &&
+        createPortal(
+          <div
+            className={styles.popup}
+            data-agent-filter-popup
+            role="dialog"
+            aria-label="에이전트 필터"
+            style={
+              {
+                '--top': `${filterButtonRef.current.getBoundingClientRect().bottom + 4}px`,
+                '--left': `${Math.max(
+                  8,
+                  Math.min(filterButtonRef.current.getBoundingClientRect().left, window.innerWidth - 248),
+                )}px`,
+              } as React.CSSProperties
+            }
+          >
+            <label className={styles.popupLabel} htmlFor="agent-filter-status">
+              상태
+            </label>
+            <select
+              id="agent-filter-status"
+              value={filters.status}
+              onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value as AgentFilters['status'] }))}
+            >
+              <option value="all">상태 전체</option>
+              <option value="WORKING">작업 중만</option>
+              <option value="WAITING">작업 대기중</option>
+              <option value="IDLE">작업 없음</option>
+              <option value="UNPLACED">미배치</option>
+            </select>
+
+            <label className={styles.popupLabel} htmlFor="agent-filter-group">
+              그룹
+            </label>
+            <select
+              id="agent-filter-group"
+              value={filters.groupId === 'all' ? 'all' : String(filters.groupId)}
+              onChange={(e) =>
+                setFilters((prev) => ({
+                  ...prev,
+                  groupId: e.target.value === 'all' ? 'all' : Number(e.target.value),
+                }))
+              }
+            >
+              <option value="all">그룹 전체</option>
+              {groups
+                .filter((group) => group.projectId === project.id)
+                .map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
+            </select>
+
+            <div className={styles.popupActions}>
+              <button type="button" className={styles.filterReset} onClick={() => setFilters(NO_FILTERS)}>
+                초기화
+              </button>
+              <button type="button" className={styles.filterReset} onClick={() => setFilterOpen(false)}>
+                닫기
+              </button>
+            </div>
+          </div>,
+          document.body,
+        )}
+
       <div className={styles.body}>
         <div className={styles.cards}>
           {projectAgents.length === 0 && (
             <p className={shared.muted}>에이전트가 없습니다. + 버튼으로 만들어 보세요.</p>
           )}
-          {projectAgents.map((agent) => {
+          {projectAgents
+            .filter((agent) => matchesFilters(agent, filters, groups, roles, tasks, executions))
+            .map((agent) => {
             const role = roles.find((r) => r.id === agent.roleId);
             const reason = unavailableReason(agent, providers, project);
-            const status = agentStatus(agent, tasks);
+            const status = agentStatus(agent, tasks, executions);
             const statusClass = {
               UNPLACED: styles.statusUnplaced,
               WORKING: styles.statusWorking,
@@ -148,9 +349,19 @@ export default function AgentList({
               IDLE: styles.statusIdle,
             }[status.kind];
             const selected = selectedAgentId === agent.id;
+            const pending = waitingByAgent.get(agent.id) ?? null;
+            // 지금 돌고 있는 실행(있으면 상태 배지가 터미널 열기 버튼이 된다).
+            const running =
+              executions.find((execution) => execution.agentId === agent.id && isLive(execution.status)) ?? null;
             return (
               <div
                 key={agent.id}
+                ref={(el) => {
+                  if (el) cardRefs.current.set(agent.id, el);
+                  else cardRefs.current.delete(agent.id);
+                }}
+                data-agent-id={agent.id}
+                data-agent-name={agent.name}
                 className={`${styles.card} ${selected ? styles.cardSelected : ''}`}
                 draggable
                 aria-pressed={selected}
@@ -170,9 +381,42 @@ export default function AgentList({
                   <span className={styles.role}>{role?.name}</span>
                 </div>
                 {project.masterAgentId === agent.id && <span className={styles.master}>마스터</span>}
-                <span className={`${styles.status} ${statusClass}`} title={`상태: ${status.label}`}>
-                  {status.label}
-                </span>
+                {/* 입력 대기 말풍선: 누르면 카드에 붙은 팝업에서 질문에 답한다(선택/끌기로 번지지 않게 막는다). */}
+                {pending !== null && (
+                  <button
+                    type="button"
+                    className={waiting.bubbleOnCard}
+                    aria-label={`${agent.name} 입력 대기 질문 열기`}
+                    title="입력 대기 중인 질문이 있습니다"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      hideHover();
+                      setWaitingPopup({ execution: pending, rect: e.currentTarget.getBoundingClientRect() });
+                    }}
+                  >
+                    💬
+                  </button>
+                )}
+                {running ? (
+                  // 작업 중 상태 배지는 누를 수 있다: 그 에이전트의 터미널 창을 연다(카드 선택·끌기로 번지지 않게 막는다).
+                  <button
+                    type="button"
+                    className={`${styles.status} ${statusClass} ${styles.statusButton}`}
+                    aria-label={`${agent.name} 터미널 열기`}
+                    title={`${status.label} · 눌러서 터미널 열기`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      hideHover();
+                      openTerminalWindow(agent.id);
+                    }}
+                  >
+                    {status.label}
+                  </button>
+                ) : (
+                  <span className={`${styles.status} ${statusClass}`} title={`상태: ${status.label}`}>
+                    {status.label}
+                  </span>
+                )}
                 {reason && <span className={styles.warnDot} aria-label={reason} />}
                 <button
                   type="button"
@@ -194,12 +438,21 @@ export default function AgentList({
       </div>
       </div>
 
-      {hover && <AgentHoverCard agent={hover.agent} project={project} anchor={hover.rect} />}
+      {hover && (
+        <AgentHoverCard
+          agent={hover.agent}
+          project={project}
+          anchor={hover.rect}
+          onKeepOpen={keepHover}
+          onLeave={hideHover}
+        />
+      )}
       {menu && (
         <AgentCardMenu
           anchor={menu.rect}
           placed={menu.agent.placed}
           isMaster={project.masterAgentId === menu.agent.id}
+          running={executions.find((execution) => execution.agentId === menu.agent.id && isLive(execution.status)) ?? null}
           onClose={() => setMenu(null)}
           onEdit={() => {
             setEditing(menu.agent);
@@ -223,6 +476,13 @@ export default function AgentList({
       )}
       {creating && <AgentFormModal project={project} onClose={() => setCreating(false)} />}
       {editing && <AgentFormModal project={project} agent={editing} onClose={() => setEditing(null)} />}
+      {waitingPopup && (
+        <WaitingInputPopup
+          execution={waitingPopup.execution}
+          anchor={waitingPopup.rect}
+          onClose={() => setWaitingPopup(null)}
+        />
+      )}
     </aside>
   );
 }

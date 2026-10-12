@@ -1,24 +1,48 @@
 package com.agent.dock.project.service;
 
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.agent.domain.Agent;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.agent.repository.AgentRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.attachment.repository.AttachmentRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.common.exception.BadRequestException;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.common.exception.ConflictException;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.repository.ExecutionLogRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.execution.repository.ExecutionRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.group.domain.AgentGroup;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.group.repository.AgentGroupMemberRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.group.repository.AgentGroupRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.project.domain.Project;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.project.dto.ProjectLayoutRequest;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.project.dto.ProjectLayoutRequest.AgentPlacement;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.project.dto.ProjectLayoutRequest.GroupPlacement;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.project.dto.UpdateProjectRequest;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.project.repository.ProjectRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.project.repository.ProjectWorkspaceRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.task.repository.TaskRepository;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.workspace.repository.WorkspaceRepository;
+import com.agent.dock.common.exception.NotFoundException;
+import com.agent.dock.project.domain.ProjectWorkspace;
+import com.agent.dock.project.dto.ProjectResponse;
+import com.agent.dock.project.dto.ProjectWorkspaceResponse;
+import com.agent.dock.workspace.domain.Workspace;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -47,6 +71,7 @@ class ProjectServiceTest {
     @Mock ExecutionRepository executionRepository;
     @Mock ExecutionLogRepository executionLogRepository;
     @Mock AttachmentRepository attachmentRepository;
+    @Mock EventPublisher changeEvents;
     @InjectMocks ProjectService service;
 
     private Project project(long id, String name) {
@@ -233,5 +258,82 @@ class ProjectServiceTest {
         inOrder.verify(agentRepository).deleteAllByIdInBatch(List.of(5L));
         verify(workspaceLinkRepository).deleteByProjectId(1L);
         verify(repository).delete(project);
+    }
+
+    private Workspace workspace(long id) {
+        Workspace workspace = new Workspace();
+        workspace.setId(id);
+        workspace.setName("W" + id);
+        workspace.setPath("/ws/" + id);
+        return workspace;
+    }
+
+    private ProjectWorkspace link(long id, Project project, Workspace workspace, boolean isDefault) {
+        ProjectWorkspace link = new ProjectWorkspace();
+        link.setId(id);
+        link.setProject(project);
+        link.setWorkspace(workspace);
+        link.setDefault(isDefault);
+        return link;
+    }
+
+    @Test
+    void updateDefaultWorkspaceMovesDefaultToTargetWithoutIndexViolation() {
+        Project project = project(1L, "P1");
+        when(repository.findById(1L)).thenReturn(Optional.of(project));
+        ProjectWorkspace previous = link(100L, project, workspace(11L), true);
+        ProjectWorkspace target = link(200L, project, workspace(12L), false);
+        when(workspaceLinkRepository.findByProjectIdOrderByIdAsc(1L)).thenReturn(List.of(previous, target));
+
+        ProjectResponse response = service.updateDefaultWorkspace(1L, 12L);
+
+        assertThat(previous.isDefault()).isFalse();
+        assertThat(target.isDefault()).isTrue();
+        assertThat(response.workspaces())
+                .filteredOn(ProjectWorkspaceResponse::isDefault)
+                .extracting(ProjectWorkspaceResponse::workspaceId)
+                .containsExactly(12L);
+        InOrder inOrder = inOrder(workspaceLinkRepository);
+        inOrder.verify(workspaceLinkRepository).save(previous);
+        inOrder.verify(workspaceLinkRepository).flush();
+        inOrder.verify(workspaceLinkRepository).save(target);
+        verify(changeEvents).projectChanged(1L);
+    }
+
+    @Test
+    void updateDefaultWorkspaceKeepsDefaultWhenTargetAlreadyDefault() {
+        Project project = project(1L, "P1");
+        when(repository.findById(1L)).thenReturn(Optional.of(project));
+        ProjectWorkspace target = link(200L, project, workspace(12L), true);
+        when(workspaceLinkRepository.findByProjectIdOrderByIdAsc(1L)).thenReturn(List.of(target));
+
+        service.updateDefaultWorkspace(1L, 12L);
+
+        assertThat(target.isDefault()).isTrue();
+        verify(workspaceLinkRepository, never()).save(any());
+        verify(workspaceLinkRepository, never()).flush();
+    }
+
+    @Test
+    void updateDefaultWorkspaceRejectsUnassignedWorkspace() {
+        Project project = project(1L, "P1");
+        when(repository.findById(1L)).thenReturn(Optional.of(project));
+        when(workspaceLinkRepository.findByProjectIdOrderByIdAsc(1L))
+                .thenReturn(List.of(link(100L, project, workspace(11L), true)));
+
+        assertThatThrownBy(() -> service.updateDefaultWorkspace(1L, 99L))
+                .isInstanceOf(NotFoundException.class);
+        verify(workspaceLinkRepository, never()).save(any());
+        verify(changeEvents, never()).projectChanged(any());
+    }
+
+    @Test
+    void updateDefaultWorkspaceRejectsUnknownProject() {
+        when(repository.findById(1L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.updateDefaultWorkspace(1L, 12L))
+                .isInstanceOf(NotFoundException.class);
+        verify(workspaceLinkRepository, never()).save(any());
+        verify(changeEvents, never()).projectChanged(any());
     }
 }

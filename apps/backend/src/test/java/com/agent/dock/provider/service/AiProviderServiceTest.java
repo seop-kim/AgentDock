@@ -1,11 +1,18 @@
 package com.agent.dock.provider.service;
 
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.common.exception.ConflictException;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.common.exception.NotFoundException;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.provider.domain.AiProvider;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.provider.domain.ProviderKey;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.provider.dto.CreateAiProviderRequest;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.provider.dto.ProviderCapabilities;
+import com.agent.dock.event.service.EventPublisher;
 import com.agent.dock.provider.repository.AiProviderRepository;
 import java.util.HashMap;
 import java.util.List;
@@ -26,6 +33,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AiProviderServiceTest {
     @Mock AiProviderRepository providerRepository;
+    @Mock EventPublisher changeEvents;
     @InjectMocks AiProviderService service;
 
     @Test
@@ -133,6 +141,56 @@ class AiProviderServiceTest {
         assertThat(response.capabilities()).doesNotContainKey("installRequire");
         assertThat(response.capabilities()).doesNotContainKey("installPrerequisite");
         assertThat(response.capabilities().get("models")).isEqualTo(List.of());
+    }
+
+    @Test
+    void renameUpdatesDisplayNameAndTrims() {
+        AiProvider provider = new AiProvider();
+        provider.setName("옛 이름");
+        when(providerRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(provider));
+        when(providerRepository.save(any(AiProvider.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var response = service.rename(1L, "  새 이름  ");
+
+        assertThat(response.name()).isEqualTo("새 이름");
+        verify(changeEvents).runtimeChanged();
+    }
+
+    @Test
+    void renameOfMissingProviderIsNotFound() {
+        when(providerRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.rename(1L, "이름")).isInstanceOf(NotFoundException.class);
+        verify(providerRepository, never()).save(any());
+    }
+
+    @Test
+    void resetCapabilitiesRestoresProviderKeyDefaults() {
+        AiProvider provider = new AiProvider();
+        provider.setKey(ProviderKey.CLAUDE_CODE);
+        provider.setCapabilities(new HashMap<>(Map.of("models", List.of("stale"))));
+        when(providerRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(provider));
+        when(providerRepository.save(any(AiProvider.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var response = service.resetCapabilities(1L);
+
+        assertThat(response.capabilities()).isEqualTo(ProviderKey.CLAUDE_CODE.defaultCapabilities());
+        verify(changeEvents).runtimeChanged();
+    }
+
+    @Test
+    void catalogMarksAlreadyRegisteredKeys() {
+        when(providerRepository.existsByKeyAndDeletedAtIsNull(ProviderKey.CLAUDE_CODE)).thenReturn(true);
+
+        var catalog = service.catalog();
+
+        assertThat(catalog).hasSize(ProviderKey.values().length);
+        var claude = catalog.stream().filter(entry -> entry.key() == ProviderKey.CLAUDE_CODE).findFirst().orElseThrow();
+        assertThat(claude.registered()).isTrue();
+        assertThat(claude.name()).isEqualTo("Claude Code");
+        assertThat(claude.capabilities()).containsKey("install");
+        var codex = catalog.stream().filter(entry -> entry.key() == ProviderKey.CODEX).findFirst().orElseThrow();
+        assertThat(codex.registered()).isFalse();
     }
 
     @Test

@@ -1,0 +1,20 @@
+/* 확인 창: 문구 + 취소/확인 두 버튼. 모달 공용 스타일(overlay/modal) 위에 얹는다. */
+
+.dialog {
+  width: min(380px, calc(100vw - 32px));
+}
+
+.text {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+}

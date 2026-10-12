@@ -1,4 +1,4 @@
-import type { Execution, ExecutionStatus } from '../types';
+import type { Execution, ExecutionStatus, MergeStatus } from '../types';
 
 /* 실행 트리를 화면에 그릴 때 쓰는 조회·표시 도우미. */
 
@@ -7,8 +7,11 @@ export const STATUS_LABEL: Record<ExecutionStatus, string> = {
   QUEUED: '대기',
   RUNNING: '실행 중',
   WAITING_CHILD: '하위 대기',
+  WAITING_INPUT: '입력 대기',
+  WAITING_PARENT: '부모에게 질문',
   DONE: '완료',
   FAILED: '실패',
+  CANCELLED: '취소',
 };
 
 /** 배지 색을 고르는 묶음. CSS 에서 이 이름으로 클래스를 만든다. */
@@ -16,8 +19,26 @@ export const STATUS_TONE: Record<ExecutionStatus, 'wait' | 'active' | 'done' | '
   QUEUED: 'wait',
   RUNNING: 'active',
   WAITING_CHILD: 'wait',
+  WAITING_INPUT: 'wait',
+  WAITING_PARENT: 'wait',
   DONE: 'done',
   FAILED: 'failed',
+  /* 취소는 끝난 것이다 — 대기(노랑)로 보이면 아직 돌고 있는 것처럼 읽힌다. */
+  CANCELLED: 'done',
+};
+
+/** 트리 결과 배지의 한국어 이름(실행 트리 창 루트 행·채팅 요약 카드·터미널 머리말이 함께 쓴다). */
+export const MERGE_LABEL: Record<MergeStatus, string> = {
+  MERGED: '병합됨',
+  MANUAL: '수동 병합 필요',
+  NONE: '변경 없음',
+};
+
+/** 트리 결과 배지 색. 기존 배지 색 클래스(active/wait/done)를 그대로 쓴다. */
+export const MERGE_TONE: Record<MergeStatus, 'active' | 'wait' | 'done'> = {
+  MERGED: 'active',
+  MANUAL: 'wait',
+  NONE: 'done',
 };
 
 export interface ExecutionRow {
@@ -69,13 +90,42 @@ export function summarize(executions: Execution[]): ExecutionTotals {
   const root = executions.find((execution) => execution.parentExecutionId === null);
   return {
     executions: executions.length,
-    delegations: executions.filter((execution) => execution.decision?.action === 'delegate').length,
+    /*
+     * 위임 = 부모가 계약으로 맡긴 실행(자식)의 수.
+     * 실행의 **마지막 결정**(decision)으로 세면 항상 0 이 된다 — 위임한 부모는 자식 결과를 모아
+     * `done` 으로 끝나면서 그 결정이 덮어써지기 때문이다. 자식이 있다는 사실이 위임의 증거다.
+     */
+    delegations: executions.filter((execution) => execution.parentExecutionId !== null).length,
     costUsd: sum((e) => e.metrics?.costUsd ?? 0, (a, b) => a + b, 0),
     durationMs: root?.metrics?.durationMs ?? 0,
     inputTokens: sum((e) => e.metrics?.inputTokens ?? 0, (a, b) => a + b, 0),
     outputTokens: sum((e) => e.metrics?.outputTokens ?? 0, (a, b) => a + b, 0),
-    running: executions.some((e) => e.status === 'QUEUED' || e.status === 'RUNNING' || e.status === 'WAITING_CHILD'),
+    running: executions.some((e) => isLive(e.status)),
   };
+}
+
+/** 아직 끝나지 않은 실행인지(대기·실행 중·하위 대기·입력 대기·부모 대기). 에이전트의 "작업 중" 판정에 쓴다. */
+export function isLive(status: ExecutionStatus): boolean {
+  return (
+    status === 'QUEUED' ||
+    status === 'RUNNING' ||
+    status === 'WAITING_CHILD' ||
+    status === 'WAITING_INPUT' ||
+    status === 'WAITING_PARENT'
+  );
+}
+
+/**
+ * 프로젝트의 실행 중 사람의 답을 기다리는 것들(입력 대기). **부모·자식 모두** 포함한다 —
+ * 위임받은 자식이 사람에게 물으면 그것도 함께 보여 줘야 한다(마스터만 보면 놓친다).
+ */
+export function waitingInputs(executions: Execution[]): Execution[] {
+  return executions.filter((execution) => execution.status === 'WAITING_INPUT');
+}
+
+/** 입력 대기 항목에 보여 줄 질문 문장(계약 `ask` 의 question, 없으면 그 실행이 받은 지시). */
+export function questionText(execution: Execution): string {
+  return execution.question ?? execution.prompt;
 }
 
 export function formatCost(usd: number): string {
@@ -92,4 +142,46 @@ export function formatDuration(ms: number): string {
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}분 ${seconds % 60}초`;
   return `${Math.floor(minutes / 60)}시간 ${minutes % 60}분`;
+}
+
+/**
+ * 명령 하나(트리)가 끝났을 때 **무엇을 했는지** 사람이 읽을 수 있게 정리한다(마크다운).
+ *
+ * <p>마스터 요약 한 줄만 보여 주면 "누가 무슨 일을 했는지"가 사라진다 — 위임받은 자식들의 결과를
+ * 한 줄씩 모으고, 끝에 결과(병합·커밋·변경 파일·시간·비용)를 값이 있는 것만 붙인다.
+ */
+export function workLog(
+  executions: Execution[],
+  rootExecutionId: number,
+  nameOf: (agentId: number) => string,
+): string {
+  const rows = treeOrder(executions, rootExecutionId);
+  if (rows.length === 0) return '';
+
+  const root = rows[0].execution;
+  const lines: string[] = [];
+  const headline = (root.handoff?.summary ?? '').trim();
+  if (headline !== '') lines.push(headline);
+
+  const others = rows.slice(1).filter((row) => (row.execution.handoff?.summary ?? '').trim() !== '');
+  if (others.length > 0) {
+    lines.push('', '**에이전트별 작업**');
+    others.forEach((row) => {
+      const state = STATUS_LABEL[row.execution.status];
+      const mark = state === '완료' ? '' : `[${state}] `;
+      lines.push(`- ${mark}${nameOf(row.execution.agentId)} — ${(row.execution.handoff?.summary ?? '').trim()}`);
+    });
+  }
+
+  const result: string[] = [];
+  if (root.mergeStatus !== null) result.push(MERGE_LABEL[root.mergeStatus]);
+  if (root.resultCommit !== null && root.resultCommit !== '') {
+    result.push(`커밋 ${root.resultCommit.slice(0, 7)}`);
+  }
+  if (root.changedFiles.length > 0) result.push(`변경 파일 ${root.changedFiles.length}개`);
+  if (root.metrics !== null && root.metrics.durationMs > 0) result.push(formatDuration(root.metrics.durationMs));
+  if (root.metrics !== null && root.metrics.costUsd > 0) result.push(formatCost(root.metrics.costUsd));
+  if (result.length > 0) lines.push('', `**결과** · ${result.join(' · ')}`);
+
+  return lines.join('\n').trim();
 }
