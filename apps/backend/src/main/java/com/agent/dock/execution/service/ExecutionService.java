@@ -411,6 +411,16 @@ public class ExecutionService {
         });
     }
 
+    /** 자식이 **부모에게** 되물어 멈춘다(사람 알림에는 뜨지 않는다 — 부모의 다음 판단 스텝이 답한다). */
+    public void markWaitingParent(Long executionId, String question, List<String> options) {
+        update(executionId, execution -> {
+            execution.setStatus(ExecutionStatus.WAITING_PARENT);
+            execution.setQuestion(question);
+            execution.setQuestionOptions(options == null ? List.of() : options);
+            execution.setFinishedAt(null);
+        });
+    }
+
     /** 사람의 답을 저장한다(다음 판단 스텝의 프롬프트에 질문과 함께 붙는다). */
     public void recordAnswer(Long executionId, String answer) {
         update(executionId, execution -> execution.setAnswer(answer));

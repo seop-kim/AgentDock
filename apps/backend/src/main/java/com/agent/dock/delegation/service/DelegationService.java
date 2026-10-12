@@ -277,6 +277,11 @@ public class DelegationService {
         logTreeResult(rootId, result, target.worktreeBranch());
         // 트리가 끝나면 그 그룹의 공유 노트에 한 줄 남긴다 —
         // 같은 팀의 다음 실행이 이 맥락을 이어받는다(런타임이 달라도 공유된다).
+        // 부모에게 되물어 멈춘 채 남은 자식은 여기서 정리한다 — 부모가 답을 준 뒤 트리가 끝났으므로 기다릴 이유가 없다.
+        // (남겨 두면 화면이 "아직 도는 트리"로 읽어 완료로 보이지 않는다.)
+        executionRepository.findByRootExecutionIdOrderByIdAsc(rootId).stream()
+                .filter(child -> child.getStatus() == ExecutionStatus.WAITING_PARENT)
+                .forEach(child -> executionService.cancel(child.getId()));
         groupService.appendSharedNote(fresh.getAgentId(), "#%d %s".formatted(rootId, message));
         // 워크트리 자동 정리는 병합 정책(settings)을 따르는 ExecutionService.recordTreeResult 훅이 맡는다 —
         // MERGED 이면서 정책이 켜졌을 때만 지운다(정책이 꺼져 있으면 남긴다).
@@ -427,6 +432,14 @@ public class DelegationService {
             }
 
             // 혼자 정할 수 없는 갈림길: 사람에게 묻고 멈춘다(실행은 끝나지 않는다 — 답이 오면 이어서 돈다).
+            // 자식이 사람이 아니라 **부모에게** 되물었다 — 사람을 부르지 않고 부모의 다음 판단이 답을 준다.
+            if (decided.action() == ExecutionDecision.ASK_PARENT) {
+                String question = decided.question().strip();
+                executionService.recordDecision(id, ExecutionDecision.ASK_PARENT, null);
+                executionService.markWaitingParent(id, question, decided.options());
+                streamHub.system(id, "⎿ 부모에게 확인: " + question);
+                return ExecutionStatus.WAITING_PARENT;
+            }
             if (decided.action() == ExecutionDecision.ASK) {
                 String question = decided.question().isBlank() ? request.strip() : decided.question().strip();
                 executionService.recordDecision(id, ExecutionDecision.ASK, null);
@@ -547,10 +560,14 @@ public class DelegationService {
                 ? files.stream().map(String::valueOf).toList()
                 : List.of();
         boolean waiting = status == ExecutionStatus.WAITING_INPUT;
+        // 부모에게 되물은 자식은 **사람을 기다리는 것이 아니다**(waiting=false) — 질문만 부모에게 전달한다.
+        boolean askedParent = status == ExecutionStatus.WAITING_PARENT;
         // 자식이 정상 완료(SUCCEEDED)했을 때만 성공이다 — 실패·취소·입력 대기는 성공으로 세지 않는다.
         boolean succeeded = status == ExecutionStatus.SUCCEEDED;
-        String note = waiting && execution.getQuestion() != null ? execution.getQuestion() : "";
-        List<String> options = waiting && execution.getQuestionOptions() != null ? execution.getQuestionOptions() : List.of();
+        String note = (waiting || askedParent) && execution.getQuestion() != null ? execution.getQuestion() : "";
+        List<String> options = (waiting || askedParent) && execution.getQuestionOptions() != null
+                ? execution.getQuestionOptions()
+                : List.of();
         return new DelegationPrompts.ChildOutcome(agentName(agentId), agentId, statusLabel(status), summary,
                 changedFiles, note, options, waiting, succeeded);
     }
@@ -756,6 +773,7 @@ public class DelegationService {
             case RUNNING -> "실행 중";
             case WAITING_CHILD -> "하위 대기";
             case WAITING_INPUT -> "입력 대기";
+            case WAITING_PARENT -> "부모에게 질문";
             case SUCCEEDED -> "완료";
             case FAILED -> "실패";
             case CANCELLED -> "취소";

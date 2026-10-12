@@ -39,6 +39,14 @@ public record DelegationContract(ExecutionDecision action, List<Order> orders, S
         return new DelegationContract(ExecutionDecision.DONE, List.of(), summary, "", List.of());
     }
 
+    /**
+     * 자식이 **부모에게** 되묻는 계약. 사람(`ask`)과 달리 사람 알림을 띄우지 않는다 — 부모의 다음 판단 스텝이
+     * 이 질문을 보고 그 자식에게 답을 주는 지시로 다시 맡긴다(실행당 1회로 제한한다).
+     */
+    public static DelegationContract askParent(String question, List<String> options) {
+        return new DelegationContract(ExecutionDecision.ASK_PARENT, List.of(), "", question, options);
+    }
+
     /** 스키마를 통과한 JSON 을 계약으로 읽는다. 형식이 어긋나면 비어 있다(재시도·폴백 대상). */
     public static Optional<DelegationContract> parse(Map<String, Object> payload) {
         if (payload == null) {
@@ -51,13 +59,16 @@ public record DelegationContract(ExecutionDecision action, List<Order> orders, S
         if ("done".equals(action) || "finish".equals(action)) {
             return Optional.of(new DelegationContract(ExecutionDecision.DONE, List.of(), summary, "", List.of()));
         }
-        if ("ask".equals(action)) {
+        if ("ask".equals(action) || "askParent".equals(action)) {
             String question = text(payload.get("question"));
             if (question.isBlank()) {
                 return Optional.empty();
             }
-            return Optional.of(new DelegationContract(ExecutionDecision.ASK, List.of(), summary, question,
-                    options(payload.get("options"))));
+            List<String> options = options(payload.get("options"));
+            if ("askParent".equals(action)) {
+                return Optional.of(askParent(question, options));
+            }
+            return Optional.of(new DelegationContract(ExecutionDecision.ASK, List.of(), summary, question, options));
         }
         if (!"delegate".equals(action)) {
             return Optional.empty();

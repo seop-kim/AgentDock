@@ -260,6 +260,7 @@ function executionStatus(status: string): Execution['status'] {
     case 'RUNNING':
     case 'WAITING_CHILD':
     case 'WAITING_INPUT':
+    case 'WAITING_PARENT':
     case 'FAILED':
     case 'CANCELLED':
       return status;
