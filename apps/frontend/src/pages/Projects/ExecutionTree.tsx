@@ -13,7 +13,7 @@ import {
   summarize,
   treeOrder,
 } from '../../lib/executions';
-import { useAgentDockStore } from '../../store/AgentDockStore';
+import { summaryOf, useAgentDockStore } from '../../store/AgentDockStore';
 import exec from '../../styles/execution.module.css';
 import modal from '../../styles/modal.module.css';
 import shared from '../../styles/shared.module.css';
@@ -115,9 +115,39 @@ function TreeResultLine({ execution }: { execution: Execution }) {
   );
 }
 
+/**
+ * 실패 사유 한 줄(길면 자른다). 자세한 출력은 터미널·실행 상세에서 본다.
+ * 실패한 실행은 계약(decision)을 남기지 않으므로 사유가 없으면 화면이 "판단 중…"으로 남았다(2026-10-12 실측).
+ */
+function failureReason(execution: Execution): string {
+  const raw =
+    (execution.errorMessage ?? '').trim() !== ''
+      ? execution.errorMessage!
+      : (execution.handoff?.summary ?? '');
+  const trimmed = raw.trim();
+  if (trimmed === '') return '사유 없음';
+  const firstLine = trimmed.split('\n').map((line) => line.trim()).find((line) => line !== '') ?? trimmed;
+  return firstLine.length > 80 ? `${firstLine.slice(0, 80)}…` : firstLine;
+}
+
+/** 같은 트리에서 같은 에이전트가 몇 번째로 도는지(1부터). 이름이 반복될 때 다른 작업임을 알린다. */
+function ordinalsOf(rows: { execution: Execution }[]): Map<number, number> {
+  const counts = new Map<number, number>();
+  const ordinals = new Map<number, number>();
+  rows.forEach(({ execution }) => {
+    const next = (counts.get(execution.agentId) ?? 0) + 1;
+    counts.set(execution.agentId, next);
+    ordinals.set(execution.id, next);
+  });
+  return ordinals;
+}
+
 /** 아직 계약을 내지 않은 실행을 "직접 처리"로 잘못 보여주지 않도록 따로 표시한다. */
 function actionLabel(execution: Execution, nameOf: (id: number) => string): string {
-  if (execution.decision === null) return '판단 중…';
+  // 끝난 실행은 결정이 없어도 진행 표현을 쓰지 않는다(실패·중단이 "판단 중…"으로 남던 문제).
+  if (execution.status === 'FAILED') return `실패 · ${failureReason(execution)}`;
+  if (execution.status === 'CANCELLED') return '중단됨';
+  if (execution.decision === null) return execution.status === 'DONE' ? '직접 처리' : '판단 중…';
   switch (execution.decision.action) {
     case 'delegate':
       return `→ 위임 ${nameOf(execution.decision.targetAgentId)}`;
@@ -183,6 +213,9 @@ export function ExecutionSummaryCard({
   if (rows.length === 0) return null;
 
   const total = summarize(rows.map((row) => row.execution));
+  const ordinals = ordinalsOf(rows);
+  // 실패는 요약에서 바로 보이게 한다 — 자손이 실패했는데 "모두 완료"로 읽히면 결과를 잘못 믿게 된다.
+  const failed = rows.filter((row) => row.execution.status === 'FAILED').length;
   const nameOf = (id: number) => agents.find((a) => a.id === id)?.name ?? '삭제된 에이전트';
 
   return (
@@ -191,6 +224,7 @@ export function ExecutionSummaryCard({
         <ExecutionBadge status={rows[0].execution.status} />
         <span>
           실행 {total.executions}회 · 위임 {total.delegations}건
+          {failed > 0 ? ` · 실패 ${failed}건` : ''}
         </span>
         <span>
           {total.durationMs > 0
@@ -205,7 +239,10 @@ export function ExecutionSummaryCard({
         {rows.map(({ execution, depth }) => (
           <li key={execution.id} className={exec.step} style={{ paddingLeft: `${depth * 12}px` }}>
             <ExecutionBadge status={execution.status} />
-            <span className={exec.stepName}>{nameOf(execution.agentId)}</span>
+            <span className={exec.stepName}>
+              {nameOf(execution.agentId)}
+              {(ordinals.get(execution.id) ?? 1) > 1 ? ` · ${ordinals.get(execution.id)}번째 작업` : ''}
+            </span>
             <span className={exec.stepAction}>{actionLabel(execution, nameOf)}</span>
             <CancelButton execution={execution} name={nameOf(execution.agentId)} onError={setNotice} />
           </li>
@@ -238,6 +275,9 @@ export default function ExecutionTreeModal({
   if (rows.length === 0) return null;
 
   const total = summarize(rows.map((row) => row.execution));
+  const ordinals = ordinalsOf(rows);
+  // 실패는 요약에서 바로 보이게 한다 — 자손이 실패했는데 "모두 완료"로 읽히면 결과를 잘못 믿게 된다.
+  const failed = rows.filter((row) => row.execution.status === 'FAILED').length;
   const nameOf = (id: number) => agents.find((a) => a.id === id)?.name ?? '삭제된 에이전트';
 
   /**
@@ -268,6 +308,11 @@ export default function ExecutionTreeModal({
           <span>
             위임 <strong>{total.delegations}</strong>건
           </span>
+          {failed > 0 && (
+            <span>
+              실패 <strong>{failed}</strong>건
+            </span>
+          )}
           <span>
             입력 <strong>{formatTokens(total.inputTokens)}</strong>
           </span>
@@ -287,7 +332,10 @@ export default function ExecutionTreeModal({
             <li key={execution.id} className={exec.row} style={{ marginLeft: `${depth * 18}px` }}>
               <div className={exec.rowHead}>
                 <ExecutionBadge status={execution.status} />
-                <strong className={exec.rowName}>{nameOf(execution.agentId)}</strong>
+                <strong className={exec.rowName}>
+                  {nameOf(execution.agentId)}
+                  {(ordinals.get(execution.id) ?? 1) > 1 ? ` · ${ordinals.get(execution.id)}번째 작업` : ''}
+                </strong>
                 {execution.agentId === masterAgentId && <span className={exec.tag}>마스터</span>}
                 <span className={exec.rowAction}>{actionLabel(execution, nameOf)}</span>
                 <span className={exec.rowMetrics}>

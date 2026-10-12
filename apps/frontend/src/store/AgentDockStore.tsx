@@ -303,6 +303,7 @@ export function executionOf(execution: ApiExecution, projectId: number): Executi
     status: executionStatus(execution.status),
     prompt: execution.prompt,
     decision,
+    errorMessage: execution.errorMessage,
     handoff:
       execution.resultText === null || execution.resultText === undefined
         ? null
@@ -371,6 +372,8 @@ function executionSummaryOf(summary: ApiExecutionSummary): Execution {
     question: summary.question ?? null,
     options: summary.questionOptions ?? [],
     answer: null,
+    // 목록(lean) 응답에는 실패 사유가 없다 — 실패 표시는 트리에서 읽은 실행이 담당한다.
+    errorMessage: null,
   };
 }
 

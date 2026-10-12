@@ -162,6 +162,8 @@ export interface Execution {
   mergeStatus: MergeStatus | null;
   /** 자동 병합하지 못한 사유(MANUAL 일 때). */
   mergeDetail: string | null;
+  /** 실패 사유(CLI 종료 코드 등). "판단 중…"으로 남지 않게 화면이 이 값을 보여 준다. */
+  errorMessage: string | null;
   /** 트리가 바꾼 파일 목록(git `--name-status`). 커밋·병합하지 못했으면 빈 배열. */
   changedFiles: ChangedFile[];
   /** 판단 실행이 사람에게 물은 질문(계약 `ask`). 답을 기다리는 동안 채워져 있다. */
