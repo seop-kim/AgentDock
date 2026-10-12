@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { api } from '../lib/api';
 import { subscribeLog } from '../lib/liveChannel';
 import { logLineKind, type TerminalLine } from '../lib/terminal';
 import filter from '../styles/logFilter.module.css';
@@ -20,6 +21,7 @@ export default function TerminalView({
   className,
   trackTail = false,
   filterable = false,
+  history = false,
 }: {
   /** 보여 줄 실행. null 이면 아직 실행이 없다(안내 문구만). */
   executionId: number | null;
@@ -31,6 +33,11 @@ export default function TerminalView({
   trackTail?: boolean;
   /** true 면 위에 검색줄을 붙인다(긴 로그를 훑는 터미널 창용). */
   filterable?: boolean;
+  /**
+   * true 면 **과거 로그**를 한 번만 읽어 정적으로 보여 준다(SSE 구독 없음).
+   * 끝난 실행은 서버의 메모리 재생 버퍼가 없을 수 있어 `GET /executions/{id}/logs` 로 DB 에서 읽는다.
+   */
+  history?: boolean;
 }) {
   const [lines, setLines] = useState<TerminalLine[]>([]);
   const [finished, setFinished] = useState(false);
@@ -46,8 +53,27 @@ export default function TerminalView({
     atBottomRef.current = true;
   }, [executionId]);
 
+  // 과거 로그는 한 번만 읽는다(정적). 라이브는 아래 스트림 구독이 맡는다.
   useEffect(() => {
-    if (executionId === null) return;
+    if (executionId === null || !history) return;
+    let alive = true;
+    void api
+      .getExecutionLogs(executionId)
+      .then((rows) => {
+        if (!alive) return;
+        setLines(rows.map((row) => ({ text: row.content, kind: logLineKind(row.stream) })));
+        setFinished(true);
+      })
+      .catch(() => {
+        // 못 읽으면 빈 화면 + 안내 문구를 그대로 둔다.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [executionId, history]);
+
+  useEffect(() => {
+    if (executionId === null || history) return;
     // 리더 탭이 이 실행의 스트림을 열고(이미 열려 있으면 재사용) 줄을 채널로 보내 준다.
     return subscribeLog(executionId, {
       onLine: (line) =>
@@ -66,13 +92,18 @@ export default function TerminalView({
     if (!trackTail || atBottomRef.current) el.scrollTop = el.scrollHeight;
   }, [lines.length, trackTail]);
 
-  const live = storeLive && !finished;
+  const live = !history && storeLive && !finished;
   const rows: TerminalLine[] =
     lines.length > 0
       ? lines
       : [
           {
-            text: executionId === null ? '지금 실행 중인 작업이 없습니다.' : '출력을 기다리는 중…',
+            text:
+              executionId === null
+                ? '지금 실행 중인 작업이 없습니다.'
+                : history
+                  ? '이 실행에는 저장된 로그가 없습니다.'
+                  : '출력을 기다리는 중…',
             kind: 'muted',
           },
         ];

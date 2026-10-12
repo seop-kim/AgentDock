@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import TerminalView from '../components/TerminalView';
 import { CancelButton, useCancelNotice } from './Projects/ExecutionTree';
@@ -15,8 +15,11 @@ import styles from './TerminalWindow.module.css';
  */
 export default function TerminalWindow() {
   const { agentId } = useParams();
-  const { agents, projects, workspaces, tasks, executions, loading, watchExecutionTree } = useAgentDockStore();
+  const { agents, projects, workspaces, tasks, executions, executionList, loadExecutionList, loading, watchExecutionTree } =
+    useAgentDockStore();
   const [notice, setNotice] = useCancelNotice();
+  /** 보고 있는 실행. null 이면 **현재** 실행, 값이 있으면 그 **과거** 실행의 기록을 본다. */
+  const [historyId, setHistoryId] = useState<number | null>(null);
 
   const agent = agents.find((candidate) => candidate.id === Number(agentId)) ?? null;
   const agentProjectId = agent?.projectId ?? null;
@@ -29,6 +32,11 @@ export default function TerminalWindow() {
   useEffect(() => {
     if (agentProjectId !== null) watchExecutionTree(agentProjectId, null);
   }, [agentProjectId, watchExecutionTree]);
+
+  // 지난 실행 목록(무엇을 언제 했나) — 이 창에서 직접 읽는다. 고르면 그 로그를 정적으로 본다.
+  useEffect(() => {
+    if (agentProjectId !== null) loadExecutionList({ projectId: agentProjectId, limit: 200 });
+  }, [agentProjectId, loadExecutionList]);
 
   if (!agent) {
     return (
@@ -52,6 +60,14 @@ export default function TerminalWindow() {
     agent.id,
   );
   const state = terminalState(execution, task);
+  // 이 에이전트의 지난 실행(최근 순). 현재 실행도 목록에 있으므로 "현재"와 겹치지 않게 위에서 고른다.
+  const pastExecutions = executionList
+    .filter((candidate) => candidate.agentId === agent.id)
+    .sort((left, right) => right.id - left.id);
+  const isHistory = historyId !== null;
+  const shown = isHistory ? (pastExecutions.find((candidate) => candidate.id === historyId) ?? null) : execution;
+  const historyLabel = (status: string) =>
+    status === 'DONE' ? '완료' : status === 'FAILED' ? '실패' : status === 'CANCELLED' ? '중단' : '진행 중';
   // 격리된 실행은 워크스페이스가 아니라 worktree 안에서 돈다 — 실제 작업 디렉터리를 보여 준다.
   const runDir = execution?.worktreePath ?? cwd;
 
@@ -60,8 +76,25 @@ export default function TerminalWindow() {
       <header className={styles.head}>
         <h1 className={styles.title}>{agent.name} 터미널</h1>
         <span className={styles.state}>
-          {state === 'live' ? '실행 중' : state === 'done' ? '완료' : '작업 없음'}
+          {isHistory ? '기록' : state === 'live' ? '실행 중' : state === 'done' ? '완료' : '작업 없음'}
         </span>
+        {/* 지난 실행 고르기 — 고르면 그 로그를 정적으로 보고, "현재"로 돌아올 수 있다. */}
+        {pastExecutions.length > 0 && (
+          <select
+            className={styles.state}
+            value={historyId === null ? '' : String(historyId)}
+            onChange={(event) => setHistoryId(event.target.value === '' ? null : Number(event.target.value))}
+            aria-label="실행 이력"
+            title="지난 실행의 로그를 봅니다"
+          >
+            <option value="">현재{execution ? ` (#${execution.id})` : ''}</option>
+            {pastExecutions.map((past) => (
+              <option key={past.id} value={past.id}>
+                #{past.id} {historyLabel(past.status)}
+              </option>
+            ))}
+          </select>
+        )}
         {execution?.worktreeBranch && (
           <span className={styles.state} title={execution.worktreePath ?? undefined}>
             워크트리 {execution.worktreeBranch}
@@ -72,15 +105,17 @@ export default function TerminalWindow() {
             커밋 {execution.resultCommit}
           </span>
         )}
-        {execution && <CancelButton execution={execution} name={agent.name} onError={setNotice} />}
+        {/* 과거 기록을 보는 중에는 취소 버튼을 두지 않는다(그 실행은 이미 끝났다 — 지금 실행을 멈추는 버튼으로 오해하게 된다). */}
+        {!isHistory && execution && <CancelButton execution={execution} name={agent.name} onError={setNotice} />}
       </header>
       {notice && <p className="errorText">{notice}</p>}
       <p className={styles.cwd}>{runDir ?? '워크스페이스가 없습니다'}</p>
       <TerminalView
-        executionId={execution?.id ?? null}
-        live={state === 'live'}
+        executionId={shown?.id ?? null}
+        live={!isHistory && state === 'live'}
         className={styles.terminal}
         filterable
+        history={isHistory}
       />
     </div>
   );
