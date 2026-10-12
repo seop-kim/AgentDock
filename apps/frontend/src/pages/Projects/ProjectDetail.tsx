@@ -1,6 +1,7 @@
 import { CSSProperties, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { SettingsIcon } from '../../components/icons';
+import RunningWorks from './RunningWorks';
 import { useAgentDockStore } from '../../store/AgentDockStore';
 import shared from '../../styles/shared.module.css';
 import { questionText } from '../../lib/executions';
@@ -174,6 +175,8 @@ export default function ProjectDetail() {
             <h1 className={styles.title}>{project.name}</h1>
             {/* 새로고침·설정은 한 묶음으로 붙여 둔다(space-between 이 가운데로 벌리지 않게). */}
             <div className={styles.titleActions}>
+              {/* 지금 돌고 있는 작업(트리 묶음) — 있을 때만 칩이 뜬다. */}
+              {projectId !== null && <RunningWorks projectId={projectId} />}
               <button
                 type="button"
                 className={styles.settingsButton}

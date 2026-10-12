@@ -138,6 +138,8 @@ export interface Execution {
   agentId: number;
   /** 이 실행을 만든 부모 실행. 루트(마스터) 실행은 null. */
   parentExecutionId: number | null;
+  /** 이 실행이 속한 트리의 루트 실행 id(루트 자신이면 자기 id). 실행 목록을 트리로 묶을 때 쓴다. */
+  rootExecutionId: number | null;
   status: ExecutionStatus;
   /** 이 실행이 받은 지시. */
   prompt: string;
