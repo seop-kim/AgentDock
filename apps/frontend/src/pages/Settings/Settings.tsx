@@ -1,10 +1,11 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { PlugIcon, ThemeIcon } from '../../components/icons';
+import { MergeIcon, PlugIcon, ThemeIcon } from '../../components/icons';
 import styles from './Settings.module.css';
 
 const SECTIONS = [
   { to: '/settings/agents', label: '에이전트 연결 설정', Icon: PlugIcon },
   { to: '/settings/theme', label: '테마', Icon: ThemeIcon },
+  { to: '/settings/merge-policy', label: '병합 정책', Icon: MergeIcon },
 ];
 
 /** 설정 화면의 틀. 안쪽 왼쪽 메뉴로 설정 항목(에이전트 연결 설정, 테마)을 구분한다. */

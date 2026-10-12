@@ -3,6 +3,7 @@ package com.agent.dock.execution.repository;
 import com.agent.dock.execution.domain.Execution;
 import com.agent.dock.execution.domain.ExecutionStatus;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -45,4 +46,17 @@ public interface ExecutionRepository extends JpaRepository<Execution, Long>, Exe
             + "e.taskId, e.status, e.costUsd, e.inputTokens, e.outputTokens) from Execution e "
             + "where e.taskId in :taskIds")
     List<ExecutionUsage> findUsageByTaskIds(@Param("taskIds") Collection<Long> taskIds);
+
+    /** 기간별 사용량 포인트(전역) — 생성시각이 [from, to) 인 실행만. */
+    @Query("select new com.agent.dock.execution.repository.ExecutionUsagePoint("
+            + "e.createdAt, e.costUsd, e.inputTokens, e.outputTokens) from Execution e "
+            + "where e.createdAt >= :from and e.createdAt < :to")
+    List<ExecutionUsagePoint> findUsagePointsGlobal(@Param("from") Instant from, @Param("to") Instant to);
+
+    /** 기간별 사용량 포인트(프로젝트) — 그 프로젝트 Task 들의 실행 중 생성시각이 [from, to) 인 것만. */
+    @Query("select new com.agent.dock.execution.repository.ExecutionUsagePoint("
+            + "e.createdAt, e.costUsd, e.inputTokens, e.outputTokens) from Execution e "
+            + "where e.taskId in :taskIds and e.createdAt >= :from and e.createdAt < :to")
+    List<ExecutionUsagePoint> findUsagePointsByTaskIds(@Param("taskIds") Collection<Long> taskIds,
+                                                       @Param("from") Instant from, @Param("to") Instant to);
 }

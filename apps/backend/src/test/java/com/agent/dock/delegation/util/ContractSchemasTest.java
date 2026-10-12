@@ -17,6 +17,8 @@ class ContractSchemasTest {
             assertThat(schema).doesNotContain("\n").doesNotContain("\r");
             assertThat(isJson(schema)).as(schema).isTrue();
         }
+        // 계약 finish: 판단 스키마가 done 과 함께 finish 를 허용한다(서버가 성공 자식 뒤에 스스로 남긴다).
+        assertThat(ContractSchemas.JUDGEMENT).contains("\"finish\"");
     }
 
     private boolean isJson(String value) {

@@ -105,10 +105,33 @@ class DelegationPromptsTest {
     @Test
     void childResultsListAgentSummaryAndChangedFiles() {
         String progress = DelegationPrompts.childResults(List.of(
-                new DelegationPrompts.ChildOutcome("백엔드 A", 9L, "완료", "1+1=2", List.of("a.txt"), ""),
-                new DelegationPrompts.ChildOutcome("백엔드 B", 10L, "실패", "", List.of(), "계약 위반")));
+                new DelegationPrompts.ChildOutcome("백엔드 A", 9L, "완료", "1+1=2", List.of("a.txt"), "", true),
+                new DelegationPrompts.ChildOutcome("백엔드 B", 10L, "실패", "", List.of(), "계약 위반", false)));
 
         assertThat(progress).contains("백엔드 A").contains("(id=9)").contains("1+1=2").contains("a.txt")
                 .contains("백엔드 B").contains("(요약 없음)").contains("계약 위반");
+    }
+
+    @Test
+    void allSucceededRequiresEveryChildSucceededAndNoneWaiting() {
+        DelegationPrompts.ChildOutcome ok = new DelegationPrompts.ChildOutcome("A", 1L, "완료", "끝", List.of(), "", true);
+        DelegationPrompts.ChildOutcome failed = new DelegationPrompts.ChildOutcome("B", 2L, "실패", "", List.of(), "사유", false);
+        DelegationPrompts.ChildOutcome waiting = new DelegationPrompts.ChildOutcome("C", 3L, "입력 대기", "", List.of(),
+                "질문", List.of("A안"), true, false);
+
+        assertThat(DelegationPrompts.ChildOutcome.allSucceeded(List.of(ok))).isTrue();
+        assertThat(DelegationPrompts.ChildOutcome.allSucceeded(List.of(ok, ok))).isTrue();
+        assertThat(DelegationPrompts.ChildOutcome.allSucceeded(List.of(ok, failed))).isFalse();
+        assertThat(DelegationPrompts.ChildOutcome.allSucceeded(List.of(ok, waiting))).isFalse();
+        assertThat(DelegationPrompts.ChildOutcome.allSucceeded(List.of())).isFalse();
+    }
+
+    @Test
+    void finishSummaryListsEveryChild() {
+        String summary = DelegationPrompts.finishSummary(List.of(
+                new DelegationPrompts.ChildOutcome("백엔드 A", 9L, "완료", "1+1=2", List.of(), "", true),
+                new DelegationPrompts.ChildOutcome("백엔드 B", 10L, "완료", "", List.of(), "", true)));
+
+        assertThat(summary).contains("2건").contains("백엔드 A").contains("1+1=2").contains("백엔드 B");
     }
 }

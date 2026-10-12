@@ -215,3 +215,148 @@ export interface ChatMessage {
   /** 명령에 함께 보낸 첨부 파일. 없으면 빈 배열. */
   attachments: AttachedFile[];
 }
+
+// ── 조각별 상태 ─────────────────────────────────────────────────────────────────
+
+/**
+ * 데이터 조각을 언제·어떻게 읽었는지. 화면이 **빈 목록과 구분**해
+ * '아직 안 읽음(idle) / 읽는 중(loading) / 정상(ready) / 서버 미지원(unsupported) / 오류(error)' 을 표시한다.
+ * 백엔드가 아직 안 만든 API 는 목업으로 때우지 않고 `unsupported` 로 남겨 화면이 대기·미지원을 보여 준다.
+ */
+export type FeatureStatus = 'idle' | 'loading' | 'ready' | 'unsupported' | 'error';
+
+// ── C. 실행 변경사항 diff (`GET /executions/{id}/diff`) ─────────────────────────────
+
+/** diff 창이 보여 주는 파일 하나 — git 변경 코드와 파일별 unified diff. */
+export interface ExecutionDiffFile {
+  path: string;
+  /** git 변경 코드(A 추가 / M 수정 / D 삭제 / R 이름변경 …). */
+  status: string;
+  /** 파일별 unified diff 본문. */
+  diff: string;
+}
+
+/** 트리 루트 실행의 변경 파일별 unified diff(트리 루트 행에서 창으로 연다). */
+export interface ExecutionDiff {
+  /** 트리 루트 실행 id. */
+  executionId: number;
+  files: ExecutionDiffFile[];
+}
+
+// ── D. 예약(반복) 실행 (`/schedules`) ───────────────────────────────────────────────
+
+export type ScheduleCadence = 'HOURLY' | 'DAILY' | 'WEEKLY' | 'CRON';
+
+/** 예약 실행 하나 — 주기(cadence/cron)와 실행할 명령, 받을 대상, 다음/마지막 실행 시각. */
+export interface Schedule {
+  id: number;
+  projectId: number;
+  name: string;
+  cadence: ScheduleCadence;
+  /** cadence 가 CRON 일 때의 크론식(다른 주기는 null). */
+  cron: string | null;
+  prompt: string;
+  targetAgentId: number | null;
+  groupId: number | null;
+  enabled: boolean;
+  nextRunAt: string | null;
+  lastRunAt: string | null;
+  lastExecutionId: number | null;
+}
+
+/** 예약 생성 요청 본문. */
+export interface NewSchedule {
+  projectId: number;
+  name: string;
+  cadence: ScheduleCadence;
+  cron: string | null;
+  prompt: string;
+  targetAgentId: number | null;
+  groupId: number | null;
+}
+
+// ── E. 병합 정책 (`GET/PUT /settings/merge-policy`) ────────────────────────────────
+
+/** 워크트리 자동 정리·병합 정책. 트리가 끝난 뒤 무엇을 자동으로 할지 정한다. */
+export interface MergePolicy {
+  /** 메인 저장소가 깨끗하면 자동으로 병합한다. */
+  autoMerge: boolean;
+  /** 병합 성공(MERGED) 후 워크트리를 자동 정리한다. */
+  autoCleanupWorktree: boolean;
+  /** 정리할 때 전용 브랜치도 함께 삭제한다. */
+  autoCleanupBranch: boolean;
+  /** 병합 전에 대상(메인) 저장소가 깨끗해야 한다. */
+  requireCleanTarget: boolean;
+}
+
+// ── G. 비용·예산 (`/costs`) ────────────────────────────────────────────────────────
+
+/** 기간 집계의 한 버킷(날짜별/프로젝트별). */
+export interface CostUsageBucket {
+  /** 버킷 키(날짜 또는 프로젝트 id). */
+  key: string;
+  label: string;
+  costUsd: number;
+  inputTokens: number;
+  outputTokens: number;
+  executions: number;
+}
+
+/** 기간별 사용량 집계 응답. CLI 가 돌려준 실측 계측값만 더한다(추정 금지). */
+export interface CostUsage {
+  from: string;
+  to: string;
+  totalCostUsd: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalExecutions: number;
+  /** 날짜별 버킷. */
+  byDay: CostUsageBucket[];
+  /** 프로젝트별 버킷. */
+  byProject: CostUsageBucket[];
+}
+
+/** 프로젝트 예산과 사용 현황(80% 경고는 화면이 spent/budget 비율로 그린다). */
+export interface ProjectBudget {
+  projectId: number;
+  projectName: string;
+  budgetUsd: number;
+  spentUsd: number;
+}
+
+// ── H. 알림 채널·규칙 (`/notifications`) ───────────────────────────────────────────
+
+export type NotificationChannelKind = 'WEBHOOK' | 'SLACK' | 'EMAIL';
+
+/** 알림을 보낼 채널 하나(웹훅·Slack·메일). */
+export interface NotificationChannel {
+  id: number;
+  kind: NotificationChannelKind;
+  name: string;
+  /** 발송 대상(웹훅 URL·Slack 웹훅 URL·메일 주소). 비밀값은 서버가 가려서 준다. */
+  target: string;
+  enabled: boolean;
+}
+
+/** 어떤 이벤트를 어느 채널로 보낼지 정하는 규칙. */
+export interface NotificationRule {
+  id: number;
+  channelId: number;
+  event: string;
+  enabled: boolean;
+}
+
+/** 알림 채널 생성·수정 요청 본문. */
+export interface NewNotificationChannel {
+  kind: NotificationChannelKind;
+  name: string;
+  target: string;
+  enabled: boolean;
+}
+
+/** 알림 규칙 생성·수정 요청 본문. */
+export interface NewNotificationRule {
+  channelId: number;
+  event: string;
+  enabled: boolean;
+}

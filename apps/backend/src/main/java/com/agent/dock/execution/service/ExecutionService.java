@@ -33,14 +33,18 @@ import com.agent.dock.execution.dto.ExecutionTreeResponse;
 import com.agent.dock.execution.repository.ExecutionLogRepository;
 import com.agent.dock.execution.repository.ExecutionRepository;
 import com.agent.dock.event.service.EventPublisher;
+import com.agent.dock.settings.dto.MergePolicyResponse;
+import com.agent.dock.settings.service.MergePolicyService;
 import com.agent.dock.runtime.dto.AgentExecutionResult;
 import com.agent.dock.runtime.dto.ExecutionMetrics;
 import com.agent.dock.runtime.interfaces.AgentRuntime;
 import com.agent.dock.runtime.service.RuntimeRegistry;
+import com.agent.dock.runtime.service.StreamPumps;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.HashMap;
 import java.util.List;
@@ -77,6 +81,9 @@ public class ExecutionService {
     private final WorktreeService worktreeService;
     /** 전역 SSE 스트림에 "실행이 바뀌었다"를 알린다(화면은 이 알림을 받고 바뀐 조각만 다시 읽는다). */
     private final EventPublisher changeEvents;
+
+    /** 병합 정책(전역 싱글턴) — MERGED 트리 뒤 워크트리 자동 정리 여부를 정한다. */
+    private final MergePolicyService mergePolicyService;
 
     /** 서버가 죽었다 다시 떠 고아로 남은 실행에 남기는 사유. */
     private static final String STALE_EXECUTION_REASON = "서버 재기동으로 중단됨";
@@ -259,6 +266,49 @@ public class ExecutionService {
             execution.setMergeDetail(detail);
             execution.setChangedFiles(changedFiles == null ? List.of() : changedFiles);
         });
+        // 병합이 끝난(MERGED) 트리는 정책이 켜져 있으면 워크트리·브랜치를 자동 정리한다(부가 기능 — 실패해도 결과 기록을 막지 않는다).
+        if (mergeStatus == MergeStatus.MERGED) {
+            autoCleanupMergedTree(executionId);
+        }
+    }
+
+    /**
+     * 병합 성공(MERGED) 뒤 정책이 켜져 있으면 워크트리를 자동 정리한다. 무거운 git 은 workers 풀에서 돌리고,
+     * 실패(정리 못함)는 실행 결과를 막지 않고 SYSTEM 로그 한 줄로 사유만 남긴다 — 자동화는 부가 기능이다.
+     */
+    private void autoCleanupMergedTree(Long executionId) {
+        MergePolicyResponse policy = mergePolicyService.get();
+        if (!policy.autoCleanupEnabled()) {
+            return;
+        }
+        Execution execution = executionRepository.findById(executionId).orElse(null);
+        if (execution == null) {
+            return;
+        }
+        String path = execution.getWorktreePath();
+        if (path == null || path.isBlank()) {
+            return;
+        }
+        String branch = execution.getWorktreeBranch();
+        boolean deleteBranch = policy.cleanupDeleteBranch();
+        try {
+            WorktreeService.Removal removal = CompletableFuture.supplyAsync(
+                    () -> worktreeService.remove(path, branch, deleteBranch), StreamPumps.pool()).join();
+            if (removal.removed()) {
+                update(executionId, e -> {
+                    e.setWorktreePath(null);
+                    e.setWorktreeBranch(null);
+                });
+                streamHub.system(executionId, "⎿ 병합 후 워크트리를 자동 정리했습니다"
+                        + (deleteBranch ? "(브랜치 포함)" : ""));
+            } else {
+                log.warn("자동 정리를 건너뜁니다(실행 {}): {}", executionId, removal.detail());
+                streamHub.system(executionId, "⎿ 워크트리 자동 정리를 건너뜁니다: " + removal.detail());
+            }
+        } catch (RuntimeException ex) {
+            log.warn("자동 정리를 건너뜁니다(실행 {}): {}", executionId, ex.getMessage());
+            streamHub.system(executionId, "⎿ 워크트리 자동 정리를 건너뜁니다: " + ex.getMessage());
+        }
     }
 
     /**

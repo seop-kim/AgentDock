@@ -9,11 +9,15 @@ package com.agent.dock.delegation.util;
  */
 public final class ContractSchemas {
 
-    /** 판단 실행(마스터·그룹 리더): 위임할 대상과 각자에게 줄 지시, 사람에게 물을 질문, 또는 완료 요약. */
+    /**
+     * 판단 실행(마스터·그룹 리더): 위임할 대상과 각자에게 줄 지시, 사람에게 물을 질문, 또는 완료 요약.
+     * `finish` 는 `done` 과 같은 뜻(자식 결과가 모두 성공해 더 판단할 것이 없는 마무리)이다 —
+     * 서버가 그 경우 재판단을 생략하고 이 계약을 스스로 남긴다.
+     */
     public static final String JUDGEMENT = "{"
             + "\"type\":\"object\","
             + "\"properties\":{"
-            + "\"action\":{\"type\":\"string\",\"enum\":[\"delegate\",\"ask\",\"done\"]},"
+            + "\"action\":{\"type\":\"string\",\"enum\":[\"delegate\",\"ask\",\"done\",\"finish\"]},"
             + "\"targets\":{\"type\":\"array\",\"items\":{"
             + "\"type\":\"object\","
             + "\"properties\":{"

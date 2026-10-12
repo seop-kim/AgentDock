@@ -1,0 +1,112 @@
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+  margin-bottom: var(--spacing-md);
+}
+
+.header h1 {
+  margin: 0;
+}
+
+.ranges {
+  display: flex;
+  gap: 6px;
+}
+
+.range {
+  background: transparent;
+  color: var(--color-muted);
+  border-color: var(--color-border);
+}
+
+.rangeOn,
+.rangeOn:hover {
+  color: var(--color-text);
+  border-color: var(--color-primary);
+  background: var(--color-code-bg);
+}
+
+.totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--spacing-sm);
+  margin: var(--spacing-md) 0;
+}
+
+.total {
+  composes: glass from '../../styles/glass.module.css';
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--spacing-md);
+  border-radius: var(--radius-lg);
+}
+
+.total strong {
+  font-size: 1.2rem;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--spacing-sm);
+  font-size: 14px;
+}
+
+.table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-muted);
+  font-size: 12px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+
+.budgetCell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.budgetCell input {
+  width: 110px;
+}
+
+.ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}
+
+.ghost:hover {
+  background: var(--color-code-bg);
+  filter: none;
+}
+
+.warn {
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--color-warning);
+  color: var(--color-warning);
+  background: var(--color-warning-bg);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.warnOver {
+  border-color: var(--color-error);
+  color: var(--color-error);
+  background: var(--color-error-bg);
+}

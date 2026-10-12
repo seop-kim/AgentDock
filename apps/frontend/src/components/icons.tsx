@@ -163,3 +163,43 @@ export const TrashIcon = ({ size = 20 }: { size?: number }) => (
     <path d="M10 11v6M14 11v6" />
   </Icon>
 );
+/** 예약·반복 실행 */
+export const CalendarIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
+    <rect x="3" y="5" width="18" height="16" rx="2" />
+    <path d="M3 9h18M8 3v4M16 3v4" />
+  </Icon>
+);
+
+/** 비용·예산(동전) */
+export const CoinIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
+    <circle cx="12" cy="12" r="8" />
+    <path d="M12 8v8M9.6 9.7h4.3a1.8 1.8 0 0 1 0 3.6h-3.8a1.8 1.8 0 0 0 0 3.6h4.3" />
+  </Icon>
+);
+
+/** 알림 */
+export const BellIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
+    <path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z" />
+    <path d="M10.5 20a1.8 1.8 0 0 0 3 0" />
+  </Icon>
+);
+
+/** 병합 정책 */
+export const MergeIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
+    <circle cx="7" cy="6" r="2" />
+    <circle cx="7" cy="18" r="2" />
+    <circle cx="17" cy="12" r="2" />
+    <path d="M7 8v8M9 7.5c4 .2 6 1.7 6 3.1" />
+  </Icon>
+);
+
+/** 즉시 실행 */
+export const PlayIcon = ({ size = 20 }: { size?: number }) => (
+  <Icon size={size}>
+    <path d="M7 5l12 7-12 7V5z" />
+  </Icon>
+);

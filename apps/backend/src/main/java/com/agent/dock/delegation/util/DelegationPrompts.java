@@ -1,6 +1,7 @@
 package com.agent.dock.delegation.util;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 위임 실행에 쓰는 프롬프트와 지시 파일. 계약 형식과 팀 로스터를 매번 함께 넣어 모델이 대상을 고르게 한다.
@@ -30,12 +31,22 @@ public final class DelegationPrompts {
      * @param options 자식이 사람에게 물은 질문의 보기(부모가 그대로 물려받아 화면에 다시 그린다). 없으면 빈 목록
      */
     public record ChildOutcome(String agentName, Long agentId, String statusLabel, String summary,
-                              List<String> changedFiles, String note, List<String> options, boolean waiting) {
+                              List<String> changedFiles, String note, List<String> options, boolean waiting,
+                              boolean succeeded) {
 
-        /** 끝나거나 실패한 결과(사람의 입력을 기다리지 않는 보통의 경우). */
+        /** 사람의 입력을 기다리지 않는 결과(성공·실패). `succeeded=true` 는 그 자식이 정상 완료했음을 뜻한다. */
         public ChildOutcome(String agentName, Long agentId, String statusLabel, String summary,
-                            List<String> changedFiles, String note) {
-            this(agentName, agentId, statusLabel, summary, changedFiles, note, List.of(), false);
+                            List<String> changedFiles, String note, boolean succeeded) {
+            this(agentName, agentId, statusLabel, summary, changedFiles, note, List.of(), false, succeeded);
+        }
+
+        /**
+         * 자식들이 **모두 성공**했는지(사람의 입력을 기다리는 자식이 하나도 없어야 한다). 하나라도 실패·대기면 false —
+         * 부모는 기존처럼 자식 결과를 붙여 다시 판단한다.
+         */
+        public static boolean allSucceeded(List<ChildOutcome> outcomes) {
+            return outcomes != null && !outcomes.isEmpty()
+                    && outcomes.stream().allMatch(outcome -> outcome.succeeded() && !outcome.waiting());
         }
     }
 
@@ -138,6 +149,8 @@ public final class DelegationPrompts {
 
                 [판단 규칙]
                 - 지난 단계 결과가 있으면 그것을 모아 마무리하세요(action=done + summary).
+                - 자식이 모두 성공했으면 서버가 재판단 없이 마무리(action=finish)하므로, 이 판단은 그 밖의 경우
+                  (자식 실패·부분 성공, 사람의 답)에만 다시 돕니다.
                 - 요청이 특정 팀이나 팀원을 지목했으면 그대로 그 팀에 맡기세요(action=delegate). 지목은 사용자의 결정이므로 되돌리지 마세요.
                 - 지목이 없고 일이 작거나 이미 끝났다면 직접 처리하세요(action=done + summary).
                 - 팀원이 2명 이상이고 나눌 수 있는 일이면 한 사람에게 몰아주지 말고 나눠 맡기세요.
@@ -215,6 +228,15 @@ public final class DelegationPrompts {
             progress.append("\n");
         }
         return progress.toString();
+    }
+
+    /** 자식 결과가 모두 성공했을 때(재판단 없이) 마무리 요약으로 쓸 한 덩어리. */
+    public static String finishSummary(List<ChildOutcome> outcomes) {
+        String joined = outcomes.stream()
+                .map(outcome -> "%s: %s".formatted(outcome.agentName(),
+                        outcome.summary().isBlank() ? outcome.statusLabel() : outcome.summary()))
+                .collect(Collectors.joining(" / "));
+        return "자식 %d건이 모두 성공했습니다 — %s".formatted(outcomes.size(), joined);
     }
 
     private static String block(String value) {
