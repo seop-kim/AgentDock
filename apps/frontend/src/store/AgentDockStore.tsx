@@ -686,6 +686,14 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
   const openProjectRef = useRef<number | null>(null);
   /** 실행 목록을 어떤 조건으로 읽었는지. 화면이 요청하기 전에는 null 이라 아무 것도 부르지 않는다. */
   const executionListQueryRef = useRef<ExecutionListQuery | null>(null);
+  /**
+   * 프로젝트별 "실행 id → 그 실행이 속한 트리의 루트 id" 표.
+   *
+   * <p>태스크의 `latestExecutionId` 는 **마지막으로 생긴 실행**이라 자손일 수 있다(실측: task 74 의 latest 는
+   * 손자 255 였고, 그것을 루트로 삼아 총괄 242 를 아예 읽지 않아 "작업 없음"으로 보였다).
+   * 평평한 실행 목록(`ExecutionSummaryResponse`)이 `rootExecutionId` 를 들고 있어 한 번에 풀 수 있다.
+   */
+  const rootOfRef = useRef<Map<number, Map<number, number>>>(new Map());
   /** 화면이 요청했는지(=이벤트로 다시 읽을 필요가 있는지). 요청한 적 있을 때만 이벤트가 조각을 다시 읽는다. */
   const schedulesLoadedRef = useRef(false);
   const mergePolicyLoadedRef = useRef(false);
@@ -942,7 +950,22 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
       const limit = chatPageSizeRef.current;
       const rows = await api.listTasks(projectId, limit);
       const taskList = rows.map((task) => mapTask(projectId, task));
-      rows.forEach((task, index) => taskRootsRef.current.set(taskList[index].id, task.latestExecutionId));
+      // latestExecutionId 는 자손일 수 있으므로, 평평한 실행 목록에서 **진짜 루트**를 찾아 쓴다
+      // (새 실행이 생기면 실행 알림이 forceTrees 로 들어와 표를 새로 만든다).
+      let rootOf = rootOfRef.current.get(projectId);
+      if (rootOf === undefined || forceTrees) {
+        try {
+          const flat = await api.listExecutions({ projectId, limit: 200 });
+          rootOf = new Map(flat.map((execution) => [execution.id, execution.rootExecutionId ?? execution.id]));
+          rootOfRef.current.set(projectId, rootOf);
+        } catch {
+          rootOf = rootOf ?? new Map(); // 못 읽으면 latestExecutionId 로 폴백한다(예전 동작).
+        }
+      }
+      rows.forEach((task, index) => {
+        const latest = task.latestExecutionId;
+        taskRootsRef.current.set(taskList[index].id, latest === null ? null : (rootOf.get(latest) ?? latest));
+      });
       setTasks((prev) => [...prev.filter((task) => task.projectId !== projectId), ...taskList]);
       // 요청한 만큼 받았으면 더 있을 수 있고, 그보다 적으면 그게 끝이다.
       setChatHasMore((prev) => ({ ...prev, [projectId]: rows.length >= limit }));
