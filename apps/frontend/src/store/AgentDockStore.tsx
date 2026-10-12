@@ -6,8 +6,21 @@ import {
   Execution as ApiExecution,
   ExecutionTree,
   api,
+  isUnsupportedError,
   type Agent as ApiAgent,
   type AgentGroup as ApiGroup,
+  type ChannelCreateRequest,
+  type ChannelResponse,
+  type ChannelUpdateRequest,
+  type ExecutionDiffResponse,
+  type MergePolicyResponse,
+  type ProjectBudgetResponse,
+  type RuleCreateRequest,
+  type RuleResponse,
+  type ScheduleCreateRequest,
+  type ScheduleResponse,
+  type ScheduleUpdateRequest,
+  type UsageResponse,
   type ExecutionListQuery,
   type ExecutionSummary as ApiExecutionSummary,
   type Project as ApiProject,
@@ -22,9 +35,22 @@ import type {
   AttachedFile,
   ChatMessage,
   ChatTarget,
+  CostUsage,
   Execution,
+  ExecutionDiff,
+  FeatureStatus,
+  MergePolicy,
+  NewNotificationChannel,
+  NewNotificationRule,
+  NewSchedule,
+  NotificationChannel,
+  NotificationChannelKind,
+  NotificationRule,
   Project,
+  ProjectBudget,
   Provider,
+  Schedule,
+  ScheduleCadence,
   Task,
   Workspace,
 } from '../types';
@@ -111,6 +137,56 @@ interface AgentDockStore {
   uploadAttachments: (workspaceId: number, files: File[]) => Promise<AttachedFile[]>;
   /** 파일 목록은 필요할 때만 읽는다(첨부 창이 열릴 때). */
   loadWorkspaceFiles: (workspaceId: number) => void;
+
+  // ── C. 실행 변경사항 diff ───────────────────────────────────────────────────────
+  /** 실행 id(트리 루트) → 파일별 unified diff. 창이 연 실행만 채워진다. */
+  executionDiffs: Record<number, ExecutionDiff | null>;
+  diffStatus: Record<number, FeatureStatus>;
+  /** 실행 하나의 diff 를 읽는다(트리 루트 행에서 창을 열 때). */
+  loadExecutionDiff: (executionId: number) => void;
+
+  // ── D. 예약 실행 ───────────────────────────────────────────────────────────────
+  schedules: Schedule[];
+  schedulesStatus: FeatureStatus;
+  loadSchedules: () => void;
+  createSchedule: (input: NewSchedule) => void;
+  deleteSchedule: (id: number) => void;
+  /** 예약을 켜고 끈다(스케줄러가 그대로 반영한다). */
+  setScheduleEnabled: (id: number, enabled: boolean) => void;
+  /** 예약을 지금 한 번 실행한다. */
+  runScheduleNow: (id: number) => void;
+
+  // ── E. 병합 정책 ───────────────────────────────────────────────────────────────
+  mergePolicy: MergePolicy | null;
+  mergePolicyStatus: FeatureStatus;
+  loadMergePolicy: () => void;
+  saveMergePolicy: (policy: MergePolicy) => void;
+
+  // ── G. 비용·예산 ───────────────────────────────────────────────────────────────
+  costUsage: CostUsage | null;
+  costBudgets: ProjectBudget[];
+  costStatus: FeatureStatus;
+  /** 기간(from~to) 사용량을 읽는다. 같은 기간을 기억해 SSE 갱신 때 다시 쓴다. */
+  loadCostUsage: (from: string, to: string) => void;
+  /** 프로젝트 예산을 설정한다(null 이면 삭제). */
+  setProjectBudget: (projectId: number, budgetUsd: number | null) => void;
+  /** 프로젝트 예산 목록만 다시 읽는다(비용 화면). */
+  loadCostBudgets: () => void;
+
+  // ── H. 알림 채널·규칙 ──────────────────────────────────────────────────────────
+  notificationChannels: NotificationChannel[];
+  notificationRules: NotificationRule[];
+  notificationStatus: FeatureStatus;
+  /** 채널과 규칙을 함께 읽는다. */
+  loadNotifications: () => void;
+  createChannel: (input: NewNotificationChannel) => void;
+  updateChannel: (id: number, input: NewNotificationChannel) => void;
+  deleteChannel: (id: number) => void;
+  /** 채널로 시험 발송한다. */
+  testChannel: (id: number) => void;
+  createRule: (input: NewNotificationRule) => void;
+  deleteRule: (id: number) => void;
+  setRuleEnabled: (id: number, enabled: boolean) => void;
 }
 
 export interface AgentRole {
@@ -416,6 +492,145 @@ function mergeExecutions(prev: Execution[], roots: Set<number>, fresh: Execution
   return [...prev.filter((execution) => !dropped.has(execution.id)), ...fresh];
 }
 
+/** 예약 화면이 고른 cadence 를 백엔드 cron(6필드)으로 바꾼다(CRON 이면 입력한 식을 그대로). */
+function scheduleCron(cadence: ScheduleCadence, cron: string | null): string {
+  switch (cadence) {
+    case 'HOURLY':
+      return '0 0 * * * *';
+    case 'DAILY':
+      return '0 0 0 * * *';
+    case 'WEEKLY':
+      return '0 0 0 * * 1';
+    default:
+      return (cron ?? '').trim();
+  }
+}
+
+/** 백엔드 예약 → 화면 Schedule. cadence 는 서버에 없으므로 CRON 으로 두고 cron 을 그대로 보여 준다. */
+function mapSchedule(schedule: ScheduleResponse): Schedule {
+  return {
+    id: schedule.id,
+    projectId: schedule.project?.id ?? 0,
+    name: schedule.name,
+    cadence: 'CRON',
+    cron: schedule.cron,
+    prompt: schedule.prompt,
+    targetAgentId: schedule.targetAgent?.id ?? null,
+    groupId: schedule.targetGroup?.id ?? null,
+    enabled: schedule.enabled,
+    nextRunAt: schedule.nextRunAt,
+    lastRunAt: schedule.lastRunAt,
+    lastExecutionId: schedule.lastTaskId,
+  };
+}
+
+function scheduleCreateRequest(input: NewSchedule): ScheduleCreateRequest {
+  return {
+    projectId: input.projectId,
+    name: input.name,
+    prompt: input.prompt,
+    targetAgentId: input.targetAgentId,
+    groupId: input.groupId,
+    cron: scheduleCron(input.cadence, input.cron),
+  };
+}
+
+function scheduleUpdateRequest(schedule: Schedule, enabled: boolean): ScheduleUpdateRequest {
+  return {
+    name: schedule.name,
+    prompt: schedule.prompt,
+    targetAgentId: schedule.targetAgentId,
+    groupId: schedule.groupId,
+    cron: schedule.cron ?? '',
+    enabled,
+  };
+}
+
+/** 백엔드 diff 응답 → 화면 ExecutionDiff. patch→diff(없으면 빈 문자열). available=false 면 빈 files. */
+function mapExecutionDiff(response: ExecutionDiffResponse): ExecutionDiff {
+  return {
+    executionId: response.executionId,
+    files: response.files.map((file) => ({ path: file.path, status: file.status, diff: file.patch ?? '' })),
+  };
+}
+
+/** 백엔드 병합 정책 → 화면 MergePolicy. */
+function mapMergePolicy(policy: MergePolicyResponse): MergePolicy {
+  return {
+    autoMerge: true,
+    autoCleanupWorktree: policy.autoCleanupEnabled,
+    autoCleanupBranch: policy.cleanupDeleteBranch,
+    requireCleanTarget: false,
+  };
+}
+
+function mergePolicyRequest(policy: MergePolicy): MergePolicyResponse {
+  return {
+    autoCleanupEnabled: policy.autoCleanupWorktree,
+    cleanupDeleteBranch: policy.autoCleanupBranch,
+    updatedAt: null,
+  };
+}
+
+/** 백엔드 사용량 → 화면 CostUsage. 프로젝트별 버킷은 서버가 주지 않으므로 비워 둔다. */
+function mapCostUsage(usage: UsageResponse): CostUsage {
+  return {
+    from: usage.from,
+    to: usage.to,
+    totalCostUsd: usage.totalCostUsd,
+    totalInputTokens: usage.totalInputTokens,
+    totalOutputTokens: usage.totalOutputTokens,
+    totalExecutions: usage.executionCount,
+    byDay: usage.buckets.map((bucket) => ({
+      key: bucket.start,
+      label: bucket.start.slice(0, 10),
+      costUsd: bucket.costUsd,
+      inputTokens: bucket.inputTokens,
+      outputTokens: bucket.outputTokens,
+      executions: bucket.executionCount,
+    })),
+    byProject: [],
+  };
+}
+
+/** 백엔드 예산 → 화면 ProjectBudget. */
+function mapBudget(budget: ProjectBudgetResponse, projectName: string): ProjectBudget {
+  return {
+    projectId: budget.projectId,
+    projectName,
+    budgetUsd: budget.amountUsd ?? 0,
+    spentUsd: budget.usedUsd,
+  };
+}
+
+/** 백엔드 채널 → 화면 NotificationChannel. type→kind, config 의 대상(url/to/email)→target. */
+function mapChannel(channel: ChannelResponse): NotificationChannel {
+  const config = channel.config ?? {};
+  const target = String(config.url ?? config.to ?? config.email ?? config.recipient ?? '');
+  return { id: channel.id, kind: channel.type, name: channel.name, target, enabled: channel.enabled };
+}
+
+function channelConfig(kind: NotificationChannelKind, target: string): Record<string, unknown> {
+  return kind === 'EMAIL' ? { to: target } : { url: target };
+}
+
+function channelCreateRequest(input: NewNotificationChannel): ChannelCreateRequest {
+  return { type: input.kind, name: input.name, config: channelConfig(input.kind, input.target), enabled: input.enabled };
+}
+
+function channelUpdateRequest(input: NewNotificationChannel): ChannelUpdateRequest {
+  return { name: input.name, config: channelConfig(input.kind, input.target), enabled: input.enabled };
+}
+
+/** 백엔드 알림 규칙 → 화면 NotificationRule. eventType→event. */
+function mapRule(rule: RuleResponse): NotificationRule {
+  return { id: rule.id, channelId: rule.channelId, event: rule.eventType, enabled: rule.enabled };
+}
+
+function ruleCreateRequest(input: NewNotificationRule): RuleCreateRequest {
+  return { channelId: input.channelId, eventType: input.event as RuleCreateRequest['eventType'], enabled: input.enabled };
+}
+
 export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -435,6 +650,18 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [streamConnected, setStreamConnected] = useState(false);
+  const [executionDiffs, setExecutionDiffs] = useState<Record<number, ExecutionDiff | null>>({});
+  const [diffStatus, setDiffStatus] = useState<Record<number, FeatureStatus>>({});
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [schedulesStatus, setSchedulesStatus] = useState<FeatureStatus>('idle');
+  const [mergePolicy, setMergePolicy] = useState<MergePolicy | null>(null);
+  const [mergePolicyStatus, setMergePolicyStatus] = useState<FeatureStatus>('idle');
+  const [costUsage, setCostUsage] = useState<CostUsage | null>(null);
+  const [costBudgets, setCostBudgets] = useState<ProjectBudget[]>([]);
+  const [costStatus, setCostStatus] = useState<FeatureStatus>('idle');
+  const [notificationChannels, setNotificationChannels] = useState<NotificationChannel[]>([]);
+  const [notificationRules, setNotificationRules] = useState<NotificationRule[]>([]);
+  const [notificationStatus, setNotificationStatus] = useState<FeatureStatus>('idle');
 
   const seqRef = useRef(1000);
   const nextId = useCallback(() => {
@@ -449,6 +676,8 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
   const agentsRef = useRef<ApiAgent[]>([]);
   const groupsRef = useRef<AgentGroup[]>([]);
   const filesRef = useRef<Record<number, string[]>>({});
+  /** 프로젝트 목록의 최신값(예산 목록을 프로젝트별로 읽을 때 쓴다). */
+  const projectsRef = useRef<Project[]>([]);
   /** 태스크 → 최신 실행(트리 루트). 이벤트로 태스크 목록만 다시 읽을 때 트리의 뿌리를 알려면 필요하다. */
   const taskRootsRef = useRef<Map<number, number | null>>(new Map());
   /** 채팅(명령) 페이지 크기. '이전 명령 더 보기' 로 늘어난다 — 콜백에서 최신 값을 읽으려고 ref 로도 둔다. */
@@ -457,6 +686,15 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
   const openProjectRef = useRef<number | null>(null);
   /** 실행 목록을 어떤 조건으로 읽었는지. 화면이 요청하기 전에는 null 이라 아무 것도 부르지 않는다. */
   const executionListQueryRef = useRef<ExecutionListQuery | null>(null);
+  /** 화면이 요청했는지(=이벤트로 다시 읽을 필요가 있는지). 요청한 적 있을 때만 이벤트가 조각을 다시 읽는다. */
+  const schedulesLoadedRef = useRef(false);
+  const mergePolicyLoadedRef = useRef(false);
+  const costLoadedRef = useRef(false);
+  const notificationsLoadedRef = useRef(false);
+  /** 사용량을 어떤 기간으로 읽었는지. 화면이 요청하기 전에는 null(이벤트가 다시 읽지 않는다). */
+  const costRangeRef = useRef<{ from: string; to: string } | null>(null);
+  /** 지금 열어 둔 diff 실행 id 집합(실행이 바뀌면 이 diff 만 다시 읽는다). */
+  const diffIdsRef = useRef<Set<number>>(new Set());
   const [chatHasMore, setChatHasMore] = useState<Record<number, boolean>>({});
   /** 실행 트리 창을 열어 둔 트리(프로젝트 → 루트 실행). 그 트리만 계속 다시 읽는다. */
   const openTreesRef = useRef<Map<number, Set<number>>>(new Map());
@@ -522,6 +760,9 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     filesRef.current = workspaceFiles;
   }, [workspaceFiles]);
+  useEffect(() => {
+    projectsRef.current = projects;
+  }, [projects]);
 
   /** AI 런타임 목록. */
   const loadProviders = useCallback(async () => {
@@ -740,6 +981,122 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
     await Promise.all(Object.keys(filesRef.current).map((key) => fetchWorkspaceFiles(Number(key))));
   }, [fetchWorkspaceFiles]);
 
+  /** 한 실행의 변경사항 diff 를 읽는다(창을 열 때). 서버가 아직 없으면 '미지원' 으로 남긴다. */
+  const loadExecutionDiff = useCallback(async (executionId: number) => {
+    diffIdsRef.current.add(executionId);
+    setDiffStatus((prev) => ({ ...prev, [executionId]: 'loading' }));
+    try {
+      const response = await api.getExecutionDiff(executionId);
+      setExecutionDiffs((prev) => ({ ...prev, [executionId]: mapExecutionDiff(response) }));
+      setDiffStatus((prev) => ({ ...prev, [executionId]: 'ready' }));
+    } catch (ex) {
+      setDiffStatus((prev) => ({
+        ...prev,
+        [executionId]: isUnsupportedError(ex) ? 'unsupported' : 'error',
+      }));
+    }
+  }, []);
+
+  /** 예약 목록을 읽는다. */
+  const loadSchedules = useCallback(async () => {
+    schedulesLoadedRef.current = true;
+    setSchedulesStatus('loading');
+    try {
+      const rows = await api.listSchedules();
+      setSchedules(rows.map(mapSchedule));
+      setSchedulesStatus('ready');
+    } catch (ex) {
+      setSchedulesStatus(isUnsupportedError(ex) ? 'unsupported' : 'error');
+    }
+  }, []);
+
+  /** 병합 정책을 읽는다. */
+  const loadMergePolicy = useCallback(async () => {
+    mergePolicyLoadedRef.current = true;
+    setMergePolicyStatus('loading');
+    try {
+      setMergePolicy(mapMergePolicy(await api.getMergePolicy()));
+      setMergePolicyStatus('ready');
+    } catch (ex) {
+      setMergePolicyStatus(isUnsupportedError(ex) ? 'unsupported' : 'error');
+    }
+  }, []);
+
+  /** 기간(from~to) 사용량을 읽는다(화면이 고른 기간을 기억해 이벤트 때 같은 기간으로 다시 읽는다). */
+  const loadCostUsage = useCallback(async (from: string, to: string) => {
+    costLoadedRef.current = true;
+    costRangeRef.current = { from, to };
+    setCostStatus('loading');
+    try {
+      setCostUsage(mapCostUsage(await api.getCostUsage(from, to)));
+      setCostStatus('ready');
+    } catch (ex) {
+      setCostStatus(isUnsupportedError(ex) ? 'unsupported' : 'error');
+    }
+  }, []);
+
+  /** 프로젝트 예산 목록을 읽는다. 서버에 목록 API 가 없어 프로젝트별 GET 을 모은다. */
+  const loadCostBudgets = useCallback(async () => {
+    costLoadedRef.current = true;
+    setCostStatus('loading');
+    try {
+      const list = projectsRef.current;
+      const nameOf = new Map(list.map((project) => [project.id, project.name]));
+      const rows = await Promise.all(list.map((project) => api.getProjectBudget(project.id)));
+      setCostBudgets(rows.map((row) => mapBudget(row, nameOf.get(row.projectId) ?? `프로젝트 #${row.projectId}`)));
+      setCostStatus('ready');
+    } catch (ex) {
+      setCostStatus(isUnsupportedError(ex) ? 'unsupported' : 'error');
+    }
+  }, []);
+
+  /** 프로젝트 예산을 설정하고 목록을 다시 읽는다(null 이면 삭제). */
+  const setProjectBudget = useCallback(
+    async (projectId: number, budgetUsd: number | null) => {
+      try {
+        if (budgetUsd === null) await api.deleteProjectBudget(projectId);
+        else await api.setProjectBudget(projectId, { amountUsd: budgetUsd });
+        await loadCostBudgets();
+      } catch (ex) {
+        setCostStatus(isUnsupportedError(ex) ? 'unsupported' : 'error');
+        fail(ex);
+      }
+    },
+    [fail, loadCostBudgets],
+  );
+
+  /** 알림 채널과 규칙을 함께 읽는다. */
+  const loadNotifications = useCallback(async () => {
+    notificationsLoadedRef.current = true;
+    setNotificationStatus('loading');
+    try {
+      const [channels, rules] = await Promise.all([api.listNotificationChannels(), api.listNotificationRules()]);
+      setNotificationChannels(channels.map(mapChannel));
+      setNotificationRules(rules.map(mapRule));
+      setNotificationStatus('ready');
+    } catch (ex) {
+      setNotificationStatus(isUnsupportedError(ex) ? 'unsupported' : 'error');
+    }
+  }, []);
+
+  /** 조각을 바꾸는 요청을 보내고, 성공하면 그 조각을 다시 읽는다. 실패는 그 조각 상태(미지원/오류)로 남긴다. */
+  const mutateSlice = useCallback(
+    async (
+      action: () => Promise<unknown>,
+      reloadSlice: () => Promise<void>,
+      setStatus: (status: FeatureStatus) => void,
+    ) => {
+      try {
+        await action();
+        await reloadSlice();
+      } catch (ex) {
+        setStatus(isUnsupportedError(ex) ? 'unsupported' : 'error');
+        fail(ex);
+      }
+    },
+    [fail],
+  );
+
   /**
    * 알림 하나를 "다시 읽을 조각"으로 옮긴다. 프로젝트를 알 수 없는 알림은 그 조각 전체(`reload`)를 다시 읽는다.
    * 바뀌지 않은 조각은 건드리지 않는다 — 3초마다 20건을 부르던 방식을 대신한다.
@@ -760,6 +1117,10 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
                 event.projectId === null ||
                 event.projectId === listQuery.projectId);
             if (matches && listQuery !== null) await fetchExecutionList(listQuery);
+          }
+          // 열어 둔 diff 창이 있으면 그 실행의 변경사항도 다시 읽는다(파일이 바뀌었을 수 있다).
+          if (diffIdsRef.current.size > 0) {
+            await Promise.all([...diffIdsRef.current].map((id) => loadExecutionDiff(id)));
           }
           return;
         case 'task.changed':
@@ -792,6 +1153,24 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
         case 'attachment.changed':
           await refreshOpenFileLists();
           return;
+        case 'schedule.changed':
+          if (schedulesLoadedRef.current) await loadSchedules();
+          return;
+        case 'notification.changed':
+          if (notificationsLoadedRef.current) await loadNotifications();
+          return;
+        case 'mergePolicy.changed':
+        case 'merge-policy.changed':
+        case 'settings.changed':
+          if (mergePolicyLoadedRef.current) await loadMergePolicy();
+          return;
+        case 'budget.changed':
+        case 'cost.changed': {
+          const range = costRangeRef.current;
+          if (range !== null) await loadCostUsage(range.from, range.to);
+          if (costLoadedRef.current) await loadCostBudgets();
+          return;
+        }
         default:
           return;
       }
@@ -799,10 +1178,16 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
     [
       fetchExecutionList,
       loadAgents,
+      loadCostBudgets,
+      loadCostUsage,
+      loadExecutionDiff,
       loadGroups,
+      loadMergePolicy,
+      loadNotifications,
       loadProjectSlice,
       loadProjects,
       loadProviders,
+      loadSchedules,
       loadWorkspaces,
       refreshOpenFileLists,
     ],
@@ -853,6 +1238,15 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
     if (listQuery !== null) {
       await tolerantly('실행 목록', () => fetchExecutionList(listQuery), undefined);
     }
+    // 화면이 한 번 요청한 C/D/E/G/H 조각도 새로고침 때 같은 조건으로 최신으로 둔다(이벤트를 놓쳐도 따라잡는다).
+    if (schedulesLoadedRef.current) await tolerantly('예약 목록', loadSchedules, undefined);
+    if (mergePolicyLoadedRef.current) await tolerantly('병합 정책', loadMergePolicy, undefined);
+    if (notificationsLoadedRef.current) await tolerantly('알림 설정', loadNotifications, undefined);
+    const costRange = costRangeRef.current;
+    if (costRange !== null) {
+      await tolerantly('사용량', () => loadCostUsage(costRange.from, costRange.to), undefined);
+    }
+    if (costLoadedRef.current) await tolerantly('프로젝트 예산', loadCostBudgets, undefined);
 
     setLoading(false);
     setError(null);
@@ -861,10 +1255,15 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
     fetchExecutionList,
     loadAgents,
     loadCatalog,
+    loadCostBudgets,
+    loadCostUsage,
     loadGroups,
+    loadMergePolicy,
+    loadNotifications,
     loadProjectSlice,
     loadProjects,
     loadProviders,
+    loadSchedules,
     loadWorkspaces,
   ]);
 
@@ -1247,6 +1646,63 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
         }
       },
       loadWorkspaceFiles: (workspaceId) => void fetchWorkspaceFiles(workspaceId),
+
+      executionDiffs,
+      diffStatus,
+      loadExecutionDiff: (executionId) => void loadExecutionDiff(executionId),
+
+      schedules,
+      schedulesStatus,
+      loadSchedules: () => void loadSchedules(),
+      createSchedule: (input) => void mutateSlice(() => api.createSchedule(scheduleCreateRequest(input)), loadSchedules, setSchedulesStatus),
+      deleteSchedule: (id) => void mutateSlice(() => api.deleteSchedule(id), loadSchedules, setSchedulesStatus),
+      setScheduleEnabled: (id, enabled) => {
+        const schedule = schedules.find((candidate) => candidate.id === id);
+        if (schedule === undefined) return;
+        void mutateSlice(() => api.updateSchedule(id, scheduleUpdateRequest(schedule, enabled)), loadSchedules, setSchedulesStatus);
+      },
+      runScheduleNow: (id) => void mutateSlice(() => api.runSchedule(id), loadSchedules, setSchedulesStatus),
+
+      mergePolicy,
+      mergePolicyStatus,
+      loadMergePolicy: () => void loadMergePolicy(),
+      saveMergePolicy: (policy) => {
+        setMergePolicy(policy);
+        void mutateSlice(() => api.updateMergePolicy(mergePolicyRequest(policy)), loadMergePolicy, setMergePolicyStatus);
+      },
+
+      costUsage,
+      costBudgets,
+      costStatus,
+      loadCostUsage: (from, to) => void loadCostUsage(from, to),
+      setProjectBudget: (projectId, budgetUsd) => void setProjectBudget(projectId, budgetUsd),
+      loadCostBudgets: () => void loadCostBudgets(),
+
+      notificationChannels,
+      notificationRules,
+      notificationStatus,
+      loadNotifications: () => void loadNotifications(),
+      createChannel: (input) =>
+        void mutateSlice(() => api.createNotificationChannel(channelCreateRequest(input)), loadNotifications, setNotificationStatus),
+      updateChannel: (id, input) =>
+        void mutateSlice(() => api.updateNotificationChannel(id, channelUpdateRequest(input)), loadNotifications, setNotificationStatus),
+      deleteChannel: (id) =>
+        void mutateSlice(() => api.deleteNotificationChannel(id), loadNotifications, setNotificationStatus),
+      testChannel: (id) =>
+        void mutateSlice(() => api.testNotificationChannel(id), loadNotifications, setNotificationStatus),
+      createRule: (input) =>
+        void mutateSlice(() => api.createNotificationRule(ruleCreateRequest(input)), loadNotifications, setNotificationStatus),
+      deleteRule: (id) =>
+        void mutateSlice(() => api.deleteNotificationRule(id), loadNotifications, setNotificationStatus),
+      setRuleEnabled: (id, enabled) => {
+        const rule = notificationRules.find((candidate) => candidate.id === id);
+        if (rule === undefined) return;
+        void mutateSlice(
+          () => api.updateNotificationRule(id, { channelId: rule.channelId, eventType: rule.event as RuleCreateRequest['eventType'], enabled }),
+          loadNotifications,
+          setNotificationStatus,
+        );
+      },
     }),
     [
       agents,
@@ -1275,6 +1731,26 @@ export function AgentDockStoreProvider({ children }: { children: ReactNode }) {
       tasks,
       workspaceFiles,
       workspaces,
+      executionDiffs,
+      diffStatus,
+      loadExecutionDiff,
+      schedules,
+      schedulesStatus,
+      loadSchedules,
+      mergePolicy,
+      mergePolicyStatus,
+      loadMergePolicy,
+      costUsage,
+      costBudgets,
+      costStatus,
+      loadCostUsage,
+      setProjectBudget,
+      loadCostBudgets,
+      notificationChannels,
+      notificationRules,
+      notificationStatus,
+      loadNotifications,
+      mutateSlice,
     ],
   );
 

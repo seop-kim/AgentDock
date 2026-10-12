@@ -101,4 +101,23 @@ class DelegationContractTest {
         assertThat(DelegationContract.parse(Map.of("action", "delegate",
                 "targets", List.of("문자열")))).isEmpty();
     }
+
+    @Test
+    void readsFinishContractAsDone() {
+        DelegationContract contract = DelegationContract.parse(
+                Map.of("action", "finish", "summary", "자식이 모두 성공했습니다")).orElseThrow();
+
+        assertThat(contract.action()).isEqualTo(ExecutionDecision.DONE);
+        assertThat(contract.summary()).isEqualTo("자식이 모두 성공했습니다");
+        assertThat(contract.orders()).isEmpty();
+    }
+
+    @Test
+    void finishFactoryProducesADoneContract() {
+        DelegationContract contract = DelegationContract.finish("모두 성공");
+
+        assertThat(contract.action()).isEqualTo(ExecutionDecision.DONE);
+        assertThat(contract.summary()).isEqualTo("모두 성공");
+        assertThat(contract.orders()).isEmpty();
+    }
 }

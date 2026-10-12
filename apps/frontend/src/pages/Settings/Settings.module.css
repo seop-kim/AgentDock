@@ -229,3 +229,25 @@
 .editor input {
   width: 100%;
 }
+/* 병합 정책(설정 > 병합 정책) */
+.policyRow {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+}
+
+.policyRow:last-child {
+  border-bottom: 0;
+}
+
+.policyRow input {
+  padding: 0;
+}
+
+.policyLabel {
+  min-width: 130px;
+  font-weight: 600;
+}

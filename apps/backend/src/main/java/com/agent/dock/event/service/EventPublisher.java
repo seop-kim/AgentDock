@@ -52,9 +52,29 @@ public class EventPublisher {
         publish(EventTypes.RUNTIME_CHANGED, null, null, null);
     }
 
+    /** 프로젝트 비용 예산이 설정·변경됐다. */
+    public void budgetChanged(Long projectId) {
+        publish(EventTypes.BUDGET_CHANGED, projectId, null, null);
+    }
+
+    /** 알림 채널·규칙이 바뀌었다. */
+    public void notificationChanged(Long projectId) {
+        publish(EventTypes.NOTIFICATION_CHANGED, projectId, null, null);
+    }
+
     /** 파일 첨부가 올라오거나 Task 에 연결됐다. */
     public void attachmentChanged(Long projectId, Long taskId) {
         publish(EventTypes.ATTACHMENT_CHANGED, projectId, null, taskId);
+    }
+
+    /** 예약(반복·예약 실행)이 만들어지거나 수정·삭제·실행됐다. */
+    public void scheduleChanged(Long projectId) {
+        publish(EventTypes.SCHEDULE_CHANGED, projectId, null, null);
+    }
+
+    /** 전역 설정(병합 정책 등)이 바뀌었다. 프로젝트에 매이지 않아 식별자가 없다. */
+    public void settingsChanged() {
+        publish(EventTypes.SETTINGS_CHANGED, null, null, null);
     }
 
     private void publish(String type, Long projectId, Long executionId, Long taskId) {

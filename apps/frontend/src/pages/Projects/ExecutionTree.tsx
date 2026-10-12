@@ -20,6 +20,7 @@ import shared from '../../styles/shared.module.css';
 import type { Execution, ExecutionStatus } from '../../types';
 import { askConfirm } from '../../components/ConfirmDialog';
 import ExecutionDetail from './ExecutionDetail';
+import ExecutionDiffModal from './ExecutionDiffModal';
 
 /** 실행 상태 배지. 채팅 카드와 실행 트리 창이 함께 쓴다. */
 export function ExecutionBadge({ status }: { status: ExecutionStatus }) {
@@ -89,21 +90,28 @@ export function CancelButton({
  */
 function TreeResultLine({ execution }: { execution: Execution }) {
   const { retryMerge } = useAgentDockStore();
+  const [diffOpen, setDiffOpen] = useState(false);
   const status = execution.mergeStatus;
   if (status !== 'MERGED' && status !== 'MANUAL') return null;
   return (
-    <p className={exec.rowFiles} title={execution.mergeDetail ?? undefined}>
+    <div className={exec.rowFiles} title={execution.mergeDetail ?? undefined}>
       <span className={`${exec.badge} ${exec[MERGE_TONE[status]]}`}>{MERGE_LABEL[status]}</span>
       {execution.resultCommit && <> · 커밋 {execution.resultCommit}</>}
       {execution.changedFiles.length > 0 && (
         <> · {execution.changedFiles.map((file) => `${file.status} ${file.path}`).join(', ')}</>
+      )}
+      {execution.changedFiles.length > 0 && (
+        <button type="button" className={exec.cardButton} onClick={() => setDiffOpen(true)}>
+          변경 diff 보기
+        </button>
       )}
       {status === 'MANUAL' && (
         <button type="button" className={exec.cardButton} onClick={() => retryMerge(execution.id)}>
           다시 병합
         </button>
       )}
-    </p>
+      {diffOpen && <ExecutionDiffModal execution={execution} onClose={() => setDiffOpen(false)} />}
+    </div>
   );
 }
 

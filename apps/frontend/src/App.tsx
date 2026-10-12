@@ -9,8 +9,12 @@ import ProjectDetail from './pages/Projects/ProjectDetail';
 import Projects from './pages/Projects/Projects';
 import RealityCheck from './pages/RealityCheck';
 import Tasks from './pages/Tasks/Tasks';
+import Schedules from './pages/Schedules/Schedules';
+import Costs from './pages/Costs/Costs';
+import Notifications from './pages/Notifications/Notifications';
 import TerminalWindow from './pages/TerminalWindow';
 import AgentConnectionSettings from './pages/Settings/AgentConnectionSettings';
+import MergePolicySettings from './pages/Settings/MergePolicySettings';
 import Settings from './pages/Settings/Settings';
 import ThemeSettings from './pages/Settings/ThemeSettings';
 
@@ -38,11 +42,15 @@ export default function App() {
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/tasks" element={<Tasks />} />
+          <Route path="/schedules" element={<Schedules />} />
+          <Route path="/costs" element={<Costs />} />
+          <Route path="/notifications" element={<Notifications />} />
           <Route path="/reality-check" element={<RealityCheck />} />
           <Route path="/settings" element={<Settings />}>
             <Route index element={<Navigate to="agents" replace />} />
             <Route path="agents" element={<AgentConnectionSettings />} />
             <Route path="theme" element={<ThemeSettings />} />
+            <Route path="merge-policy" element={<MergePolicySettings />} />
           </Route>
         </Route>
       </Routes>

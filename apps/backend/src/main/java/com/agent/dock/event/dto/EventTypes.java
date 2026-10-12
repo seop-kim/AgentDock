@@ -21,6 +21,16 @@ public final class EventTypes {
     public static final String RUNTIME_CHANGED = "runtime.changed";
     /** 파일 첨부(업로드·Task 연결). */
     public static final String ATTACHMENT_CHANGED = "attachment.changed";
+    /** 알림 채널·규칙(설정). */
+    public static final String NOTIFICATION_CHANGED = "notification.changed";
+    /** 비용 예산(설정·경고). */
+    public static final String BUDGET_CHANGED = "budget.changed";
+
+    /** 예약(반복·예약 실행) 생성·수정·삭제·실행. */
+    public static final String SCHEDULE_CHANGED = "schedule.changed";
+
+    /** 전역 설정(병합 정책 등 — 프로젝트에 매이지 않는 설정). */
+    public static final String SETTINGS_CHANGED = "settings.changed";
 
     private EventTypes() {
     }

@@ -24,7 +24,6 @@ import com.agent.dock.group.dto.GroupResponse;
 import com.agent.dock.group.service.GroupService;
 import com.agent.dock.project.domain.Project;
 import com.agent.dock.project.repository.ProjectRepository;
-import com.agent.dock.execution.domain.MergeStatus;
 import com.agent.dock.runtime.dto.AgentExecutionResult;
 import com.agent.dock.runtime.util.JsonObjects;
 import jakarta.annotation.PostConstruct;
@@ -56,7 +55,8 @@ import org.springframework.stereotype.Service;
  *
  * <p>명령 하나가 실행 트리 하나다. 판단이 필요한 실행(마스터·그룹 리더)은 계약(JSON)을 남기고,
  * 계약이 delegate 면 자식 실행을 만들어 결과를 기다린 뒤(그동안 부모는 WAITING_CHILD) 결과를 붙여 다시 판단한다.
- * done 이 나오면 끝난다. 상한(깊이·실행 수·예산)과 순환 위임은 백엔드가 막는다.
+ * **자식이 모두 성공하면 재판단을 생략하고 곧바로 마무리(finish)** 한다 — 실패·부분 성공이면 결과를 붙여
+ * 다시 판단한다. done 이 나오면 끝난다. 상한(깊이·실행 수·예산)과 순환 위임은 백엔드가 막는다.
  */
 @Service
 @RequiredArgsConstructor
@@ -278,17 +278,8 @@ public class DelegationService {
         // 트리가 끝나면 그 그룹의 공유 노트에 한 줄 남긴다 —
         // 같은 팀의 다음 실행이 이 맥락을 이어받는다(런타임이 달라도 공유된다).
         groupService.appendSharedNote(fresh.getAgentId(), "#%d %s".formatted(rootId, message));
-        // **메인 저장소로 병합까지 끝난 트리**는 워크트리를 자동으로 정리한다(사람이 손으로 지우던 일).
-        // 되돌릴 수 없는 삭제라 조건을 좁힌다 — 자동 병합이 끝난 경우(MERGED)만. 아직 도는 트리면
-        // ExecutionService 가 409 로 막고, 정리 실패가 트리 결과를 망치지 않게 삼킨다.
-        if (result.status() == MergeStatus.MERGED) {
-            try {
-                executionService.removeWorktree(rootId, true);
-                streamHub.system(rootId, "⎿ 워크트리를 정리했습니다(브랜치까지)");
-            } catch (RuntimeException ex) {
-                log.warn("워크트리 자동 정리를 건너뜁니다(실행 {}): {}", rootId, ex.getMessage());
-            }
-        }
+        // 워크트리 자동 정리는 병합 정책(settings)을 따르는 ExecutionService.recordTreeResult 훅이 맡는다 —
+        // MERGED 이면서 정책이 켜졌을 때만 지운다(정책이 꺼져 있으면 남긴다).
     }
 
     /** 커밋 제목: 루트 실행의 최종 요약(계약 done.summary / result_text)을 다듬어 쓴다. 없으면 `실행 #<id> 작업 결과`. */
@@ -468,6 +459,16 @@ public class DelegationService {
                 streamHub.system(id, "⎿ 하위 실행이 사람의 입력을 기다립니다");
                 return ExecutionStatus.WAITING_INPUT;
             }
+            // 자식 결과가 **모두 성공**하면 부모 판단을 다시 돌리지 않는다(모델 재호출 1회 절약).
+            // 마지막 계약은 서버가 finish(done)로 남긴다 — 실패·부분 성공이면 기존처럼 결과를 붙여 재판단한다.
+            if (DelegationPrompts.ChildOutcome.allSucceeded(outcomes)) {
+                DelegationContract finish = DelegationContract.finish(DelegationPrompts.finishSummary(outcomes));
+                executionService.recordDecision(id, ExecutionDecision.DONE, null);
+                executionService.recordHandoff(id, Map.of("summary", finish.summary()));
+                executionService.markSucceeded(id);
+                streamHub.system(id, "⎿ 자식 결과가 모두 성공해 재판단 없이 마무리합니다");
+                return ExecutionStatus.SUCCEEDED;
+            }
             progress = DelegationPrompts.childResults(outcomes);
         }
 
@@ -489,7 +490,8 @@ public class DelegationService {
                 outcomes.add(future.get());
             } catch (Exception ex) {
                 log.warn("child execution failed: {}", ex.getMessage());
-                outcomes.add(new DelegationPrompts.ChildOutcome("알 수 없음", null, "실패", String.valueOf(ex), List.of(), ""));
+                outcomes.add(new DelegationPrompts.ChildOutcome("알 수 없음", null, "실패", String.valueOf(ex),
+                        List.of(), "", false));
             }
         }
         return outcomes;
@@ -545,10 +547,12 @@ public class DelegationService {
                 ? files.stream().map(String::valueOf).toList()
                 : List.of();
         boolean waiting = status == ExecutionStatus.WAITING_INPUT;
+        // 자식이 정상 완료(SUCCEEDED)했을 때만 성공이다 — 실패·취소·입력 대기는 성공으로 세지 않는다.
+        boolean succeeded = status == ExecutionStatus.SUCCEEDED;
         String note = waiting && execution.getQuestion() != null ? execution.getQuestion() : "";
         List<String> options = waiting && execution.getQuestionOptions() != null ? execution.getQuestionOptions() : List.of();
         return new DelegationPrompts.ChildOutcome(agentName(agentId), agentId, statusLabel(status), summary,
-                changedFiles, note, options, waiting);
+                changedFiles, note, options, waiting, succeeded);
     }
 
     // ── 가드 ─────────────────────────────────────────────────────────────────────

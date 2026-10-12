@@ -1,12 +1,26 @@
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080';
 
 /** 서버가 2xx 가 아닌 응답을 주면 던진다. 404 같은 상태를 호출부가 구분할 수 있게 status 를 담는다. */
-class ApiError extends Error {
+export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
     super(message);
     this.status = status;
   }
+}
+
+/** 오류에서 HTTP 상태 코드를 꺼낸다(ApiError 가 아니면 null). */
+export function errorStatus(ex: unknown): number | null {
+  return ex instanceof ApiError ? ex.status : null;
+}
+
+/**
+ * 서버가 아직 안 만든(또는 이 버전에 없는) API 인지. 화면·스토어는 이를 '미지원' 으로 표시하고
+ * 목업/모의 데이터로 때우지 않는다(404 Not Found · 501 Not Implemented).
+ */
+export function isUnsupportedError(ex: unknown): boolean {
+  const status = errorStatus(ex);
+  return status === 404 || status === 501;
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -305,6 +319,159 @@ export interface ProviderCatalogEntry {
   capabilities?: Capabilities | null;
 }
 
+/** C. 실행 트리 루트 파일별 diff 응답(GET /executions/{id}/diff). patch 가 null 이면 그 파일 diff 를 만들지 못한 것. */
+export interface ExecutionFileDiff {
+  status: string;
+  path: string;
+  patch: string | null;
+  truncated: boolean;
+}
+export interface ExecutionDiffResponse {
+  executionId: number;
+  rootExecutionId: number | null;
+  available: boolean;
+  reason: string | null;
+  files: ExecutionFileDiff[];
+}
+
+/** D. 예약 실행(백엔드 schedule 도메인). */
+export interface ScheduleResponse {
+  id: number;
+  project: { id: number; name: string } | null;
+  name: string;
+  prompt: string;
+  targetAgent: { id: number; name: string } | null;
+  targetGroup: { id: number; name: string } | null;
+  cron: string;
+  enabled: boolean;
+  missedPolicy: 'SKIP' | 'RUN_ONCE' | null;
+  nextRunAt: string | null;
+  lastRunAt: string | null;
+  lastTaskId: number | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+export interface ScheduleCreateRequest {
+  projectId: number;
+  name: string;
+  prompt: string;
+  targetAgentId?: number | null;
+  groupId?: number | null;
+  cron: string;
+  enabled?: boolean;
+  missedPolicy?: 'SKIP' | 'RUN_ONCE';
+}
+export interface ScheduleUpdateRequest {
+  name: string;
+  prompt: string;
+  targetAgentId?: number | null;
+  groupId?: number | null;
+  cron: string;
+  enabled?: boolean;
+  missedPolicy?: 'SKIP' | 'RUN_ONCE';
+}
+export interface ScheduleRunResult {
+  scheduleId: number;
+  taskId: number | null;
+  executionId: number | null;
+  ranAt: string | null;
+}
+
+/** E. 병합 정책(GET/PUT /settings/merge-policy). */
+export interface MergePolicyResponse {
+  autoCleanupEnabled: boolean;
+  cleanupDeleteBranch: boolean;
+  updatedAt: string | null;
+}
+
+/** G. 기간별 사용량(GET /executions/usage). */
+export interface UsageBucketResponse {
+  start: string;
+  end: string;
+  executionCount: number;
+  costUsd: number;
+  inputTokens: number;
+  outputTokens: number;
+}
+export interface UsageResponse {
+  projectId: number | null;
+  from: string;
+  to: string;
+  bucket: string;
+  totalCostUsd: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  executionCount: number;
+  buckets: UsageBucketResponse[];
+}
+export interface UpdateBudgetRequest {
+  amountUsd: number;
+  period?: 'DAILY' | 'WEEKLY' | 'MONTHLY';
+  alertRatio?: number;
+}
+export interface ProjectBudgetResponse {
+  projectId: number;
+  configured: boolean;
+  amountUsd: number | null;
+  period: string | null;
+  alertRatio: number | null;
+  usedUsd: number;
+  ratio: number | null;
+  warning: boolean;
+  periodStart: string | null;
+  periodEnd: string | null;
+  executionCount: number;
+  inputTokens: number;
+  outputTokens: number;
+}
+
+/** H. 알림 채널·규칙(백엔드 notification 도메인). */
+export type ChannelType = 'WEBHOOK' | 'SLACK' | 'EMAIL';
+export type NotificationEventTypeValue = 'EXECUTION_FINISHED' | 'EXECUTION_FAILED' | 'WAITING_INPUT' | 'BUDGET_THRESHOLD';
+export interface ChannelResponse {
+  id: number;
+  projectId: number | null;
+  type: ChannelType;
+  name: string;
+  config: Record<string, unknown>;
+  enabled: boolean;
+}
+export interface ChannelCreateRequest {
+  projectId?: number | null;
+  type: ChannelType;
+  name: string;
+  config?: Record<string, unknown>;
+  enabled?: boolean;
+}
+export interface ChannelUpdateRequest {
+  name?: string;
+  config?: Record<string, unknown>;
+  enabled?: boolean;
+}
+export interface RuleResponse {
+  id: number;
+  projectId: number | null;
+  channelId: number;
+  eventType: NotificationEventTypeValue;
+  enabled: boolean;
+}
+export interface RuleCreateRequest {
+  projectId?: number | null;
+  channelId: number;
+  eventType: NotificationEventTypeValue;
+  enabled?: boolean;
+}
+export interface RuleUpdateRequest {
+  channelId?: number | null;
+  eventType?: NotificationEventTypeValue;
+  enabled?: boolean;
+}
+export interface TestSendResponse {
+  channelId: number;
+  success: boolean;
+  detail: string | null;
+}
+
 export const api = {
   base: API_BASE,
   /** 서버 내부 오류(최근 순). 사람이 원인을 보고 에이전트에게 수정을 맡길지 고른다. */
@@ -454,4 +621,59 @@ export const api = {
 
   listRoles: () => request<AgentRole[]>('/roles'),
   listPermissionProfiles: () => request<PermissionProfile[]>('/permission-profiles'),
+
+  // ── C. 실행 변경사항 diff ───────────────────────────────────────────────────────
+  /** 트리 루트 실행의 changed_files 파일별 unified diff. available=false 면 이유를 담아 빈 files 를 준다. */
+  getExecutionDiff: (id: number) => request<ExecutionDiffResponse>(`/executions/${id}/diff`),
+
+  // ── D. 예약(반복) 실행 ─────────────────────────────────────────────────────────
+  listSchedules: (projectId?: number) =>
+    request<ScheduleResponse[]>(`/schedules${projectId === undefined ? '' : `?projectId=${projectId}`}`),
+  createSchedule: (data: ScheduleCreateRequest) =>
+    request<ScheduleResponse>('/schedules', { method: 'POST', body: JSON.stringify(data) }),
+  updateSchedule: (id: number, data: ScheduleUpdateRequest) =>
+    request<ScheduleResponse>(`/schedules/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteSchedule: (id: number) => request<void>(`/schedules/${id}`, { method: 'DELETE' }),
+  /** 예약을 지금 한 번 실행한다(기존 채팅 명령 경로를 서버가 재사용한다). */
+  runSchedule: (id: number) => request<ScheduleRunResult>(`/schedules/${id}/run`, { method: 'POST' }),
+
+  // ── E. 병합 정책 ───────────────────────────────────────────────────────────────
+  getMergePolicy: () => request<MergePolicyResponse>('/settings/merge-policy'),
+  updateMergePolicy: (data: MergePolicyResponse) =>
+    request<MergePolicyResponse>('/settings/merge-policy', { method: 'PUT', body: JSON.stringify(data) }),
+
+  // ── G. 비용·예산 ───────────────────────────────────────────────────────────────
+  /** 기간별 사용량 집계(execution 계측 컬럼 합계, 추정 금지). bucket = DAY/WEEK/MONTH. */
+  getCostUsage: (from: string, to: string, projectId?: number | null, bucket: 'DAY' | 'WEEK' | 'MONTH' = 'DAY') => {
+    const params = new URLSearchParams({ from, to, bucket });
+    if (projectId !== undefined && projectId !== null) params.set('projectId', String(projectId));
+    return request<UsageResponse>(`/executions/usage?${params.toString()}`);
+  },
+  /** 프로젝트 예산과 이번 기간 사용 현황(없으면 configured=false, 프로젝트가 없으면 404). */
+  getProjectBudget: (projectId: number) => request<ProjectBudgetResponse>(`/projects/${projectId}/budget`),
+  /** 프로젝트 예산 설정(없으면 만든다). */
+  setProjectBudget: (projectId: number, data: UpdateBudgetRequest) =>
+    request<ProjectBudgetResponse>(`/projects/${projectId}/budget`, { method: 'PUT', body: JSON.stringify(data) }),
+  /** 프로젝트 예산 삭제(멱등, 204). */
+  deleteProjectBudget: (projectId: number) =>
+    request<void>(`/projects/${projectId}/budget`, { method: 'DELETE' }),
+
+  // ── H. 알림 채널·규칙 ──────────────────────────────────────────────────────────
+  listNotificationChannels: (projectId?: number) =>
+    request<ChannelResponse[]>(`/notifications/channels${projectId === undefined ? '' : `?projectId=${projectId}`}`),
+  createNotificationChannel: (data: ChannelCreateRequest) =>
+    request<ChannelResponse>('/notifications/channels', { method: 'POST', body: JSON.stringify(data) }),
+  updateNotificationChannel: (id: number, data: ChannelUpdateRequest) =>
+    request<ChannelResponse>(`/notifications/channels/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteNotificationChannel: (id: number) => request<void>(`/notifications/channels/${id}`, { method: 'DELETE' }),
+  /** 채널로 시험 발송(성공/사유). */
+  testNotificationChannel: (id: number) =>
+    request<TestSendResponse>(`/notifications/channels/${id}/test`, { method: 'POST' }),
+  listNotificationRules: (projectId?: number) =>
+    request<RuleResponse[]>(`/notifications/rules${projectId === undefined ? '' : `?projectId=${projectId}`}`),
+  createNotificationRule: (data: RuleCreateRequest) =>
+    request<RuleResponse>('/notifications/rules', { method: 'POST', body: JSON.stringify(data) }),
+  updateNotificationRule: (id: number, data: RuleUpdateRequest) =>
+    request<RuleResponse>(`/notifications/rules/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteNotificationRule: (id: number) => request<void>(`/notifications/rules/${id}`, { method: 'DELETE' }),
 };

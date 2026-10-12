@@ -3,15 +3,18 @@ package com.agent.dock.execution.controller;
 import com.agent.dock.delegation.service.DelegationService;
 import com.agent.dock.execution.domain.Execution;
 import com.agent.dock.execution.dto.AnswerRequest;
+import com.agent.dock.execution.dto.ExecutionDiffResponse;
 import com.agent.dock.execution.dto.ExecutionLogResponse;
 import com.agent.dock.execution.dto.ExecutionResponse;
 import com.agent.dock.execution.dto.ExecutionStatsResponse;
 import com.agent.dock.execution.dto.ExecutionSummaryResponse;
 import com.agent.dock.execution.dto.ExecutionTreeResponse;
+import com.agent.dock.execution.service.ExecutionDiffService;
 import com.agent.dock.execution.service.ExecutionService;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -23,6 +26,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RequiredArgsConstructor
 public class ExecutionController {
     private final ExecutionService service;
+    /** 트리 루트의 변경 파일을 파일별 unified diff 로 만든다(무거운 git 은 workers 풀에서 돈다). */
+    private final ExecutionDiffService diffService;
     /** 답을 받아 **실행을 이어서 돌리는** 일은 오케스트레이터(위임 루프)의 것이다. */
     private final DelegationService delegationService;
 
@@ -69,6 +74,15 @@ public class ExecutionController {
     @GetMapping(value = "/{id}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream(@PathVariable String id) {
         return service.streamLogs(id);
+    }
+
+    /**
+     * 실행 트리 루트가 바꾼 파일별 unified diff(변경 파일 창). git 은 workers 풀에서 돌아 요청 스레드를 막지 않는다.
+     * 트리 루트에 커밋이 없으면 available=false 와 사유를 싣는다.
+     */
+    @GetMapping("/{id}/diff")
+    public CompletableFuture<ExecutionDiffResponse> diff(@PathVariable Long id) {
+        return diffService.diff(id);
     }
 
     @PostMapping("/{id}/cancel")

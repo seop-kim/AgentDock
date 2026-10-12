@@ -14,6 +14,7 @@ import java.util.Optional;
  * {"action":"delegate","targets":[{"agentId":12,"prompt":"…","expects":"…"}]}
  * {"action":"ask","question":"…","options":["…"]}
  * {"action":"done","summary":"…"}
+ * {"action":"finish","summary":"…"}
  * </pre>
  *
  * 모델이 낸 문장을 해석하지 않는다. `--json-schema` 로 강제한 JSON 만 읽는다.
@@ -30,6 +31,14 @@ public record DelegationContract(ExecutionDecision action, List<Order> orders, S
         return new DelegationContract(ExecutionDecision.DELEGATE, orders, summary, "", List.of());
     }
 
+    /**
+     * 자식 결과가 모두 성공해 **재판단 없이** 서버가 마무리할 때 쓰는 계약. `done` 과 같은 뜻이다 —
+     * 마지막 계약은 DONE 으로 남고 요약만 자식 결과에서 모아 온다.
+     */
+    public static DelegationContract finish(String summary) {
+        return new DelegationContract(ExecutionDecision.DONE, List.of(), summary, "", List.of());
+    }
+
     /** 스키마를 통과한 JSON 을 계약으로 읽는다. 형식이 어긋나면 비어 있다(재시도·폴백 대상). */
     public static Optional<DelegationContract> parse(Map<String, Object> payload) {
         if (payload == null) {
@@ -39,7 +48,7 @@ public record DelegationContract(ExecutionDecision action, List<Order> orders, S
             return Optional.empty();
         }
         String summary = text(payload.get("summary"));
-        if ("done".equals(action)) {
+        if ("done".equals(action) || "finish".equals(action)) {
             return Optional.of(new DelegationContract(ExecutionDecision.DONE, List.of(), summary, "", List.of()));
         }
         if ("ask".equals(action)) {

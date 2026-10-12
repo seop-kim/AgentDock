@@ -460,3 +460,70 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* 실행 트리 루트 행의 '변경 diff' 창(ExecutionDiffModal). 글래스 상자에는 overflow 를 두지 않는다. */
+.diffModal {
+  composes: glassStrong from './glass.module.css';
+  color: var(--color-text);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  width: min(960px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.diffModal h2 {
+  margin: 0;
+}
+
+.diffScroll {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  min-height: 0;
+  overflow: auto;
+}
+
+.diffFiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.diffFile {
+  padding: 3px 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+.diffFile:hover {
+  background: var(--color-code-bg);
+  filter: none;
+}
+
+.diffFileOn,
+.diffFileOn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-text);
+  background: var(--color-code-bg);
+}
+
+.diffBody {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-code-bg);
+  color: var(--color-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow: auto;
+  white-space: pre;
+}

@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { readStorage, STORAGE_KEYS, writeStorage } from '../lib/storage';
-import { AlertIcon, DashboardIcon, FolderIcon, ListIcon, MenuIcon, SettingsIcon } from './icons';
+import { AlertIcon, BellIcon, CalendarIcon, CoinIcon, DashboardIcon, FolderIcon, ListIcon, MenuIcon, SettingsIcon } from './icons';
 import styles from './Sidebar.module.css';
 
 const MENUS = [
   { to: '/', label: 'Dashboard', Icon: DashboardIcon },
   { to: '/projects', label: '프로젝트', Icon: FolderIcon },
   { to: '/tasks', label: 'Tasks', Icon: ListIcon },
+  { to: '/schedules', label: '예약', Icon: CalendarIcon },
+  { to: '/costs', label: '비용·예산', Icon: CoinIcon },
+  { to: '/notifications', label: '알림', Icon: BellIcon },
   { to: '/reality-check', label: '현실성 점검', Icon: AlertIcon },
   { to: '/settings', label: '설정', Icon: SettingsIcon },
 ];
